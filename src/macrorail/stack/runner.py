@@ -1,0 +1,248 @@
+"""Runs one focus stack: move → settle → trigger → wait for the camera → next.
+
+The stage only ever moves in the stack direction while shooting, so lead-screw backlash
+never shifts a slice. A camera failure pauses the stack (the user fixes it and resumes,
+which retakes the same slice); a stop or the last shot returns the stage to the start.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Literal
+
+from ..camera.base import Camera, CameraError
+from ..log import ActivityLog
+from ..motion.base import Axis, AxisError, MotionInterrupted
+from .plan import StackPlan
+
+Phase = Literal[
+    "preparing", "running", "paused", "camera_error", "returning", "done", "stopped", "failed"
+]
+ACTIVE_PHASES: frozenset[Phase] = frozenset(
+    {"preparing", "running", "paused", "camera_error", "returning"}
+)
+
+Approach = Callable[[int, int], Awaitable[None]]
+
+
+class _StopRequested(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class Shot:
+    index: int
+    position: int
+    file: str
+    time: float
+    capture_s: float
+
+
+class StackRun:
+    def __init__(
+        self,
+        plan: StackPlan,
+        *,
+        axis: Axis,
+        camera: Camera,
+        approach: Approach,
+        speed: float,
+        accel: float,
+        settle_s: float,
+        log: ActivityLog,
+        on_change: Callable[[], None],
+        record_dir: Path,
+    ) -> None:
+        self.plan = plan
+        self._axis = axis
+        self._camera = camera
+        self._approach = approach
+        self._speed = speed
+        self._accel = accel
+        self._settle_s = settle_s
+        self._log = log
+        self._on_change = on_change
+        self._record_dir = record_dir
+        self.phase: Phase = "preparing"
+        self.shots: list[Shot] = []
+        self.error: str | None = None
+        self.started_at = time.time()
+        self.finished_at: float | None = None
+        self._active_s = 0.0
+        self._active_since: float | None = time.monotonic()
+        self._pause_requested = False
+        self._stop_requested = False
+        self._resume = asyncio.Event()
+
+    # -- control (from the event loop, any time) ----------------------------------------------
+
+    @property
+    def active(self) -> bool:
+        return self.phase in ACTIVE_PHASES
+
+    def pause(self) -> None:
+        if self.phase in ("preparing", "running"):
+            self._pause_requested = True
+            self._on_change()
+
+    def resume(self) -> None:
+        if self.phase in ("paused", "camera_error") or self._pause_requested:
+            self._pause_requested = False
+            self._resume.set()
+
+    async def stop(self) -> None:
+        if not self.active or self._stop_requested:
+            return
+        self._stop_requested = True
+        self._resume.set()
+        if self.phase in ("preparing", "running"):
+            await self._axis.stop()  # interrupts a move in progress; otherwise a no-op
+
+    # -- progress -----------------------------------------------------------------------------
+
+    @property
+    def elapsed_s(self) -> float:
+        running = time.monotonic() - self._active_since if self._active_since else 0.0
+        return self._active_s + running
+
+    @property
+    def remaining_s(self) -> float | None:
+        if len(self.shots) < 2 or self.phase not in ("running", "paused", "camera_error"):
+            return None
+        per_shot = (self.shots[-1].time - self.shots[0].time) / (len(self.shots) - 1)
+        return per_shot * (self.plan.count - len(self.shots))
+
+    def snapshot(self) -> dict[str, object]:
+        return {
+            "phase": self.phase,
+            "pausing": self._pause_requested and self.phase == "running",
+            "stopping": self._stop_requested and self.active,
+            "taken": len(self.shots),
+            "total": self.plan.count,
+            "start": self.plan.start,
+            "end": self.plan.end,
+            "step": self.plan.step,
+            "last_file": self.shots[-1].file if self.shots else None,
+            "elapsed_s": round(self.elapsed_s, 1),
+            "remaining_s": None if self.remaining_s is None else round(self.remaining_s),
+            "error": self.error,
+        }
+
+    # -- the run ------------------------------------------------------------------------------
+
+    async def run(self) -> None:
+        outcome: Phase = "done"
+        self._log.info(f"Stack started: {self.plan.count} shots.")
+        try:
+            await self._approach(self.plan.start, self.plan.direction)
+            self._set_phase("running")
+            while len(self.shots) < self.plan.count:
+                await self._checkpoint()
+                await self._shoot(len(self.shots))
+        except (_StopRequested, MotionInterrupted):
+            outcome = "stopped"
+        except AxisError as exc:
+            self.error = str(exc)
+            outcome = "failed"
+        if outcome != "failed":
+            await self._return_to_start()
+        self._finish(outcome)
+
+    async def _shoot(self, index: int) -> None:
+        position = self.plan.positions[index]
+        if self._axis.state.position != position:
+            await self._axis.move_to(position, self._speed, self._accel)
+        await asyncio.sleep(self._settle_s)
+        try:
+            capture = await self._camera.capture()
+        except CameraError as exc:
+            self.error = str(exc)
+            self._log.error(f"Stack paused at shot {index + 1}: {exc}")
+            self._set_phase("camera_error")
+            return  # the checkpoint waits for resume, then this slice is retaken
+        self.shots.append(Shot(index, position, capture.name, time.time(), capture.duration_s))
+        self._on_change()
+
+    async def _checkpoint(self) -> None:
+        if self._stop_requested:
+            raise _StopRequested
+        if self._pause_requested and self.phase == "running":
+            self._set_phase("paused")
+            self._log.info(f"Stack paused after {len(self.shots)} of {self.plan.count} shots.")
+        if self.phase in ("paused", "camera_error"):
+            self._pause_clock()
+            self._resume.clear()
+            await self._resume.wait()
+            if self._stop_requested:
+                raise _StopRequested
+            self._log.info("Stack resumed.")
+            self.error = None
+            self._pause_requested = False
+            self._active_since = time.monotonic()
+            self._set_phase("running")
+
+    async def _return_to_start(self) -> None:
+        self._set_phase("returning")
+        try:
+            await self._approach(self.plan.start, self.plan.direction)
+        except AxisError as exc:
+            self.error = f"Could not return to the start: {exc}"
+            self._log.error(self.error)
+
+    def _finish(self, outcome: Phase) -> None:
+        self._pause_clock()
+        self.finished_at = time.time()
+        self._set_phase(outcome)
+        taken = f"{len(self.shots)} of {self.plan.count} shots"
+        if outcome == "done":
+            self._log.info(f"Stack complete: {taken} in {_duration(self.elapsed_s)}.")
+        elif outcome == "stopped":
+            self._log.info(f"Stack stopped after {taken}.")
+        else:
+            self._log.error(f"Stack failed after {taken}: {self.error}")
+        self._save_record()
+
+    def _pause_clock(self) -> None:
+        if self._active_since is not None:
+            self._active_s += time.monotonic() - self._active_since
+            self._active_since = None
+
+    def _set_phase(self, phase: Phase) -> None:
+        self.phase = phase
+        self._on_change()
+
+    def _save_record(self) -> None:
+        stamp = datetime.fromtimestamp(self.started_at).strftime("%Y%m%d-%H%M%S")
+        record = {
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "outcome": self.phase,
+            "error": self.error,
+            "steps_per_mm": self._axis.steps_per_mm,
+            "plan": {
+                "start": self.plan.start,
+                "end": self.plan.end,
+                "step": self.plan.step,
+                "count": self.plan.count,
+            },
+            "settle_s": self._settle_s,
+            "active_s": round(self.elapsed_s, 1),
+            "shots": [asdict(shot) for shot in self.shots],
+        }
+        try:
+            self._record_dir.mkdir(parents=True, exist_ok=True)
+            path = self._record_dir / f"stack-{stamp}.json"
+            path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        except OSError as exc:
+            self._log.warning(f"Could not save the stack record: {exc}")
+
+
+def _duration(seconds: float) -> str:
+    minutes, secs = divmod(round(seconds), 60)
+    return f"{minutes} min {secs} s" if minutes else f"{secs} s"
