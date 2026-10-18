@@ -1,0 +1,88 @@
+# Rail controller protocol (v1)
+
+This is the line protocol between the Raspberry Pi (host) and the Arduino Nano (firmware).
+It is the contract between `firmware/` and `src/macrorail/motion/`. The simulator in
+`src/macrorail/sim/firmware.py` implements the same contract.
+
+## Transport
+
+- USB serial, 115200 baud, 8N1.
+- Opening the port resets the Nano (DTR), and the host waits for the `READY` event.
+- ASCII lines terminated by `\n`; a trailing `\r` is ignored. Lines are at most 63 characters.
+- All positions, distances, speeds and accelerations are in **microsteps**
+  (`/s`, `/s²` for speed and acceleration). The host converts to millimetres.
+
+## Messages
+
+| Direction | Form | Example |
+|---|---|---|
+| Host → firmware request | `<id> <COMMAND> [arg ...]` | `17 MOVE 4000 400 4000` |
+| Firmware → host reply | `<id> OK [key=value ...]` | `17 OK pos=4000` |
+| | `<id> ERR <CODE> [key=value ...]` | `17 ERR NOT_HOMED` |
+| Firmware → host event | `! <EVENT> [key=value ...]` | `! POS pos=1234` |
+
+- `id` is a decimal integer from 1 to 65535 chosen by the host, and is unique among requests still in flight.
+- Each request gets exactly one reply with the same `id`.
+- **Immediate** commands reply straight away.
+- **Motion** commands (`HOME`, `MOVE`, `JOG`) reply only when the motion has finished.
+  - The reply is `OK` if the motion completed, or `ERR` with the reason it ended early.
+  - Only one motion command may be in flight. While one is running, only `INFO`, `STATUS`, `STOP`
+    and `HALT` are accepted; everything else gets `ERR BUSY`.
+- A line that cannot be parsed gets the reply `0 ERR SYNTAX` (or `0 ERR TOOLONG`).
+
+## Commands
+
+| Command | Kind | Reply data | Notes |
+|---|---|---|---|
+| `INFO` | immediate | `fw=<semver> proto=<n> driver=<ok\|missing>` | |
+| `STATUS` | immediate | `pos= homed= enabled= moving= endstop= driver=` | Flags are `0`/`1`. `driver` is `ok`/`missing`. The host polls it every 0.5 s, which also keeps the link watchdog alive. |
+| `ENABLE` | immediate | | Energises the motor. Calibrates StealthChop at run current. |
+| `DISABLE` | immediate | | De-energises the motor and **clears homed**. |
+| `CURRENT <run_mA> <hold_mA>` | immediate | | RMS currents. `100 ≤ run ≤ 1500` and `0 ≤ hold ≤ run`. |
+| `LIMITS <min> <max>` | immediate | | Soft limits, enforced once homed. |
+| `HOME <fast> <slow> <backoff> <max> <accel>` | motion | `pos=0` | Seek the switch at `fast`, back off `backoff`, re-approach at `slow`. The switch point becomes `0`. Fails after `max` steps without a trigger. |
+| `MOVE <target> <speed> <accel>` | motion | `pos=` | Absolute move. Requires homed, and the target must be within limits. |
+| `JOG <delta> <speed> <accel>` | motion | `pos=` | Relative move. Allowed when not homed; once homed, the target must be within limits. |
+| `STOP` | immediate | | Decelerate. The pending motion then replies `ERR STOPPED pos=`. |
+| `HALT` | immediate | | Stop instantly (no deceleration). The pending motion replies `ERR HALTED pos=`. |
+
+## Events
+
+| Event | When |
+|---|---|
+| `! READY fw=<semver> proto=<n> driver=<ok\|missing>` | After boot (and so after every port open). |
+| `! POS pos=<n>` | About every 100 ms while moving. |
+| `! FAULT code=<code>` | When the idle driver check finds a problem. The motor is disabled and homed is cleared. |
+
+Fault codes:
+
+- `driver_lost`: the driver doesn't answer over UART. Check the 12 V supply and the UART wiring.
+- `driver_reset`: the driver lost power and its registers were reset. The firmware has already restored the configuration.
+- `overtemp`: the driver is too hot.
+- `short`: short to ground or to supply.
+
+## Error codes
+
+| Code | Meaning |
+|---|---|
+| `SYNTAX`, `TOOLONG` | Malformed line. |
+| `UNKNOWN` | Unknown command. |
+| `ARG` | Wrong number or range of arguments. |
+| `BUSY` | A motion command is in flight. |
+| `DISABLED` | Motion requested while the motor is disabled. |
+| `NOT_HOMED` | Absolute move before homing. |
+| `LIMIT` | The target is outside the soft limits. |
+| `DRIVER` | The driver isn't responding, so the motor can't be enabled. |
+| `STOPPED`, `HALTED` | The motion ended early on `STOP` or `HALT`. |
+| `ENDSTOP` | The switch triggered during a move toward it outside homing. Homed is cleared. |
+| `NO_SWITCH` | Homing travelled `max` steps without finding the switch. |
+| `SWITCH_STUCK` | The switch was still pressed after backing off. |
+| `LINK` | The watchdog stopped motion: no line from the host for 2 s. |
+
+## Safety rules enforced by the firmware
+
+- Moving toward the switch (negative direction) halts the moment the switch triggers, homed or not.
+- `DISABLE`, an endstop hit, and any driver fault clear the homed flag. The host must home again
+  before absolute moves.
+- While motion is in flight, the firmware stops the motor (with deceleration) if no line arrives
+  for 2 s.
