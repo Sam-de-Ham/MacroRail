@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 
 import pytest
 
-from macrorail.config import RailConfig
+from macrorail.config import Config, RailConfig
 from macrorail.log import ActivityLog
+from macrorail.machine import Machine, build_machine
 from macrorail.motion.rail import RailAxis
 from macrorail.sim.firmware import SimRail
 
@@ -34,3 +36,26 @@ async def rail(sim_rail: SimRail) -> AsyncIterator[RailAxis]:
     yield axis
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.fixture
+async def machine(tmp_path: Path) -> AsyncIterator[Machine]:
+    config = Config(rail=RailConfig(port="sim"), data_dir=tmp_path)
+    m = build_machine(config, sim=True, sim_speedup=SPEEDUP)
+    await m.update_settings({"stack": {"settle_s": 0.0}})
+    task = asyncio.create_task(m.run())
+    await until(lambda: m.axis.state.connected)
+    yield m
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+async def idle(machine: Machine, timeout: float = 10.0) -> None:
+    await until(lambda: not machine.busy, timeout)
+
+
+async def homed(machine: Machine) -> Machine:
+    machine.home()
+    await idle(machine)
+    assert machine.axis.state.homed
+    return machine
