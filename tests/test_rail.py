@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from macrorail.motion.base import AxisError, MotionInterrupted
+from macrorail.motion.rail import RailAxis
+from macrorail.sim.firmware import SimRail
+
+from .conftest import until
+
+SPEED = 800.0  # steps/s (2 mm/s)
+ACCEL = 4000.0  # steps/s² (10 mm/s²)
+
+
+async def test_connects_and_reports_firmware(rail: RailAxis) -> None:
+    state = rail.state
+    assert state.connected
+    assert state.driver_ok
+    assert state.firmware == "1.0.0-sim"
+    assert not state.homed
+    assert state.problem is None
+
+
+async def test_absolute_moves_require_homing(rail: RailAxis) -> None:
+    await rail.enable()
+    with pytest.raises(AxisError, match="Home the rail"):
+        await rail.move_to(1000, SPEED, ACCEL)
+
+
+async def test_home_parks_at_min_position(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    await rail.home()
+    assert rail.state.homed
+    assert rail.state.position == rail.min_position
+    assert sim_rail.physical == pytest.approx(rail.min_position, abs=1)
+
+
+async def test_move_reaches_exact_target(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    await rail.home()
+    assert await rail.move_to(4001, SPEED, ACCEL) == 4001
+    assert sim_rail.physical == pytest.approx(4001, abs=1e-6)
+
+
+async def test_move_outside_limits_is_refused(rail: RailAxis) -> None:
+    await rail.enable()
+    await rail.home()
+    with pytest.raises(AxisError, match="outside"):
+        await rail.move_to(rail.max_position + 1, SPEED, ACCEL)
+
+
+async def test_jog_into_switch_stops_and_clears_homed(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    with pytest.raises(AxisError, match="home switch"):
+        await rail.jog(-round(sim_rail.physical) - 400, SPEED, ACCEL)
+    assert sim_rail.physical == pytest.approx(0, abs=2)
+    assert not rail.state.homed
+
+
+async def test_stop_interrupts_motion(rail: RailAxis) -> None:
+    await rail.enable()
+    await rail.home()
+    move = asyncio.create_task(rail.move_to(rail.max_position, SPEED, ACCEL))
+    await until(lambda: rail.state.position > 2000)
+    await rail.stop()
+    with pytest.raises(MotionInterrupted):
+        await move
+    assert rail.min_position < rail.state.position < rail.max_position
+
+
+async def test_disable_requires_homing_again(rail: RailAxis) -> None:
+    await rail.enable()
+    await rail.home()
+    await rail.disable()
+    assert not rail.state.homed
+    assert not rail.state.enabled
+
+
+async def test_controller_restart_reconnects_unhomed(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    await rail.home()
+    sim_rail.open()  # another open resets the controller and steals the port
+    await until(lambda: not rail.state.connected)
+    await until(lambda: rail.state.connected, timeout=10)
+    assert not rail.state.homed
+
+
+async def test_driver_power_loss_is_reported(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    sim_rail.cut_driver_power()
+    await until(lambda: not rail.state.driver_ok)
+    assert rail.state.problem is not None
+    assert "12 V" in rail.state.problem
+    with pytest.raises(AxisError, match="12 V"):
+        await rail.enable()

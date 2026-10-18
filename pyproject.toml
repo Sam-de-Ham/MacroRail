@@ -1,0 +1,64 @@
+[project]
+name = "macrorail"
+version = "1.0.0"
+description = "Focus-stacking controller for a motorised macro rail: Raspberry Pi web app, Arduino + TMC2209 motion, gphoto2 camera."
+readme = "README.md"
+license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Sam Weisz", email = "weisz.sam321@gmail.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "websockets>=13",
+    "pyserial>=3.5",
+    "pydantic>=2.9",
+    # libgphoto2 only exists for Linux/macOS; on other platforms run with --sim.
+    "gphoto2>=2.5.1; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+sim = ["pillow>=11"]
+
+[project.scripts]
+macrorail = "macrorail.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pillow>=11",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.10"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT"]
+# Per-request timeouts are part of the link API, not an accidental pattern.
+ignore = ["ASYNC109"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ASYNC110"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["gphoto2", "serial", "serial.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
