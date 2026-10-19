@@ -54,7 +54,8 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Homing:** microswitch at the motor end; position 0 = switch, park at `min_mm` (0.5 mm).
   Work happens near the front.
 - **Home switch (user decision):** interrupt-driven and always armed.
-  - The first contact stops any motion, in either direction, before its next step.
+  - The first contact stops any motion, in either direction, before its next step. It stops
+    abruptly, with no ramp, within tens of µs (worst case one 2.5 µm step).
   - The only exception: a move that starts on the pressed switch and backs away from it.
   - While pressed, moves toward the switch are refused.
   - Every level change is pushed to the host as a `! SWITCH` event, with no polling.
@@ -70,6 +71,9 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Motion commands reply when the motion finishes.
   - `STATUS` is polled every 0.5 s and doubles as the firmware's 2 s watchdog.
   - A missing reply means the link is dead, and the host reconnects.
+  - **Half-duplex around the driver UART:** the Nano's SoftwareSerial drops host bytes.
+    - The firmware uses the driver UART only while answering a request (idle STATUS, ENABLE, CURRENT).
+    - The host sends nothing while a request is unanswered; motion requests free the line once sent.
 - **Camera:**
   - A shot is gphoto2 `trigger_capture`, then wait for FILE_ADDED. On failure: re-init and retry once.
     This can cost a duplicate frame, never a missing one.
@@ -79,13 +83,15 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - If the covering last shot would run past the travel limit, it is placed on the limit.
   - The range is always covered: count = ceil(range/step) + 1.
   - Steps snap to the microstep grid.
+  - The shot count is shown before starting: in the plan summary and on the Start button.
 - **Stack runner:**
   - Each shot is move → settle (0.8 s) → shoot → confirm.
   - Pause holds position.
   - A camera error pauses the stack, and resume retakes that slice.
   - Stop or completion returns to start.
   - Each stack writes a JSON record to `~/.local/share/macrorail/stacks/`.
-- **Live view** is paused during stacks. Tap-to-zoom is a 3× zoom around the tap point. The A6400
+- **Live view** is paused during stacks. Each browser can also pause it with a toggle, which closes
+  the stream so the camera stops sending frames; the choice is saved per browser. Tap-to-zoom is a 3× zoom around the tap point. The A6400
   preview frames are 1024×680, close to their on-screen size, so a 1:1 crop would add nothing.
 - **Camera reconnect** is automatic: retried every 3 s, and right away after a loss. There is no
   Reconnect button. The capture timeout lives in `config.toml`, not the UI.
@@ -110,61 +116,44 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 ## Status
 
-- **2026-10-19:**
-  - v1 software is complete and tested against the simulator: 78 tests; ruff, mypy (strict) and the firmware build are green.
-  - An independent code review was done and its findings were fixed: a double-tap Start could orphan a stack, Stop could be missed in several places, and live view was never enabled for gphoto. Link, watchdog and gphoto tests were added.
-  - The driver UART moved to D7/D8, so all signals use one row (D3–D8).
-  - The UI was checked in the browser at phone and desktop sizes: home, set range, stack, pause/resume, stop-and-return, take control.
-  - On the Pi, the app was deployed to `~/macrorail` and ran in sim mode: it starts in about 5 s and live view streams.
-  - The service is not installed yet because `sudo` needs a password.
-
-- **2026-10-19, on the real Pi with nothing wired (Nano and A6400 on USB):**
-  - **Power:** a new PSU fixed the under-voltage (`get_throttled` is `0x0`).
-    The soft temperature limit tripped during a firmware compile on the Pi.
-  - **Firmware:** flashed from the Pi over SSH with `pio run -d firmware -e nano -t upload`
-    (PlatformIO in `uv tool`). The `nano` (old bootloader) environment is the right one.
-    - READY arrives 1.6 s after the port opens. A STATUS round trip takes about 10 ms.
-    - With nothing wired it reports `driver=missing` and `endstop=1` (the fail-safe reading), and refuses ENABLE/MOVE/JOG.
-  - **Camera:** gphoto2 reports "Sony ILCE-6400 (PC Control)", and the battery widget works.
-    - Live view: 1024×680 at about 30 fps from the camera; the app caps it at 10 fps.
-    - A capture is confirmed in 1.33–1.43 s. The battery drains slightly while connected: the Pi does not charge it, so use a dummy battery for long stacks.
-  - **Full app** (`.venv/bin/macrorail` run by hand): the rail is connected but reports no driver, the camera is connected, and live view streams. The systemd service is still not installed (the install needs the user's sudo).
-  - **Setup guide:** a 9-page PDF with breadboard layout and wire checklist, at `MacroRail-quick-start.pdf` (not tracked). It is built from HTML in the session scratchpad.
-
-- **2026-10-19, hardware bring-up, part 1:**
-  - The driver was detected over UART on first power-up.
-  - The switch was wired NO, so the firmware now uses `ENDSTOP_ACTIVE_LEVEL = LOW`. The motor ran the wrong way, so `INVERT_DIRECTION = true`.
-  - **UI fix:** it used `crypto.randomUUID`, which is HTTPS/localhost-only, so it was dead over `http://pi.local`. Lesson: always test the UI from a LAN host, not localhost.
-  - **Switch reworked (user request):** interrupt-driven on D2, always armed, pushed to the host.
-  - **Link bug found and fixed:** the driver's SoftwareSerial dropped bytes from the host. The link is now half-duplex around the driver UART (see `docs/protocol.md`, Flow control). A stress test of 3,353 requests in 60 s had 0 errors.
-  - **Supervisors hardened:** that bug had crashed the rail supervisor, which took down all background tasks. Supervisors now log and recover, and shutdown errors are logged.
-  - **Camera:** an unclean session end leaves the A6400 stuck (`-10` timeouts) until it is power-cycled, so the app now closes the session on shutdown.
-  - **Running the app by hand on the Pi:** `cd ~/macrorail && setsid nohup .venv/bin/macrorail > ~/macrorail.log 2>&1 < /dev/null &`. Stop it with `pkill -f "^/home/pi/macrorail/[.]venv/bin/python"`; the anchored pattern avoids killing your own SSH shell.
-
-- **2026-10-19, hardware bring-up, part 1:**
-  - The driver was detected over UART on first power-up.
-  - The switch was wired NO, so the firmware now uses `ENDSTOP_ACTIVE_LEVEL = LOW`. The motor ran the wrong way, so `INVERT_DIRECTION = true`.
-  - **UI fix:** it used `crypto.randomUUID`, which is HTTPS/localhost-only, so it was dead over `http://pi.local`. Lesson: always test the UI from a LAN host, not localhost.
-  - **Switch reworked (user request):** interrupt-driven on D2, always armed, pushed to the host.
-  - **Link bug found and fixed:** the driver's SoftwareSerial dropped bytes from the host. The link is now half-duplex around the driver UART (see `docs/protocol.md`, Flow control). A stress test of 3,353 requests in 60 s had 0 errors.
-  - **Supervisors hardened:** that bug had crashed the rail supervisor, which took down all background tasks. Supervisors now log and recover, and shutdown errors are logged.
-  - **Camera:** an unclean session end leaves the A6400 stuck (`-10` timeouts) until it is power-cycled, so the app now closes the session on shutdown.
-  - **Running the app by hand on the Pi:** `cd ~/macrorail && setsid nohup .venv/bin/macrorail > ~/macrorail.log 2>&1 &`. Stop it with `pkill -f "^/home/pi/macrorail/[.]venv/bin/python"`; the anchored pattern avoids killing your own SSH shell.
+- **Software (2026-10-19):** v1 is feature-complete.
+  - 84 tests against the simulator; ruff, mypy (strict) and the firmware build are green.
+  - An independent review was done and its findings fixed.
+  - The UI was checked at phone and desktop sizes, from localhost and over the LAN.
+- **Pi:**
+  - The code is deployed to `~/macrorail` and run by hand, because the systemd install needs the user's sudo.
+  - Power is fine on the new PSU. Startup takes about 5 s.
+  - **Run by hand:** `cd ~/macrorail && setsid nohup .venv/bin/macrorail > ~/macrorail.log 2>&1 < /dev/null &`
+  - **Stop:** `pkill -f "^/home/pi/macrorail/[.]venv/bin/python"` (anchored, so it can't kill your own SSH shell).
+  - **Deploy:** `git archive HEAD | ssh pi 'tar -x …'`. Never redirect SSH's stdin to `/dev/null` in that pipe.
+  - **Flash:** `~/.local/bin/pio run -d firmware -e nano -t upload --upload-port /dev/ttyUSB0`.
+    The app must be stopped first, because it owns the port.
+- **Hardware bring-up so far:** breadboard per the setup guide `MacroRail-quick-start.pdf` (untracked; built from HTML in the session scratchpad).
+  - **Driver:** detected over UART.
+  - **Switch:** wired NO on D2, so `ENDSTOP_ACTIVE_LEVEL = LOW`.
+  - **Motor direction:** `INVERT_DIRECTION = true`.
+  - **Measured:** READY 1.6 s after the port opens; a STATUS round trip is about 10 ms. The link survived a 3,353-request stress test with 0 errors.
+  - **Camera:** "Sony ILCE-6400 (PC Control)". Live view is 1024×680 at about 30 fps (the app caps it at 10). A capture is confirmed in 1.33–1.43 s. The battery drains while connected, so use a dummy battery for long stacks.
+- **Lessons from bring-up:**
+  - Test the UI over the LAN: `crypto.randomUUID` only exists on HTTPS or localhost.
+  - An unclean session end leaves the A6400 stuck until it is power-cycled, so the app closes the session on shutdown.
+  - Supervisors must never die. A link error once killed every background task; they now log and recover.
+- **Open:** the user's session log shows homing ended four times with SWITCH_STUCK, plus one unexpected switch hit. It may be manual testing, or a 1 mm back-off that is too short for the roller lever's release travel. Check with the user.
 
 ## Next: hardware bring-up (with the user)
 
-1. **Pi setup:** the user runs `~/macrorail/deploy/install.sh` on the Pi (it needs sudo).
-2. **Wiring:** done on a breadboard. The switch moves to D2 (from D6).
-3. **Firmware and port:** already flashed (1.0.0), and the default port path matches this Nano.
-4. **First power-up checks:** detect the driver, check the switch reading, direction and homing.
-5. **Calibrate:**
-   - Measure the real travel and set `travel_mm`.
+1. **Homing:** confirm homing on the real switch, and resolve the SWITCH_STUCK question.
+2. **Calibrate:**
+   - Measure the real travel and set `travel_mm` (default 140).
    - Tune the run current: smooth, cool, no lost steps at 2.5 µm moves.
    - Tune the settle time on 4× live view.
-6. **Camera:** measure the JPEG-download cost to decide whether a review gallery is worth it.
-7. **Full stacks:** run them at 2× and 4×, including a 100+ shot stack and a camera unplug mid-stack.
-8. **Release polish:** README screenshots from the real setup, a sample stack, the date in the CHANGELOG,
-   and a local `v1.0.0` tag. Push to GitHub only when the user says so.
+3. **Camera:** measure the JPEG-download cost to decide whether a review gallery is worth it.
+4. **Full stacks:** run them at 2× and 4×, including a 100+ shot stack and a camera unplug mid-stack.
+5. **Pi install:** the user runs `~/macrorail/deploy/install.sh` (it needs sudo) for autostart.
+6. **Release polish:**
+   - README screenshots from the real setup, and a sample stack.
+   - The date in the CHANGELOG, and a local `v1.0.0` tag.
+   - Push to GitHub only when the user says so.
 
 ## Reference: old projects (read-only inspiration)
 
