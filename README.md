@@ -1,5 +1,7 @@
 # MacroRail
 
+[![CI](https://github.com/Sam-de-Ham/MacroRail/actions/workflows/ci.yml/badge.svg)](https://github.com/Sam-de-Ham/MacroRail/actions/workflows/ci.yml)
+
 Focus stacking for macro and microscope-objective photography: a 3D-printed rail moves the
 subject in micrometre steps while the camera takes a photo at each step. You run it all
 from a phone or laptop.
