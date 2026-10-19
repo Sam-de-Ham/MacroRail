@@ -4,7 +4,10 @@ import asyncio
 
 import pytest
 
+from macrorail.config import RailConfig
+from macrorail.log import ActivityLog
 from macrorail.motion.base import AxisError, MotionInterrupted
+from macrorail.motion.protocol import Event
 from macrorail.motion.rail import RailAxis
 from macrorail.sim.firmware import SimRail
 
@@ -111,11 +114,19 @@ async def test_switch_stops_motion_in_any_direction(rail: RailAxis, sim_rail: Si
     assert not rail.state.homed
 
 
-async def test_switch_changes_are_pushed(rail: RailAxis, sim_rail: SimRail) -> None:
+async def test_switch_state_follows_the_switch(rail: RailAxis, sim_rail: SimRail) -> None:
     sim_rail.hold_switch(True)
-    await until(lambda: rail.state.endstop, timeout=0.3)  # well within one status poll
+    await until(lambda: rail.state.endstop)
     sim_rail.hold_switch(False)
-    await until(lambda: not rail.state.endstop, timeout=0.3)
+    await until(lambda: not rail.state.endstop)
+
+
+def test_switch_events_update_state_without_polling() -> None:
+    axis = RailAxis(RailConfig(port="sim"), SimRail().open, ActivityLog(), lambda: None)
+    axis._on_event(Event("SWITCH", {"pressed": "1"}))
+    assert axis.state.endstop
+    axis._on_event(Event("SWITCH", {"pressed": "0"}))
+    assert not axis.state.endstop
 
 
 async def test_pressed_switch_allows_only_backing_off(rail: RailAxis, sim_rail: SimRail) -> None:

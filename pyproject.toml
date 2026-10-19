@@ -13,19 +13,17 @@ dependencies = [
     "websockets>=13",
     "pyserial>=3.5",
     "pydantic>=2.9",
+    "numpy>=2.1",  # focus analysis and preview stacks
+    "pillow>=11",  # JPEG decoding, thumbnails, the simulator's live view
     # libgphoto2 only exists for Linux/macOS; on other platforms run with --sim.
     "gphoto2>=2.5.1; sys_platform == 'linux'",
 ]
-
-[project.optional-dependencies]
-sim = ["pillow>=11"]
 
 [project.scripts]
 macrorail = "macrorail.__main__:main"
 
 [dependency-groups]
 dev = [
-    "pillow>=11",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "httpx>=0.27",
