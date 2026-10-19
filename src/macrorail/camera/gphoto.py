@@ -47,6 +47,14 @@ class GPhotoCamera:
         return self._state
 
     async def run(self) -> None:
+        try:
+            await self._supervise()
+        finally:
+            # End the camera's remote session cleanly: a Sony left mid-session stops answering
+            # until it is switched off and on again.
+            await asyncio.get_running_loop().run_in_executor(self._executor, self._close)
+
+    async def _supervise(self) -> None:
         last_problem: str | None = None
         while True:
             if not self._state.connected:

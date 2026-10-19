@@ -31,6 +31,7 @@ class FakeWorld:
     present: bool = True
     trigger_failures: int = 0
     inits: int = 0
+    exits: int = 0
     triggers: int = 0
     pending_events: list[tuple[int, Any]] = field(default_factory=list)
 
@@ -44,7 +45,7 @@ class FakeCamera:
         self.world.inits += 1
 
     def exit(self) -> None:
-        pass
+        self.world.exits += 1
 
     def get_abilities(self) -> Any:
         return types.SimpleNamespace(model="Sony Alpha-A6400 (Control)")
@@ -138,3 +139,11 @@ async def test_missing_camera_is_explained(world: FakeWorld) -> None:
     assert camera.state.problem is not None
     assert "No camera found" in camera.state.problem
     task.cancel()
+
+
+async def test_shutdown_closes_the_session(world: FakeWorld) -> None:
+    camera, task = await start_camera()
+    assert camera.state.connected
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    assert world.exits == 1
