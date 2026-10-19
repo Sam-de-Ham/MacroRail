@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0f12">
+  <title>MacroRail</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <div class="chrome">
+  <header class="topbar">
+    <div class="brand"><img src="icon.svg" alt="" width="22" height="22"><span>MacroRail</span></div>
+    <div class="pills">
+      <span class="pill" id="rail-pill"><i></i><span>Rail</span></span>
+      <span class="pill" id="camera-pill"><i></i><span>Camera</span></span>
+    </div>
+    <button class="icon-button" data-action="open-settings" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.47.47 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+    </button>
+  </header>
+
+  <div class="banner" id="connection-banner" hidden>Reconnecting to the rail…</div>
+  <div class="banner banner-muted" id="control-banner" hidden>
+    <span>Another device is in control. You're watching.</span>
+    <button class="button small" data-action="take-control">Take control</button>
+  </div>
+  </div>
+
+  <main class="layout">
+    <section class="column-view">
+      <figure class="liveview" id="liveview">
+        <img id="liveview-image" alt="Live view from the camera">
+        <figcaption class="liveview-message" id="liveview-message">Live view unavailable</figcaption>
+        <div class="liveview-position" id="liveview-position">–</div>
+        <div class="liveview-hint" id="liveview-hint">Tap to zoom</div>
+      </figure>
+
+      <article class="card" id="stack-card">
+        <header class="card-header">
+          <h2>Stack</h2>
+          <span class="muted" id="stack-status"></span>
+        </header>
+        <div class="progress" id="stack-progress" hidden>
+          <div class="progress-bar"><div id="stack-progress-fill"></div></div>
+          <div class="progress-numbers">
+            <span id="stack-count"></span>
+            <span class="muted" id="stack-times"></span>
+          </div>
+          <p class="muted small-text" id="stack-file"></p>
+          <p class="error-text" id="stack-error" hidden></p>
+        </div>
+        <p class="summary" id="plan-summary"></p>
+        <div class="button-row">
+          <button class="button primary grow" data-action="stack-start" id="stack-start">Start stack</button>
+          <button class="button grow" data-action="stack-pause" id="stack-pause" hidden>Pause</button>
+          <button class="button primary grow" data-action="stack-resume" id="stack-resume" hidden>Resume</button>
+        </div>
+        <div class="camera-line">
+          <span class="muted" id="camera-detail">–</span>
+          <button class="button small" data-action="test-shot" id="test-shot">Test shot</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="column-controls">
+      <article class="card" id="position-card">
+        <header class="card-header">
+          <h2>Position</h2>
+          <span class="badge" id="homed-badge">Not homed</span>
+        </header>
+        <div class="readout">
+          <span class="readout-value" id="position-mm">–</span><span class="readout-unit">mm</span>
+        </div>
+        <p class="muted small-text" id="position-detail">&nbsp;</p>
+        <div class="button-row">
+          <button class="button grow" data-action="home" id="home">Home</button>
+          <button class="button grow" data-action="motors" id="motors">Motor off</button>
+        </div>
+        <div class="segmented" id="jog-steps" role="radiogroup" aria-label="Jog step"></div>
+        <div class="jog">
+          <button class="button jog-button" data-action="jog" data-direction="-1" aria-label="Jog toward home">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M15.4 6.4 14 5l-7 7 7 7 1.4-1.4L9.8 12z"/></svg>
+            <span>Toward home</span>
+          </button>
+          <button class="button jog-button" data-action="jog" data-direction="1" aria-label="Jog away from home">
+            <span>Away</span>
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8.6 6.4 10 5l7 7-7 7-1.4-1.4 5.6-5.6z"/></svg>
+          </button>
+        </div>
+      </article>
+
+      <article class="card" id="range-card">
+        <header class="card-header">
+          <h2>Focus range</h2>
+          <div class="segmented compact" role="radiogroup" aria-label="Stack mode">
+            <button data-action="mode" data-mode="range" role="radio">Start → End</button>
+            <button data-action="mode" data-mode="count" role="radio">Start + Shots</button>
+          </div>
+        </header>
+
+        <div class="point-row">
+          <span class="point-label">Start</span>
+          <span class="point-value" id="start-value">–</span>
+          <button class="button small" data-action="set-point" data-point="start">Set here</button>
+          <button class="button small" data-action="go-point" data-point="start">Go</button>
+        </div>
+        <div class="point-row" id="end-row">
+          <span class="point-label">End</span>
+          <span class="point-value" id="end-value">–</span>
+          <button class="button small" data-action="set-point" data-point="end">Set here</button>
+          <button class="button small" data-action="go-point" data-point="end">Go</button>
+        </div>
+        <div class="point-row" id="count-row">
+          <span class="point-label">Shots</span>
+          <input class="field" type="number" inputmode="numeric" min="2" max="5000" step="1" id="count-input" aria-label="Number of shots">
+          <div class="segmented compact" role="radiogroup" aria-label="Direction">
+            <button data-action="direction" data-direction="-1" role="radio">Toward home</button>
+            <button data-action="direction" data-direction="1" role="radio">Away</button>
+          </div>
+        </div>
+
+        <div class="fields">
+          <label class="field-group">
+            <span>Step</span>
+            <span class="field-with-unit">
+              <input class="field" type="number" inputmode="decimal" min="0" step="any" id="step-input">
+              <span class="unit">µm</span>
+            </span>
+          </label>
+          <label class="field-group">
+            <span>Settle</span>
+            <span class="field-with-unit">
+              <input class="field" type="number" inputmode="decimal" min="0" max="10" step="0.1" id="settle-input">
+              <span class="unit">s</span>
+            </span>
+          </label>
+        </div>
+        <p class="muted small-text" id="step-detail">&nbsp;</p>
+        <button class="button grow" data-action="preview" id="preview">Preview range</button>
+      </article>
+
+      <details class="card log" id="log">
+        <summary><h2>Activity</h2><span class="muted" id="log-latest"></span></summary>
+        <ol id="log-list"></ol>
+      </details>
+    </section>
+  </main>
+
+  <button class="stop-button" data-action="stop" id="stop" hidden>
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+    <span>Stop</span>
+  </button>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog class="sheet" id="settings">
+    <form method="dialog" class="sheet-body" id="settings-form">
+      <header class="card-header">
+        <h2>Settings</h2>
+        <button class="icon-button" value="close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"/></svg>
+        </button>
+      </header>
+      <h3>Motion</h3>
+      <div class="fields">
+        <label class="field-group"><span>Travel speed</span><span class="field-with-unit"><input class="field" type="number" step="0.1" data-setting="motion.travel_speed_mm_s"><span class="unit">mm/s</span></span></label>
+        <label class="field-group"><span>Stack speed</span><span class="field-with-unit"><input class="field" type="number" step="0.05" data-setting="motion.stack_speed_mm_s"><span class="unit">mm/s</span></span></label>
+        <label class="field-group"><span>Acceleration</span><span class="field-with-unit"><input class="field" type="number" step="1" data-setting="motion.accel_mm_s2"><span class="unit">mm/s²</span></span></label>
+        <label class="field-group"><span>Backlash take-up</span><span class="field-with-unit"><input class="field" type="number" step="0.05" data-setting="motion.backlash_mm"><span class="unit">mm</span></span></label>
+      </div>
+      <h3>Motor current</h3>
+      <div class="fields">
+        <label class="field-group"><span>Running</span><span class="field-with-unit"><input class="field" type="number" step="50" data-setting="motion.run_current_ma"><span class="unit">mA</span></span></label>
+        <label class="field-group"><span>Idle hold</span><span class="field-with-unit"><input class="field" type="number" step="50" data-setting="motion.hold_current_ma"><span class="unit">mA</span></span></label>
+        <label class="field-group"><span>Idle after</span><span class="field-with-unit"><input class="field" type="number" step="5" data-setting="motion.idle_hold_after_s"><span class="unit">s</span></span></label>
+      </div>
+      <p class="muted small-text">The motor runs at full current while moving and stacking, and drops to the idle hold current after it has been idle for a while.</p>
+      <p class="muted small-text" id="about"></p>
+    </form>
+  </dialog>
+</body>
+</html>

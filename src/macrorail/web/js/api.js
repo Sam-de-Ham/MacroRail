@@ -1,0 +1,65 @@
+// Commands to the server. Every request identifies this browser for the control lease.
+
+const CLIENT_KEY = "macrorail.client";
+
+function loadClientId() {
+  try {
+    const existing = localStorage.getItem(CLIENT_KEY);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    localStorage.setItem(CLIENT_KEY, id);
+    return id;
+  } catch {
+    return crypto.randomUUID(); // storage unavailable: control lasts for this page only
+  }
+}
+
+export const clientId = loadClientId();
+
+export class CommandError extends Error {}
+
+export async function command(method, path, body) {
+  const response = await fetch(`/api/${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", "X-Client-Id": clientId },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (response.ok) return;
+  let message = `Request failed (${response.status}).`;
+  try {
+    const { detail } = await response.json();
+    if (typeof detail === "string") message = detail;
+    else if (Array.isArray(detail)) message = detail.map((d) => d.msg).join(" ");
+  } catch {
+    // keep the generic message
+  }
+  throw new CommandError(message);
+}
+
+export const post = (path, body) => command("POST", path, body);
+export const patch = (path, body) => command("PATCH", path, body);
+export const remove = (path) => command("DELETE", path);
+
+// Keeps a WebSocket to the server open, reconnecting with backoff.
+export function connectUpdates({ onState, onLog, onConnection }) {
+  let delay = 500;
+  const open = () => {
+    const scheme = location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${scheme}://${location.host}/api/ws?client=${clientId}`);
+    socket.addEventListener("open", () => {
+      delay = 500;
+      onConnection(true);
+    });
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "state") onState(message.state);
+      else if (message.type === "log") onLog(message.entries);
+    });
+    socket.addEventListener("close", () => {
+      onConnection(false);
+      setTimeout(open, delay);
+      delay = Math.min(delay * 2, 5000);
+    });
+  };
+  open();
+}
