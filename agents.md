@@ -172,7 +172,9 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Test the UI over the LAN: `crypto.randomUUID` only exists on HTTPS or localhost.
   - An unclean session end leaves the A6400 stuck until it is power-cycled, so the app closes the session on shutdown.
   - Supervisors must never die. A link error once killed every background task; they now log and recover.
-- **Firmware on the Nano:** protocol 2 (release-based homing, unfiltered homing contact). Protocol 3 (`DRIVER`) must be flashed with the v1.1 app.
+- **Pi and Nano (2026-10-19):** v1.1 deployed and running by hand; the Nano has protocol 3. Checked
+  without 12 V or camera: the rail connects, shows "No driver power", diagnostics show the Pi
+  (it flagged a soft temperature limit during the firmware compile), and the UI loads over the LAN.
 - **Homing on hardware:** works. The measured release distance is 3.79 mm, but a microswitch should be well under 1 mm, and the user hears the click 2–3 mm before the stop.
   - Wiring is C + NO (open at rest, closed when pressed).
   - Suspects: contact chatter rejected by the noise filter (now unfiltered while homing), or a worn switch.
