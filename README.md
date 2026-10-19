@@ -11,6 +11,7 @@ stepper driver, and controls the camera over USB with gphoto2, including live vi
   - 2.5 µm steps (1/16 microstepping on an 8 mm-lead screw).
   - Silent StealthChop drive.
   - Every frame is approached from the same direction, so backlash never shifts a slice.
+  - The home switch is interrupt-driven and always armed: its first contact stops the motor before its next step.
 - **Nothing is assumed**
   - Each move is confirmed by the controller, and each shot by the camera, before the next step.
   - A camera hiccup pauses the stack instead of skipping a frame.
@@ -77,9 +78,9 @@ config (`ls /dev/serial/by-id/`).
 
 1. **Home** the rail. It finds the switch, then parks just in front of it.
 2. **Find the front of the subject** on the live view with the jog buttons, and press **Set here** for Start.
-   Tap the live view to zoom in.
+   Tap the live view to zoom in; the button in its corner pauses or resumes it.
 3. **Find the back of the subject** and press **Set here** for End.
-4. **Choose a step size.** The summary shows the shot count and the estimated time.
+4. **Choose a step size.** The summary and the Start button show how many shots it will take, plus the estimated time.
 5. **Preview range** sweeps between the two points so you can check the framing.
 6. **Start stack.** You can pause and resume. Stop returns the rail to the start.
 
