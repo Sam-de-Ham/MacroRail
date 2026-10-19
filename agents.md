@@ -79,8 +79,8 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - A camera error pauses the stack, and resume retakes that slice.
   - Stop or completion returns to start.
   - Each stack writes a JSON record to `~/.local/share/macrorail/stacks/`.
-- **Live view** is paused during stacks. Tap-to-zoom is a 3× zoom around the tap point: the
-  A6400 preview frames are only about 640 px wide, so a true 1:1 crop would show nothing extra.
+- **Live view** is paused during stacks. Tap-to-zoom is a 3× zoom around the tap point. The A6400
+  preview frames are 1024×680, close to their on-screen size, so a 1:1 crop would add nothing.
 - **Camera reconnect** is automatic: retried every 3 s, and right away after a loss. There is no
   Reconnect button. The capture timeout lives in `config.toml`, not the UI.
 - **Stop:**
@@ -112,23 +112,32 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - On the Pi, the app was deployed to `~/macrorail` and ran in sim mode: it starts in about 5 s and live view streams.
   - The service is not installed yet because `sudo` needs a password.
 
+- **2026-10-19, on the real Pi with nothing wired (Nano and A6400 on USB):**
+  - **Power:** a new PSU fixed the under-voltage (`get_throttled` is `0x0`).
+    The soft temperature limit tripped during a firmware compile on the Pi.
+  - **Firmware:** flashed from the Pi over SSH with `pio run -d firmware -e nano -t upload`
+    (PlatformIO in `uv tool`). The `nano` (old bootloader) environment is the right one.
+    - READY arrives 1.6 s after the port opens. A STATUS round trip takes about 10 ms.
+    - With nothing wired it reports `driver=missing` and `endstop=1` (the fail-safe reading), and refuses ENABLE/MOVE/JOG.
+  - **Camera:** gphoto2 reports "Sony ILCE-6400 (PC Control)", and the battery widget works.
+    - Live view: 1024×680 at about 30 fps from the camera; the app caps it at 10 fps.
+    - A capture is confirmed in 1.33–1.43 s. The battery drains slightly while connected: the Pi does not charge it, so use a dummy battery for long stacks.
+  - **Full app** (`.venv/bin/macrorail` run by hand): the rail is connected but reports no driver, the camera is connected, and live view streams. The systemd service is still not installed (the install needs the user's sudo).
+  - **Setup guide:** a 9-page PDF with breadboard layout and wire checklist, at `MacroRail-quick-start.pdf` (not tracked). It is built from HTML in the session scratchpad.
+
 ## Next: hardware bring-up (with the user)
 
-1. **Pi setup:** run `~/macrorail/deploy/install.sh` on the Pi. Use a proper PSU.
+1. **Pi setup:** the user runs `~/macrorail/deploy/install.sh` on the Pi (it needs sudo).
 2. **Wiring:** wire per `docs/wiring.md` (switch NC, 1 kΩ on D8, EN pull-up).
-3. **Firmware:** flash with `pio run -d firmware -e nano -t upload`.
-4. **Config:** set `rail.port` in the config (`ls /dev/serial/by-id/`).
-5. **First power-up checks:** detect the driver, check the switch reading, direction and homing.
-6. **Calibrate:**
+3. **Firmware and port:** already flashed (1.0.0), and the default port path matches this Nano.
+4. **First power-up checks:** detect the driver, check the switch reading, direction and homing.
+5. **Calibrate:**
    - Measure the real travel and set `travel_mm`.
    - Tune the run current: smooth, cool, no lost steps at 2.5 µm moves.
    - Tune the settle time on 4× live view.
-7. **Camera:**
-   - Measure the shot cycle time and live-view fps.
-   - Check the battery widget name on the A6400.
-   - Measure the JPEG-download cost to decide whether a review gallery is worth it.
-8. **Full stacks:** run them at 2× and 4×, including a 100+ shot stack and a camera unplug mid-stack.
-9. **Release polish:** README screenshots from the real setup, a sample stack, the date in the CHANGELOG,
+6. **Camera:** measure the JPEG-download cost to decide whether a review gallery is worth it.
+7. **Full stacks:** run them at 2× and 4×, including a 100+ shot stack and a camera unplug mid-stack.
+8. **Release polish:** README screenshots from the real setup, a sample stack, the date in the CHANGELOG,
    and a local `v1.0.0` tag. Push to GitHub only when the user says so.
 
 ## Reference: old projects (read-only inspiration)
