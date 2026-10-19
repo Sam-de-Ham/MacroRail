@@ -42,16 +42,32 @@ async def open_scripted() -> tuple[Link, ScriptedTransport, list[Event]]:
     return link, transport, events
 
 
-async def test_replies_are_matched_by_id_even_out_of_order() -> None:
+async def test_requests_take_turns_on_the_line() -> None:
     link, transport, _ = await open_scripted()
     first = asyncio.create_task(link.request("STATUS"))
     second = asyncio.create_task(link.request("INFO"))
     await asyncio.sleep(0.05)
-    assert transport.sent == ["1 STATUS", "2 INFO"]
-    transport.incoming.put("2 OK fw=x")
+    assert transport.sent == ["1 STATUS"]  # INFO waits: the controller may be busy answering
     transport.incoming.put("1 OK pos=5")
     assert await first == {"pos": "5"}
+    await asyncio.sleep(0.05)
+    assert transport.sent == ["1 STATUS", "2 INFO"]
+    transport.incoming.put("2 OK fw=x")
     assert await second == {"fw": "x"}
+    await link.close()
+
+
+async def test_motion_frees_the_line_and_replies_match_by_id() -> None:
+    link, transport, _ = await open_scripted()
+    move = asyncio.create_task(link.request("MOVE", 100, 400, 4000, timeout=5, motion=True))
+    await asyncio.sleep(0.05)
+    status = asyncio.create_task(link.request("STATUS"))
+    await asyncio.sleep(0.05)
+    assert transport.sent == ["1 MOVE 100 400 4000", "2 STATUS"]
+    transport.incoming.put("2 OK pos=50")
+    transport.incoming.put("1 OK pos=100")
+    assert await status == {"pos": "50"}
+    assert await move == {"pos": "100"}
     await link.close()
 
 

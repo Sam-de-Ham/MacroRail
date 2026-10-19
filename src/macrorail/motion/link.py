@@ -72,6 +72,7 @@ class Link:
         self._on_event = on_event
         self._loop = asyncio.get_running_loop()
         self._pending: dict[int, asyncio.Future[Reply]] = {}
+        self._line = asyncio.Lock()
         self._last_id = 0
         self._ready: asyncio.Future[Event] = self._loop.create_future()
         self._closed = asyncio.Event()
@@ -105,27 +106,45 @@ class Link:
         await self._closed.wait()
         return self._close_reason
 
-    async def request(self, command: str, *args: int, timeout: float = 1.0) -> dict[str, str]:
-        """Send a request and return its reply data. Raises DeviceError or LinkError."""
-        if self.closed:
-            raise self._close_reason
-        request_id = self._next_id()
-        future: asyncio.Future[Reply] = self._loop.create_future()
-        self._pending[request_id] = future
+    async def request(
+        self, command: str, *args: int, timeout: float = 1.0, motion: bool = False
+    ) -> dict[str, str]:
+        """Send a request and return its reply data. Raises DeviceError or LinkError.
+
+        The line is half-duplex around the controller's driver UART, which blocks the Nano's
+        interrupts and would drop incoming bytes: a request holds the line until its reply
+        arrives. A `motion` request replies only when the motion ends, and releases the line
+        once sent, so STATUS and STOP can follow (the controller never uses the driver UART
+        while moving).
+        """
+        async with self._line:
+            if self.closed:
+                raise self._close_reason
+            request_id = self._next_id()
+            future: asyncio.Future[Reply] = self._loop.create_future()
+            self._pending[request_id] = future
+            try:
+                self._transport.write_line(format_request(request_id, command, *args))
+            except OSError as exc:
+                self._fail(LinkError(f"write failed: {exc}"))
+            if not motion:
+                reply = await self._reply(command, request_id, future, timeout)
+        if motion:
+            reply = await self._reply(command, request_id, future, timeout)
+        if not reply.ok:
+            raise DeviceError(reply.code or "UNKNOWN", reply.data)
+        return reply.data
+
+    async def _reply(
+        self, command: str, request_id: int, future: asyncio.Future[Reply], timeout: float
+    ) -> Reply:
         try:
-            self._transport.write_line(format_request(request_id, command, *args))
-        except OSError as exc:
-            self._fail(LinkError(f"write failed: {exc}"))
-        try:
-            reply = await asyncio.wait_for(future, timeout)
+            return await asyncio.wait_for(future, timeout)
         except TimeoutError:
             self._fail(LinkError(f"no reply to {command} within {timeout:.1f} s"))
             raise self._close_reason from None
         finally:
             self._pending.pop(request_id, None)
-        if not reply.ok:
-            raise DeviceError(reply.code or "UNKNOWN", reply.data)
-        return reply.data
 
     def abort(self, reason: str) -> None:
         """Close the link from the event loop thread, failing anything in flight."""

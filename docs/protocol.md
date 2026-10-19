@@ -29,6 +29,12 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
   - Only one motion command may be in flight. While one is running, only `INFO`, `STATUS` and
     `STOP` are accepted; everything else gets `ERR BUSY`.
 - A line that cannot be parsed gets the reply `0 ERR SYNTAX` (or `0 ERR TOOLONG`).
+- **Flow control:** the Nano talks to the driver over a software UART that blocks its interrupts,
+  which would drop bytes arriving from the host. So the firmware uses the driver UART only while
+  answering a request: `STATUS` when idle (a driver check at most once a second), `ENABLE` and
+  `CURRENT`. The host sends nothing while a request is unanswered. The only exception is a motion
+  command: once it has been sent, `STATUS` and `STOP` may follow, because the firmware never
+  touches the driver while moving.
 
 ## Commands
 
