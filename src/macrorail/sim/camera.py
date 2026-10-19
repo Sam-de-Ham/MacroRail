@@ -13,12 +13,15 @@ from collections.abc import Callable
 from dataclasses import replace
 from functools import cached_property
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 from ..camera.base import CameraError, CameraState, Capture
 
 WIDTH, HEIGHT = 960, 640
-BLUR_LEVELS = (0, 1.5, 3, 5, 8, 12)
+# Blur radius for each step out of focus: fine steps give smooth sharpness peaks, like real optics.
+BLUR_LEVELS = tuple(0.8 * level for level in range(16))
+BAND = 6  # depth units (of 255 across the subject) per blur level
 
 
 class SimCamera:
@@ -74,8 +77,7 @@ class SimCamera:
     def _layers(self) -> tuple[list[Image.Image], Image.Image]:
         """Pre-rendered blur levels of the subject, plus its depth map (0 = nearest)."""
         sharp = Image.new("RGB", (WIDTH, HEIGHT), (14, 16, 20))
-        depth = Image.new("L", (WIDTH, HEIGHT), 255)
-        draw, depth_draw = ImageDraw.Draw(sharp), ImageDraw.Draw(depth)
+        draw = ImageDraw.Draw(sharp)
         cx, cy, radius = WIDTH / 2, HEIGHT / 2, HEIGHT * 0.44
         pitch = 22.0
         for row in range(-20, 21):
@@ -94,8 +96,11 @@ class SimCamera:
                     (x - size * 0.35, y - size * 0.55, x + size * 0.1, y - size * 0.15),
                     fill=(min(255, shade + 60),) * 3,
                 )
-                depth_draw.ellipse(box, fill=int(255 * (1 - height)))
-        depth = depth.filter(ImageFilter.GaussianBlur(4))
+        # Depth of the dome's surface everywhere on it: 0 at its top, 255 at its rim and beyond.
+        yy, xx = np.mgrid[0:HEIGHT, 0:WIDTH]
+        r = np.hypot(xx - cx, yy - cy) / radius
+        height = np.sqrt(np.clip(1 - r * r, 0, 1))
+        depth = Image.fromarray((255 * (1 - height)).astype(np.uint8))
         layers = [sharp.filter(ImageFilter.GaussianBlur(b)) if b else sharp for b in BLUR_LEVELS]
         return layers, depth
 
@@ -104,7 +109,7 @@ class SimCamera:
         focus = (focus_mm - self._near) / self._depth * 255  # focus plane on the depth scale
         frame = layers[-1]
         for level in reversed(range(len(BLUR_LEVELS) - 1)):
-            band = 18 * (level + 1)
+            band = BAND * (level + 1)
             lut = [255 if abs(d - focus) < band else 0 for d in range(256)]
             frame = Image.composite(layers[level], frame, depth.point(lut))
         buffer = io.BytesIO()
