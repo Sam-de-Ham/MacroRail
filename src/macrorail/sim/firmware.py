@@ -79,6 +79,7 @@ class SimRail:
         travel_mm: float = 150.0,
         start_mm: float = 30.0,
         switch_hysteresis_mm: float = 0.6,
+        backlash_mm: float = 0.0,
         speedup: float = 1.0,
     ) -> None:
         self.steps_per_mm = steps_per_mm
@@ -87,6 +88,9 @@ class SimRail:
         self.driver_powered = True
         self.switch_held = False  # tests: someone holds the switch down by hand
         self.physical = start_mm * steps_per_mm  # carriage position, switch trips at 0 (steps)
+        # Lead-screw backlash: the screw turns freely inside this gap before it moves the carriage.
+        self.backlash = backlash_mm * steps_per_mm
+        self.screw = self.physical
         # Like a roller lever: trips at 0, but only releases once the carriage is this far away.
         self.hysteresis = switch_hysteresis_mm * steps_per_mm
         self.lever_closed = self.physical <= 0
@@ -204,10 +208,14 @@ class SimRail:
         delta = self.velocity * dt
         if remaining and abs(delta) >= abs(remaining) and self.velocity * remaining > 0:
             delta, self.velocity = remaining, 0.0
-        if self.physical > 0 >= self.physical + delta:
-            delta = -self.physical  # the switch trips exactly where it is, whatever the tick size
+        screw = self.screw + delta
+        carriage = min(max(self.physical, screw - self.backlash), screw)  # pushed across the gap
+        if self.physical > 0 >= carriage:  # the switch trips exactly where it is
+            overshoot = -carriage
+            delta, screw, carriage = delta + overshoot, screw + overshoot, 0.0
         self.position += delta
-        self.physical = min(self.physical + delta, self.travel_steps)
+        self.screw = screw
+        self.physical = min(carriage, self.travel_steps)
 
     def _check_switch(self) -> bool:
         """Report level changes; return True if a fresh press stops the current motion."""

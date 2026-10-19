@@ -20,18 +20,23 @@ from .camera.base import Camera, CameraError
 from .camera.liveview import LiveView
 from .config import Config
 from .control import ControlLease
+from .focus.analysis import AnalysisError
+from .focus.scan import FocusScanner
+from .focus.scan import Motion as ScanMotion
 from .log import ActivityLog
 from .motion.base import Axis, AxisError, MotionInterrupted
+from .optics import Optics
 from .settings import Settings, SettingsStore
 from .stack.plan import PlanError, StackPlan, estimate_seconds, plan_count, plan_range
 from .stack.runner import StackRun
 
 log = logging.getLogger(__name__)
 
-Activity = Literal["idle", "homing", "moving", "previewing", "stacking", "capturing"]
+Activity = Literal["idle", "homing", "moving", "previewing", "stacking", "capturing", "scanning"]
 Point = Literal["start", "end"]
 
 MAX_JOG_MM = 5.0
+SIM_BACKLASH_MM = 0.04  # a realistic lead-screw backlash for the simulator
 DEFAULT_CAPTURE_S = 1.5
 IDLE_CHECK_S = 1.0
 
@@ -61,6 +66,7 @@ class Machine:
         self.live_view = LiveView(
             camera, config.camera.liveview_max_fps, paused=lambda: self.activity == "stacking"
         )
+        self.scanner = FocusScanner(axis, camera, self._approach, self._check_stop, self.changed)
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task[None] | None = None
         self._stop_requested = False
@@ -108,6 +114,11 @@ class Machine:
                 "paused": self.activity == "stacking",
             },
             "settings": self.settings.model_dump(),
+            "optics": {
+                "dof_um": round(self._optics().depth_of_field_um, 1),
+                "suggested_step": self._optics().suggested_step(self.axis.steps_per_mm),
+            },
+            "scan": self.scanner.snapshot(),
             "plan": self._plan_summary(),
             "stack": self.stack.snapshot() if self.stack else None,
         }
@@ -120,6 +131,16 @@ class Machine:
     def _profile(self, speed_mm_s: float) -> tuple[float, float]:
         spm = self.axis.steps_per_mm
         return speed_mm_s * spm, self.settings.motion.accel_mm_s2 * spm
+
+    def _mm(self, steps: float) -> str:
+        return f"{steps / self.axis.steps_per_mm:.3f}"
+
+    def _optics(self) -> Optics:
+        o = self.settings.optics
+        return Optics(o.magnification, o.na, o.pixel_um)
+
+    def _dof_steps(self) -> int:
+        return max(1, round(self._optics().depth_of_field_um * self.axis.steps_per_mm / 1000))
 
     # -- commands -----------------------------------------------------------------------------
 
@@ -151,6 +172,34 @@ class Machine:
         self._require_homed()
         plan = self._plan()
         self._start("previewing", self._sweep(plan))
+
+    def find_range(self) -> None:
+        """Scan around the current position for where the subject comes into and out of focus."""
+        self._require_homed()
+        self._require_live_view()
+        span = self._steps(self.settings.scan.span_mm)
+        self._start("scanning", self._find_range(span, self._dof_steps()))
+
+    def apply_range(self) -> None:
+        result = self.scanner.range
+        if result is None:
+            raise OperationError("Run a range scan first.")
+        low, high = self.axis.min_position, self.axis.max_position
+        start, end = max(result.start, low), min(result.end, high)
+        self._save(self.settings.merged({"stack": {"mode": "range", "start": start, "end": end}}))
+
+    def measure_backlash(self) -> None:
+        """Measure the lead screw's backlash from where a sharp detail peaks going each way."""
+        self._require_homed()
+        self._require_live_view()
+        self._start("scanning", self._measure_backlash(self._dof_steps()))
+
+    def apply_backlash(self) -> None:
+        result = self.scanner.backlash
+        if result is None:
+            raise OperationError("Measure the backlash first.")
+        takeup_mm = min(2.0, round(result.suggested_takeup / self.axis.steps_per_mm + 0.005, 2))
+        self._save(self.settings.merged({"motion": {"backlash_mm": takeup_mm}}))
 
     def start_stack(self) -> None:
         self._require_idle()  # never replace a running stack, e.g. on a double tap
@@ -242,7 +291,7 @@ class Machine:
             await operation
         except MotionInterrupted:
             self.log.info("Stopped.")
-        except (AxisError, CameraError, PlanError) as exc:
+        except (AxisError, CameraError, PlanError, AnalysisError) as exc:
             self.log.error(str(exc))
         except Exception as exc:
             log.exception("operation failed")
@@ -323,6 +372,37 @@ class Machine:
                 self._check_stop()
                 await self.axis.move_to(target, speed, accel)
 
+    def _scan_motion(self) -> ScanMotion:
+        speed, accel = self._profile(self.settings.motion.stack_speed_mm_s)
+        return ScanMotion(speed, accel, self.settings.scan.settle_s)
+
+    async def _find_range(self, span: int, step: int) -> None:
+        await self._prepare_motion()
+        self.log.info("Scanning for the subject's front and back…")
+        center = self.axis.state.position
+        result = await self.scanner.find_range(center, span, step, self._scan_motion())
+        self.log.info(
+            f"Subject in focus from {self._mm(result.start)} to {self._mm(result.end)} mm."
+        )
+        if result.clipped:
+            self.log.warning(
+                "The subject was still in focus at the edge of the scan. Widen the scan span "
+                "or start nearer the middle of the subject."
+            )
+
+    async def _measure_backlash(self, dof: int) -> None:
+        await self._prepare_motion()
+        self.log.info("Measuring backlash…")
+        result = await self.scanner.measure_backlash(
+            self.axis.state.position, dof, self._scan_motion()
+        )
+        um = 1000 / self.axis.steps_per_mm
+        self.log.info(
+            f"Backlash is about {result.backlash * um:.0f} µm (repeatability "
+            f"±{result.spread * um / 2:.0f} µm). Suggested take-up: "
+            f"{result.suggested_takeup * um / 1000:.2f} mm."
+        )
+
     async def _run_stack(self, run: StackRun) -> None:
         await self._prepare_motion()
         await run.run()  # a stop during preparation is seen by the run itself
@@ -388,6 +468,13 @@ class Machine:
         if not self.axis.state.homed:
             raise OperationError("Home the rail first.")
 
+    def _require_live_view(self) -> None:
+        camera = self.camera.state
+        if not camera.connected:
+            raise OperationError(camera.problem or "The camera is not connected.")
+        if not camera.live_view:
+            raise OperationError("This needs live view, which this camera doesn't provide.")
+
     def _require_idle(self) -> None:
         if self.busy:
             raise OperationError(f"Busy ({self.activity}). Stop first or wait for it to finish.")
@@ -423,9 +510,12 @@ def build_machine(config: Config, *, sim: bool = False, sim_speedup: float = 1.0
         from .sim.camera import SimCamera
         from .sim.firmware import SimRail
 
-        sim_rail = SimRail(steps_per_mm=config.rail.steps_per_mm, speedup=sim_speedup)
+        sim_rail = SimRail(
+            steps_per_mm=config.rail.steps_per_mm, backlash_mm=SIM_BACKLASH_MM, speedup=sim_speedup
+        )
         axis = RailAxis(config.rail, sim_rail.open, activity_log, changed)
-        camera = SimCamera(lambda: axis.state.position / axis.steps_per_mm, speedup=sim_speedup)
+        # The camera sees the carriage, which trails the motor by the backlash after a reversal.
+        camera = SimCamera(lambda: sim_rail.physical_mm, speedup=sim_speedup)
     else:
         from .camera.gphoto import GPhotoCamera
         from .motion.link import SerialTransport
