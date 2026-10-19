@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 
 class ProtocolError(ValueError):

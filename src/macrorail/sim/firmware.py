@@ -142,6 +142,8 @@ class SimRail:
         self.min_limit = 0
         self.max_limit = 0
         self.pending = _Pending()
+        self.current = (600, 200)
+        self.booted = time.monotonic()
         self.last_rx = time.monotonic()
         self.last_pos_report = 0.0
         self.switch_reported = self._endstop
@@ -316,7 +318,7 @@ class SimRail:
         except ValueError:
             self._emit(f"{request_id} ERR ARG")
             return
-        arity = {"INFO": 0, "STATUS": 0, "STOP": 0, "ENABLE": 0, "DISABLE": 0,
+        arity = {"INFO": 0, "STATUS": 0, "STOP": 0, "ENABLE": 0, "DISABLE": 0, "DRIVER": 0,
                  "CURRENT": 2, "LIMITS": 2, "HOME": 6, "MOVE": 3, "JOG": 3}  # fmt: skip
         if name not in arity:
             self._emit(f"{request_id} ERR UNKNOWN")
@@ -362,7 +364,20 @@ class SimRail:
         return "OK"
 
     def _cmd_current(self, _id: int, run: int, hold: int) -> str:
-        return "OK" if 100 <= run <= 1500 and 0 <= hold <= run else "ERR ARG"
+        if not (100 <= run <= 1500 and 0 <= hold <= run):
+            return "ERR ARG"
+        self.current = (run, hold)
+        return "OK"
+
+    def _cmd_driver(self, _id: int) -> str:
+        if not self.driver_ok:
+            return "ERR DRIVER"
+        irun, ihold = (min(31, round(ma / 1500 * 31)) for ma in self.current)
+        uptime = int(time.monotonic() - self.booted)
+        return (
+            f"OK cs={irun} stealth=1 stst=1 temp=0 otpw=0 ot=0 short=0 openload=0 "
+            f"irun={irun} ihold={ihold} mres=16 up={uptime}"
+        )
 
     def _cmd_limits(self, _id: int, low: int, high: int) -> str:
         if low > high:

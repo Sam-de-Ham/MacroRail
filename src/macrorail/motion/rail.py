@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -56,6 +57,10 @@ class RailAxis:
         self._state = AxisState(problem="Connecting to the rail controller…")
         self._link: Link | None = None
         self._current = (600, 200)
+        # Link health, for diagnostics.
+        self._connections = 0
+        self._connected_since: float | None = None
+        self._status_ms: float | None = None  # smoothed STATUS round trip
 
     @property
     def state(self) -> AxisState:
@@ -93,12 +98,21 @@ class RailAxis:
             await link.request("LIMITS", self.min_position, self.max_position)
             self._link = link
             self._apply_status(await link.request("STATUS"), firmware=ready.data.get("fw"))
+            self._connections += 1
+            self._connected_since = time.time()
             self._log.info(f"Rail controller connected (firmware {self._state.firmware}).")
             while True:
                 await asyncio.sleep(STATUS_INTERVAL_S)
-                self._apply_status(await link.request("STATUS"))
+                sent = time.perf_counter()
+                status = await link.request("STATUS")
+                ms = (time.perf_counter() - sent) * 1000
+                self._status_ms = (
+                    ms if self._status_ms is None else 0.8 * self._status_ms + 0.2 * ms
+                )
+                self._apply_status(status)
         finally:
             self._link = None
+            self._connected_since = None
             await link.close()
 
     def _describe_failure(self, exc: Exception) -> str:
@@ -173,6 +187,19 @@ class RailAxis:
             return await self._request(command, *args, timeout=timeout, motion=True)
         finally:
             self._update(moving=False)
+
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "port": self._config.port,
+            "protocol": PROTOCOL_VERSION,
+            "connections": self._connections,
+            "connected_since": self._connected_since,
+            "status_ms": None if self._status_ms is None else round(self._status_ms, 1),
+        }
+
+    async def read_driver(self) -> dict[str, str]:
+        """The driver's status registers (only while idle: the controller refuses it moving)."""
+        return await self._request("DRIVER")
 
     async def set_current(self, run_ma: int, hold_ma: int) -> None:
         self._current = (run_ma, hold_ma)

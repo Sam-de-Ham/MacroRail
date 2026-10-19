@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 #define FIRMWARE_VERSION "1.0.0"
-#define PROTOCOL_VERSION 2
+#define PROTOCOL_VERSION 3
 
 // Pins
 constexpr uint8_t PIN_ENDSTOP = 2;   // switch to GND, internal pull-up; INT0 (hardware interrupt)
