@@ -12,99 +12,116 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 ## Scope
 
-- **v1:** custom macro rail (Arduino Nano + TMC2209) + Sony A6400 over USB (gphoto2).
-  All effort goes here. It ends with the complete pipeline working really well.
-- **v1.1:** 3D printer as the motion source (Marlin G-code over USB, jog X/Y/Z),
-  relay shutter-cable trigger on the Nano. v1 is designed so these plug in behind
-  the existing motion/camera interfaces.
-- **Later ideas:** in-browser review of the captured stack, low-res live stack
-  preview, auto-detecting start/end focus from live view.
+- **v1 (now):** custom macro rail (Arduino Nano + TMC2209) + Sony A6400 over USB (gphoto2).
+- **v1.1:** 3D printer as the motion source (Marlin G-code over USB, jog X/Y/Z), and a relay
+  shutter-cable trigger on the Nano (D7 reserved). Add these as new `Axis` / `Camera`
+  implementations; nothing else should need to change.
+- **Later ideas:** review captured JPEGs in the browser, a low-res live stack preview,
+  auto-detecting start/end from live view, StallGuard crash detection, a Tr8×2 screw for 10×.
 
-## Principles
+## Principles and how we work
 
-- Stability and repeatability come first; then intuitive UX; then features.
-- Simple and minimal. No over-engineering, no hot fixes. Fix root causes.
-- One owner per piece of hardware; the browser never talks to hardware directly.
-- Every state change is pushed to clients. No polling, no duplicated defaults.
-- Never move or shoot on assumptions: wait for confirmations (move done, file added).
+- Stability and repeatability first, then intuitive UX, then features.
+- Simple and minimal. No over-engineering, no hot fixes; fix root causes. Don't copy old-project
+  approaches without checking them; research when unsure.
+- One owner per device; the browser never talks to hardware. Push state, never poll.
+- Never act on assumptions: wait for the controller's move reply and the camera's FILE_ADDED.
+- Develop and test against the simulator. Real hardware is tested once everything is ready,
+  just before calling v1 done.
+- Every milestone ends with: `uv run pytest`, `ruff check`, `ruff format --check`,
+  `mypy src` and `pio run -d firmware` all green, a local commit, and this file updated.
+- Git: **local only** unless explicitly agreed. Author Sam-de-Ham <weisz.sam321@gmail.com>,
+  with no co-author or AI attribution in commits.
 
 ## Hardware (verified facts)
 
-- **Rail** (CAD/STLs in `hardware/rail/`): 2 × 8×380 mm rods,
-  4 × SC8UU blocks, T8 brass nut on a floating carrier, horizontal. The carriage
-  carries the **sample**; the camera is fixed. CAD travel ≈ 150 mm (real limit not yet measured).
-- **Lead screw:** Tr8×8 (P2, 4-start), **8 mm/rev**, not self-locking.
-- **Motor:** NEMA 17 42SHDC3025-24B (ex Anet A8), 1.8°. Rated current unverified
-  (an unofficial listing says 1.5 A). Read it off the label.
+- **Rail** (`hardware/rail/`): 2 × 8×380 mm rods, 4 × SC8UU blocks, T8 nut on a floating carrier,
+  horizontal. The carriage carries the **sample**; the camera is fixed. CAD travel ≈ 150 mm.
+- **Lead screw:** Tr8×8, 8 mm/rev, not self-locking.
+- **Motor:** generic Anet A8 NEMA 17 (42SHDC3025-24B), rating unknown.
 - **Resolution:** full step 40 µm; 1/16 microstep = **2.5 µm** (400 steps/mm).
-- **Homing:** roller microswitch at the motor end (X-min).
-- **Driver:** TMC2209 at **12 V**, STEP/DIR for motion, UART for configuration.
-- **MCU:** Arduino Nano, USB to Pi.
-- **Camera:** Sony A6400, USB to Pi, gphoto2 (libgphoto2 2.5.31 on the Pi).
-- **Pi:** 3B+, Debian 13 (trixie) 64-bit, Python 3.13.5, `ssh pi`.
-  `get_throttled=0x50005`: **under-voltage**. Fix the PSU before trusting USB stability.
+- **Driver:** TMC2209 at 12 V: STEP/DIR for motion, UART (SoftwareSerial D10/D11) for setup.
+- **Nano:** the pin map is in `firmware/src/config.h` and `docs/wiring.md`. The home switch should be
+  wired NC (fails safe). The firmware assumes NC; flip `ENDSTOP_ACTIVE_LEVEL` if it is NO.
+- **Pi:** 3B+, Debian 13 64-bit, Python 3.13.5, `ssh pi`. `sudo` needs a password, so the user
+  runs `deploy/install.sh` themselves. It showed under-voltage on the bench supply; use a
+  proper PSU for real runs.
+- **Camera:** Sony A6400, USB *PC Remote* mode, gphoto2.
 
 ## Decisions
 
-- Homing uses the microswitch at the motor end (front). Position 0 is the front, and work
-  happens near the front; we never need the far end. StallGuard is deferred.
-- 1/16 microstepping with the driver's 256× interpolation; StealthChop. No CoolStep
-  (dynamic current): the current stays constant during motion and stacks, for repeatability.
-- Motor current: rating unknown (generic Anet A8 NEMA 17). Use a conservative,
-  configurable default (~0.6 A RMS run) with a low idle hold.
-- Precision instrument: every move is slow, with gentle acceleration and deceleration,
-  including travel between start and end. Speed is never traded for stability.
-- Motors off → position unknown → re-home before any absolute move.
-- 4× objective (shot at 2×–4×) is the v1 target. 10× and a Tr8×2 screw are a later upgrade
-  (steps/mm comes from config).
-- The Nano runs a minimal custom line protocol (not G-code). Commands carry IDs,
-  replies are matched by ID, events are async (move done, homed, stall, endstop).
-  Stop takes effect immediately.
-- Camera control is gphoto2 via trigger + wait for FILE_ADDED. Never use a direct
-  `capture()` (caused `-7` errors and USB drops in MacroScanner3).
-- Images stay on the SD card. JPEG download to the Pi is optional, only if it
-  doesn't slow the stack (measure first).
-- Live view through the gphoto2 preview, shown in the web UI.
-- Stack definition: **start + end + step** (default) or **start + step + count**.
-  Coverage is guaranteed: shots = ceil(range/step) + 1, and the last shot lands at or beyond the end.
-- Cycle: move → settle → trigger → wait for the camera's confirmation → next.
-  Never move before the camera confirms.
-- Pause holds position and Resume continues. Stop returns to start.
-  A completed stack returns to start.
-- Backlash: always approach positions from the same direction as the stack runs.
-- Run current is moderate, below rating. The current does not change during a stack;
-  low hold only when idle.
-- No saved presets/setups for now.
-- Multi-client: one controller at a time. Other devices are view-only with a
-  "Take control" button that takes control immediately.
-- Backend is Python, FastAPI + WebSocket, managed with **uv**.
-- Frontend is plain JS (ES modules) with handwritten CSS and no build step. Dark mode,
-  minimal, mobile-first.
-- License: PolyForm Noncommercial 1.0.0 for code; CC BY-NC 4.0 for CAD/docs.
-  Use, adapt and share with attribution; no selling.
-- The Pi gets a proper PSU for real runs. The current under-voltage is just a
-  bench-access setup.
-- Deploy: install script + systemd service, with autostart easy to enable/disable.
-- The repo includes the Arduino firmware, the rail CAD/STLs, a hardware simulator
-  (for tests, CI and screenshots) and tests.
-- Git: local only unless explicitly agreed. Author is Sam-de-Ham
-  <weisz.sam321@gmail.com>, with no co-author or AI attribution.
+- **Homing:** microswitch at the motor end; position 0 = switch, park at `min_mm` (0.5 mm).
+  Work happens near the front.
+- **Driver modes:** StealthChop, 1/16 + 256× interpolation. CoolStep and StallGuard are off.
+- **Current policy:** full run current (default 600 mA) from the first move until idle for
+  30 s, then low hold (200 mA). No current change during a stack.
+- **Motors off** clears homed; re-home before absolute moves.
+- **Motion speeds:** slow and gentle. Travel 2 mm/s, stack 1 mm/s, 10 mm/s².
+  All of these are user settings.
+- **Backlash:** every arrival at start/end ends moving in the stack direction (overshoot of
+  0.3 mm when needed), and stacks only move forward.
+- **Protocol** (`docs/protocol.md`): ASCII lines with ids.
+  - Motion commands reply when the motion finishes.
+  - `STATUS` is polled every 0.5 s and doubles as the firmware's 2 s watchdog.
+  - A missing reply means the link is dead, and the host reconnects.
+- **Camera:**
+  - A shot is gphoto2 `trigger_capture`, then wait for FILE_ADDED. On failure: re-init and retry once.
+    This can cost a duplicate frame, never a missing one.
+  - Images stay on the card. Never use a blocking `capture()`; it dropped USB on Sony in MacroScanner3.
+- **Stacks:**
+  - Two modes: start + end + step (default), or start + step + count.
+  - The range is always covered: count = ceil(range/step) + 1.
+  - Steps snap to the microstep grid.
+- **Stack runner:**
+  - Each shot is move → settle (0.8 s) → shoot → confirm.
+  - Pause holds position.
+  - A camera error pauses the stack, and resume retakes that slice.
+  - Stop or completion returns to start.
+  - Each stack writes a JSON record to `~/.local/share/macrorail/stacks/`.
+- **Live view** is paused during stacks.
+- **Control:** one controlling client id at a time; the first to connect gets it, and
+  "Take control" hands it over. Stop is allowed from any device.
+- **Stack:** FastAPI + WebSocket + MJPEG; plain ES-module UI, no build step; uv; PlatformIO.
+- **Config vs settings:** hardware constants live in `~/.config/macrorail/config.toml`. User
+  settings, start/end and the step live in `~/.local/share/macrorail/settings.json`. `--sim` uses a `sim/` subfolder.
+- **No presets/profiles for now.**
+- **License:** PolyForm Noncommercial 1.0.0 (code), CC BY-NC 4.0 (hardware).
 
-## Open questions
+## Repository map
 
-- None blocking. Measure on hardware: real travel, a good run current, settle time,
-  JPEG download cost, and live-view frame rate.
+`firmware/` Nano (PlatformIO) · `src/macrorail/` app (`motion/`, `camera/`, `stack/`, `sim/`,
+`machine.py`, `api.py`, `web/`) · `tests/` · `deploy/` install + service · `scripts/deploy-dev.sh` ·
+`docs/` protocol, wiring, architecture · `hardware/rail/` STLs + assembly guide.
 
 ## Status
 
-- 2026-10-19: Reviewed MacroScanner2/3/4 and the Pi. Decisions agreed. Local git
-  initialised; rail STLs and assembly guide imported into `hardware/rail/`.
-  Next: v1 implementation plan.
+- **2026-10-19:**
+  - v1 software is complete and tested against the simulator: 63 tests; ruff, mypy (strict) and the firmware build are green.
+  - The UI was checked in the browser at phone and desktop sizes: home, set range, stack, pause/resume, stop-and-return, take control.
+  - On the Pi, the app was deployed to `~/macrorail` and ran in sim mode: it starts in about 5 s and live view streams.
+  - The service is not installed yet because `sudo` needs a password.
+
+## Next: hardware bring-up (with the user)
+
+1. **Pi setup:** run `~/macrorail/deploy/install.sh` on the Pi. Use a proper PSU.
+2. **Wiring:** wire per `docs/wiring.md` (switch NC, 1 kΩ on D11, EN pull-up).
+3. **Firmware:** flash with `pio run -d firmware -e nano -t upload`.
+4. **Config:** set `rail.port` in the config (`ls /dev/serial/by-id/`).
+5. **First power-up checks:** detect the driver, check the switch reading, direction and homing.
+6. **Calibrate:**
+   - Measure the real travel and set `travel_mm`.
+   - Tune the run current: smooth, cool, no lost steps at 2.5 µm moves.
+   - Tune the settle time on 4× live view.
+7. **Camera:**
+   - Measure the shot cycle time and live-view fps.
+   - Check the battery widget name on the A6400.
+   - Measure the JPEG-download cost to decide whether a review gallery is worth it.
+8. **Full stacks:** run them at 2× and 4×, including a 100+ shot stack and a camera unplug mid-stack.
+9. **Release polish:** README screenshots from the real setup, a sample stack, the date in the CHANGELOG,
+   and a local `v1.0.0` tag. Push to GitHub only when the user says so.
 
 ## Reference: old projects (read-only inspiration)
 
-- `C:\Code\Mine\MacroScanner4`: rail mechanics/CAD, Marlin config for the Anet board,
-  measured hardware (its `agents.md`).
-- `C:\Code\Mine\MacroScanner3`: newest software. Flask, gphoto2 trigger + FILE_ADDED
-  (works, ~1.3–1.5 s/shot), probe scripts. Also on the Pi in `~/MacroScanner3`.
-- `C:\Code\Mine\MacroScanner2`: FastAPI + WS push, Sony SDK helper (abandoned), mock mode.
+- `C:\Code\Mine\MacroScanner4`: rail CAD and measurements (its `agents.md`).
+- `C:\Code\Mine\MacroScanner3`: previous software; its gphoto2 findings fed the decisions above.
+- `C:\Code\Mine\MacroScanner2`: early FastAPI prototype with the Sony SDK (abandoned).

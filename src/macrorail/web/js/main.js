@@ -224,7 +224,9 @@ function render(forceFields = false) {
   $("position-mm").textContent = rail.connected ? fmt.mm(rail.position, spm) : "–";
   $("position-mm").parentElement.classList.toggle("unhomed", !rail.homed);
   $("position-detail").textContent =
-    rail.problem || ACTIVITY_TEXT[s.activity] || (rail.homed ? "Ready" : "Home the rail to use positions and stacks");
+    rail.problem ||
+    ACTIVITY_TEXT[s.activity] ||
+    (rail.endstop ? "Home switch pressed" : rail.homed ? "Ready" : "Home the rail to use positions and stacks");
   const homedBadge = $("homed-badge");
   homedBadge.textContent = rail.homed ? "Homed" : "Not homed";
   homedBadge.classList.toggle("ok", rail.homed);
