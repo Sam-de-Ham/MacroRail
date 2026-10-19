@@ -58,6 +58,3 @@ class Axis(Protocol):
 
     async def stop(self) -> None:
         """Decelerate to a stop. The running motion raises MotionInterrupted."""
-
-    async def halt(self) -> None:
-        """Stop immediately, without deceleration."""

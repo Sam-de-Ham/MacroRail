@@ -26,8 +26,8 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
 - **Immediate** commands reply straight away.
 - **Motion** commands (`HOME`, `MOVE`, `JOG`) reply only when the motion has finished.
   - The reply is `OK` if the motion completed, or `ERR` with the reason it ended early.
-  - Only one motion command may be in flight. While one is running, only `INFO`, `STATUS`, `STOP`
-    and `HALT` are accepted; everything else gets `ERR BUSY`.
+  - Only one motion command may be in flight. While one is running, only `INFO`, `STATUS` and
+    `STOP` are accepted; everything else gets `ERR BUSY`.
 - A line that cannot be parsed gets the reply `0 ERR SYNTAX` (or `0 ERR TOOLONG`).
 
 ## Commands
@@ -44,7 +44,6 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
 | `MOVE <target> <speed> <accel>` | motion | `pos=` | Absolute move. Requires homed, and the target must be within limits. |
 | `JOG <delta> <speed> <accel>` | motion | `pos=` | Relative move. Allowed when not homed; once homed, the target must be within limits. |
 | `STOP` | immediate | | Decelerate. The pending motion then replies `ERR STOPPED pos=`. |
-| `HALT` | immediate | | Stop instantly (no deceleration). The pending motion replies `ERR HALTED pos=`. |
 
 ## Events
 
@@ -73,8 +72,8 @@ Fault codes:
 | `NOT_HOMED` | Absolute move before homing. |
 | `LIMIT` | The target is outside the soft limits. |
 | `DRIVER` | The driver isn't responding, so the motor can't be enabled. |
-| `STOPPED`, `HALTED` | The motion ended early on `STOP` or `HALT`. |
-| `ENDSTOP` | The switch triggered during a move toward it outside homing. Homed is cleared. |
+| `STOPPED` | The motion ended early on `STOP`. |
+| `ENDSTOP` | The switch triggered during a move toward it outside homing, and homed is cleared. A `JOG` toward the switch while it is already pressed is refused with this code without moving (homed unchanged). |
 | `NO_SWITCH` | Homing travelled `max` steps without finding the switch. |
 | `SWITCH_STUCK` | The switch was still pressed after backing off. |
 | `LINK` | The watchdog stopped motion: no line from the host for 2 s. |

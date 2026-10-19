@@ -28,10 +28,6 @@ class JogBody(BaseModel):
     delta: int
 
 
-class MoveBody(BaseModel):
-    position: int
-
-
 class PointBody(BaseModel):
     position: int | None = None
 
@@ -158,10 +154,6 @@ def create_app(machine: Machine) -> FastAPI:
     async def jog(body: JogBody) -> None:
         machine.jog(body.delta)
 
-    @app.post("/api/rail/move", status_code=204, dependencies=controlled)
-    async def move(body: MoveBody) -> None:
-        machine.move_to(body.position)
-
     @app.post("/api/rail/motors", status_code=204, dependencies=controlled)
     async def motors(body: MotorsBody) -> None:
         await machine.set_motors(body.enabled)
@@ -169,10 +161,6 @@ def create_app(machine: Machine) -> FastAPI:
     @app.post("/api/points/{point}", status_code=204, dependencies=controlled)
     async def set_point(point: Point, body: PointBody) -> None:
         machine.set_point(point, body.position)
-
-    @app.delete("/api/points/{point}", status_code=204, dependencies=controlled)
-    async def clear_point(point: Point) -> None:
-        machine.clear_point(point)
 
     @app.post("/api/points/{point}/go", status_code=204, dependencies=controlled)
     async def go_to_point(point: Point) -> None:

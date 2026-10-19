@@ -32,15 +32,20 @@ class StackPlan:
 def plan_range(start: int, end: int, step: int, low: int, high: int) -> StackPlan:
     """Shoot from `start` toward `end` every `step`, always covering the whole range.
 
-    If the range is not a whole number of steps, one extra shot lands just past `end`.
+    If the range is not a whole number of steps, one extra shot lands just past `end`; when
+    that would run off the rail, it is placed on the limit instead (still past `end`).
     """
     if step < 1:
         raise PlanError("The step must be at least one microstep.")
     if start == end:
         raise PlanError("Start and end are the same position.")
     direction = 1 if end > start else -1
+    if not (low <= start <= high and low <= end <= high):
+        raise PlanError("The range is outside the rail's travel.")
     count = math.ceil(abs(end - start) / step) + 1
-    return _build(start, step, count, direction, low, high)
+    positions = [start + direction * step * i for i in range(count)]
+    positions[-1] = min(max(positions[-1], low), high)
+    return StackPlan(tuple(positions), step, direction)
 
 
 def plan_count(start: int, step: int, count: int, direction: int, low: int, high: int) -> StackPlan:

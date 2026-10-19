@@ -52,9 +52,10 @@ async def test_set_and_go_to_points(machine: Machine) -> None:
 async def test_approach_ends_moving_in_stack_direction(machine: Machine) -> None:
     await homed(machine)
     machine.set_point("start", 4000)
-    machine.set_point("end", 4400)
-    machine.move_to(5000)  # past the start, so arriving there needs an overshoot
+    machine.set_point("end", 5000)
+    machine.go_to("end")  # past the start, so arriving there needs an overshoot
     await idle(machine)
+    machine.set_point("end", 4400)
     targets: list[int] = []
     original = machine.axis.move_to
 
@@ -203,3 +204,54 @@ async def test_current_change_rejected_while_busy(machine: Machine) -> None:
 async def test_invalid_settings_are_rejected(machine: Machine) -> None:
     with pytest.raises(OperationError, match="Invalid"):
         await machine.update_settings({"motion": {"hold_current_ma": 900}})
+
+
+async def test_second_start_does_not_replace_running_stack(machine: Machine) -> None:
+    await homed(machine)
+    machine.set_point("start", 4000)
+    machine.set_point("end", 4400)
+    machine.start_stack()
+    first = machine.stack
+    with pytest.raises(OperationError, match="Busy"):
+        machine.start_stack()
+    assert machine.stack is first
+    await machine.stop()
+    await idle(machine, timeout=20)
+
+
+async def test_stop_while_preparing_stays_put(machine: Machine) -> None:
+    await homed(machine)
+    machine.set_point("start", 40000)  # far away: the approach takes a while
+    machine.set_point("end", 40400)
+    machine.start_stack()
+    stack = machine.stack
+    assert stack is not None
+    await until(lambda: machine.axis.state.position > 4000)
+    await machine.stop()
+    await idle(machine, timeout=20)
+    assert stack.phase == "stopped"
+    assert stack.shots == []
+    assert machine.axis.state.position < 40000
+
+
+async def test_stop_while_returning(machine: Machine) -> None:
+    await homed(machine)
+    machine.set_point("start", 4000)
+    machine.set_point("end", 44000)
+    await machine.update_settings({"stack": {"step": 20000}})
+    machine.start_stack()
+    stack = machine.stack
+    assert stack is not None
+    await until(lambda: stack.phase == "returning", timeout=20)
+    await until(lambda: machine.axis.state.position < 40000)
+    await machine.stop()
+    await idle(machine, timeout=20)
+    assert stack.phase == "done"
+    assert 4000 < machine.axis.state.position < 40000
+
+
+async def test_stop_right_after_home_command(machine: Machine) -> None:
+    machine.home()
+    await machine.stop()  # lands while the motor is still being energised
+    await idle(machine)
+    assert not machine.axis.state.homed

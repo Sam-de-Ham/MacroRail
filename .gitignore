@@ -8,3 +8,4 @@ dist/
 firmware/.pio/
 firmware/.vscode/
 *.local.toml
+MacroRail-quick-start.pdf

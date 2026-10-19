@@ -38,7 +38,6 @@ export async function command(method, path, body) {
 
 export const post = (path, body) => command("POST", path, body);
 export const patch = (path, body) => command("PATCH", path, body);
-export const remove = (path) => command("DELETE", path);
 
 // Keeps a WebSocket to the server open, reconnecting with backoff.
 export function connectUpdates({ onState, onLog, onConnection }) {

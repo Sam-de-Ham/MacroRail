@@ -15,7 +15,8 @@ TMC2209Stepper driver(PIN_UART_RX, PIN_UART_TX, DRIVER_RSENSE_OHM, DRIVER_ADDRES
 AccelStepper stepper(AccelStepper::DRIVER, PIN_STEP, PIN_DIR);
 
 enum class Motion : uint8_t { None, Move, Jog, HomeSeek, HomeBackoff, HomeProbe };
-enum class Interrupt : uint8_t { None, Stopped, Halted, Link };
+enum class Interrupt : uint8_t { None, Stopped, Link };
+enum class Fault : uint8_t { None, Overtemp, Short };
 
 struct {
   bool enabled = false;
@@ -37,6 +38,7 @@ struct {
   long backoff = 0;
 } pending;
 
+Fault reportedFault = Fault::None;
 uint32_t lastRxMs = 0;
 uint32_t lastPosMs = 0;
 uint32_t lastDriverCheckMs = 0;
@@ -155,15 +157,19 @@ void checkDriver() {
     state.driverOk = configureDriver();
     return;
   }
-  const uint8_t gstat = driver.GSTAT();
-  if (gstat & 0x01) {  // reset: registers lost power
+  if (driver.GSTAT() & 0x01) {  // reset: registers lost power
     state.driverOk = configureDriver();
     fault(F("driver_reset"));
-  } else if (driver.ot()) {
-    fault(F("overtemp"));
-  } else if (driver.s2ga() || driver.s2gb() || driver.s2vsa() || driver.s2vsb()) {
-    fault(F("short"));
+    return;
   }
+  // Overtemperature and short flags stay set while the condition lasts: report each once.
+  Fault now = Fault::None;
+  if (driver.ot()) now = Fault::Overtemp;
+  else if (driver.s2ga() || driver.s2gb() || driver.s2vsa() || driver.s2vsb()) now = Fault::Short;
+  if (now != reportedFault && now != Fault::None) {
+    fault(now == Fault::Overtemp ? F("overtemp") : F("short"));
+  }
+  reportedFault = now;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -231,7 +237,6 @@ void serviceMotion() {
     if (!(done || hitSwitch)) return;
     switch (pending.interrupt) {
       case Interrupt::Stopped: finishErr(F("STOPPED")); break;
-      case Interrupt::Halted: finishErr(F("HALTED")); break;
       case Interrupt::Link: finishErr(F("LINK")); break;
       case Interrupt::None: break;
     }
@@ -304,18 +309,13 @@ void cmdStatus(uint16_t id, const long*) {
   Serial.println(state.driverOk ? F("ok") : F("missing"));
 }
 
-void interrupt(uint16_t id, Interrupt kind) {
+void cmdStop(uint16_t id, const long*) {
   if (pending.motion != Motion::None && pending.interrupt == Interrupt::None) {
-    pending.interrupt = kind;
-    if (kind == Interrupt::Halted) haltNow();
-    else stepper.stop();
+    pending.interrupt = Interrupt::Stopped;
+    stepper.stop();
   }
   replyOk(id);
 }
-
-void cmdStop(uint16_t id, const long*) { interrupt(id, Interrupt::Stopped); }
-
-void cmdHalt(uint16_t id, const long*) { interrupt(id, Interrupt::Halted); }
 
 void cmdEnable(uint16_t id, const long*) {
   if (!state.driverOk) state.driverOk = configureDriver();
@@ -411,7 +411,6 @@ struct Command {
 const char N_INFO[] PROGMEM = "INFO";
 const char N_STATUS[] PROGMEM = "STATUS";
 const char N_STOP[] PROGMEM = "STOP";
-const char N_HALT[] PROGMEM = "HALT";
 const char N_ENABLE[] PROGMEM = "ENABLE";
 const char N_DISABLE[] PROGMEM = "DISABLE";
 const char N_CURRENT[] PROGMEM = "CURRENT";
@@ -422,7 +421,7 @@ const char N_JOG[] PROGMEM = "JOG";
 
 const Command COMMANDS[] = {
     {N_INFO, 0, true, cmdInfo},          {N_STATUS, 0, true, cmdStatus},
-    {N_STOP, 0, true, cmdStop},          {N_HALT, 0, true, cmdHalt},
+    {N_STOP, 0, true, cmdStop},
     {N_ENABLE, 0, false, cmdEnable},     {N_DISABLE, 0, false, cmdDisable},
     {N_CURRENT, 2, false, cmdCurrent},   {N_LIMITS, 2, false, cmdLimits},
     {N_HOME, 5, false, cmdHome},         {N_MOVE, 3, false, cmdMove},
