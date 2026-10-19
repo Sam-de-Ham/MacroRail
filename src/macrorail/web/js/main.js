@@ -28,6 +28,7 @@ let state = null;
 let connected = false;
 let receivedHistory = false;
 let jogUm = readPreference("jog-um", 50);
+let liveViewOff = readPreference("liveview-off", 0) === 1; // this browser chose to pause it
 let toastTimer = 0;
 
 // -- preferences (per browser, optional) ------------------------------------------------------
@@ -74,6 +75,11 @@ const actions = {
   "stack-pause": () => post("stack/pause"),
   "stack-resume": () => post("stack/resume"),
   "test-shot": () => post("camera/test"),
+  "toggle-liveview": () => {
+    liveViewOff = !liveViewOff;
+    writePreference("liveview-off", liveViewOff ? 1 : 0);
+    render();
+  },
 };
 
 document.addEventListener("click", async (event) => {
@@ -128,6 +134,7 @@ const liveview = $("liveview");
 const liveImage = $("liveview-image");
 
 liveview.addEventListener("click", (event) => {
+  if (event.target.closest("button") || !liveImage.getAttribute("src")) return;
   if (liveview.classList.toggle("zoomed")) {
     const box = liveview.getBoundingClientRect();
     const x = ((event.clientX - box.left) / box.width) * 100;
@@ -140,9 +147,13 @@ liveview.addEventListener("click", (event) => {
   $("liveview-hint").textContent = liveview.classList.contains("zoomed") ? "Tap to fit" : "Tap to zoom";
 });
 
+const PLAY_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
+const PAUSE_ICON = $("liveview-toggle").innerHTML;
+
 function renderLiveView(s) {
   const available = connected && s.live_view.available;
-  const wanted = available ? "/api/liveview" : "";
+  // Closing the stream when paused stops the camera from sending frames at all.
+  const wanted = available && !liveViewOff ? "/api/liveview" : "";
   if (liveImage.getAttribute("src") !== wanted) {
     if (wanted) liveImage.setAttribute("src", wanted);
     else liveImage.removeAttribute("src");
@@ -156,10 +167,22 @@ function renderLiveView(s) {
         ? "This camera has no live view"
         : s.live_view.paused
           ? "Live view is paused while stacking"
-          : "";
+          : liveViewOff
+            ? "Live view paused"
+            : "";
   $("liveview-message").textContent = message;
   $("liveview-message").hidden = !message;
-  $("liveview-hint").hidden = !available || s.live_view.paused;
+  $("liveview-hint").hidden = !available || s.live_view.paused || liveViewOff;
+  const toggle = $("liveview-toggle");
+  toggle.hidden = !available;
+  toggle.innerHTML = liveViewOff ? PLAY_ICON : PAUSE_ICON;
+  const label = liveViewOff ? "Resume live view" : "Pause live view";
+  toggle.title = label;
+  toggle.setAttribute("aria-label", label);
+  if (liveViewOff && liveview.classList.contains("zoomed")) {
+    liveview.classList.remove("zoomed");
+    liveImage.style.transform = "";
+  }
   $("liveview-position").textContent = s.rail.connected ? `${fmt.mm(s.rail.position, s.rail.steps_per_mm)} mm` : "–";
 }
 
@@ -265,6 +288,7 @@ function render(forceFields = false) {
   $("plan-summary").hidden = stackActive;
   renderStack(stack, stackActive);
   $("stack-start").hidden = stackActive;
+  $("stack-start").textContent = plan.error ? "Start stack" : `Start stack · ${plan.count} shots`;
   $("stack-start").disabled = !canPosition || Boolean(plan.error) || !camera.connected;
   const pausable = stackActive && ["preparing", "running"].includes(stack.phase) && !stack.pausing && !stack.stopping;
   $("stack-pause").hidden = !pausable;
