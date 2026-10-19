@@ -10,8 +10,8 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
 ## Principles
 
 - **One owner per device.** A single process owns the serial port and the camera, and the
-  browser never talks to hardware. `Machine` runs one operation at a time. Stop is the only
-  command that can cut in, and it is accepted from any device.
+  browser never talks to hardware. `Machine` runs one operation at a time. While one runs, only
+  Stop (accepted from any device) and a stack's Pause/Resume are accepted.
 - **Never act on assumptions.** A move is done when the controller says so. A shot is done when
   the camera reports the new file. Positions come from the controller.
 - **Push, don't poll.** Every change produces a state snapshot that is pushed over the

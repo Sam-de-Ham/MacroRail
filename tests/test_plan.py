@@ -33,7 +33,7 @@ def test_count_mode() -> None:
     [
         ((1000, 1000, 4), "same position"),
         ((1000, 1040, 0), "at least one"),
-        ((55990, 56010, 4), "past the end"),
+        ((55990, 56010, 4), "outside"),
     ],
 )
 def test_range_errors(args: tuple[int, int, int], message: str) -> None:
@@ -41,11 +41,10 @@ def test_range_errors(args: tuple[int, int, int], message: str) -> None:
         plan_range(*args, LOW, HIGH)
 
 
-def test_extra_shot_must_also_fit() -> None:
-    with pytest.raises(PlanError, match="past the end"):
-        plan_range(55901, 55999, 4, LOW, HIGH)  # the covering shot would land on 56001
-    plan = plan_range(55900, 55996, 4, LOW, HIGH)
-    assert plan.end == 55996
+def test_extra_shot_is_clamped_to_the_limit() -> None:
+    plan = plan_range(55901, 55999, 4, LOW, HIGH)  # the covering shot would land on 56001
+    assert plan.end == HIGH
+    assert plan.positions[-2] < 55999 <= plan.end
 
 
 def test_move_time_short_move_is_triangular() -> None:

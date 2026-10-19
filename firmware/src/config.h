@@ -11,8 +11,9 @@ constexpr uint8_t PIN_STEP = 3;
 constexpr uint8_t PIN_DIR = 4;
 constexpr uint8_t PIN_ENABLE = 5;    // TMC2209 EN, active low
 constexpr uint8_t PIN_ENDSTOP = 6;   // switch to GND, internal pull-up
-constexpr uint8_t PIN_UART_RX = 10;  // TMC2209 PDN_UART (direct)
-constexpr uint8_t PIN_UART_TX = 11;  // TMC2209 PDN_UART (through 1 kΩ)
+constexpr uint8_t PIN_UART_RX = 7;   // TMC2209 PDN_UART (direct)
+constexpr uint8_t PIN_UART_TX = 8;   // TMC2209 PDN_UART (through 1 kΩ)
+// D9 is reserved for the shutter-cable relay (v1.1).
 
 // Endstop: the switch is wired normally-closed to GND, so the input reads LOW while the
 // carriage is clear and HIGH when pressed or when a wire breaks (fails safe).

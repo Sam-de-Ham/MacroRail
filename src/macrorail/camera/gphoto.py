@@ -40,6 +40,7 @@ class GPhotoCamera:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="camera")
         self._camera: Any = None  # gp.Camera, touched only on the worker thread
         self._state = CameraState(problem="Looking for the camera…")
+        self._lost_event = asyncio.Event()
 
     @property
     def state(self) -> CameraState:
@@ -59,9 +60,13 @@ class GPhotoCamera:
                     await asyncio.sleep(RETRY_INTERVAL_S)
                     continue
                 last_problem = None
-                self._update(connected=True, model=model, battery=battery, problem=None)
+                self._update(
+                    connected=True, model=model, battery=battery, live_view=True, problem=None
+                )
                 self._log.info(f"Camera connected: {model}.")
-            await asyncio.sleep(CHECK_INTERVAL_S)
+            self._lost_event.clear()
+            with contextlib.suppress(TimeoutError):  # a lost camera is looked for right away
+                await asyncio.wait_for(self._lost_event.wait(), CHECK_INTERVAL_S)
             if self._state.connected:
                 try:
                     battery = await self._call(self._battery)
@@ -106,6 +111,7 @@ class GPhotoCamera:
             self._log.error(f"Camera disconnected: {exc}")
         self._update(connected=False, problem=str(exc))
         self._executor.submit(self._close)
+        self._lost_event.set()
 
     def _update(self, **changes: Any) -> None:
         new = replace(self._state, **changes)

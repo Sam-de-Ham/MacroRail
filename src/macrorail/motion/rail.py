@@ -145,7 +145,7 @@ class RailAxis:
         except DeviceError as exc:
             if "pos" in exc.data:
                 self._update(position=int(exc.data["pos"]))
-            if exc.code in ("STOPPED", "HALTED"):
+            if exc.code == "STOPPED":
                 raise MotionInterrupted("Stopped.") from None
             raise AxisError(_ERRORS.get(exc.code, f"Rail controller error {exc.code}.")) from None
         except LinkError as exc:
@@ -207,12 +207,10 @@ class RailAxis:
         )
 
     async def stop(self) -> None:
-        if self._link is not None and self._state.moving:
+        # Always sent: the controller ignores it when idle, and the local `moving` flag can
+        # briefly lag a motion that has just been started.
+        if self._link is not None:
             await self._request("STOP")
-
-    async def halt(self) -> None:
-        if self._link is not None and self._state.moving:
-            await self._request("HALT")
 
 
 def _motion_time(distance: float, speed: float, accel: float) -> float:

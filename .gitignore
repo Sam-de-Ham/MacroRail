@@ -9,3 +9,4 @@ firmware/.pio/
 firmware/.vscode/
 *.local.toml
 .claude/
+MacroRail-quick-start.pdf

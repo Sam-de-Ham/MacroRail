@@ -133,11 +133,6 @@ class Machine:
             raise OperationError(f"Jogs are limited to {MAX_JOG_MM:g} mm at a time.")
         self._start("moving", self._jog(delta))
 
-    def move_to(self, position: int) -> None:
-        self._require_homed()
-        self._require_in_travel(position)
-        self._start("moving", self._go(position))
-
     def go_to(self, point: Point) -> None:
         self._require_homed()
         position = getattr(self.settings.stack, point)
@@ -152,15 +147,13 @@ class Machine:
         self._require_in_travel(position)
         self._save(self.settings.merged({"stack": {point: position}}))
 
-    def clear_point(self, point: Point) -> None:
-        self._save(self.settings.merged({"stack": {point: None}}))
-
     def preview_range(self) -> None:
         self._require_homed()
         plan = self._plan()
         self._start("previewing", self._sweep(plan))
 
     def start_stack(self) -> None:
+        self._require_idle()  # never replace a running stack, e.g. on a double tap
         self._require_homed()
         plan = self._plan()
         if not self.camera.state.connected:
@@ -292,12 +285,14 @@ class Machine:
 
     async def _home(self) -> None:
         await self._prepare_motion()
+        self._check_stop()
         self.log.info("Homing…")
         await self.axis.home()
         self.log.info("Homed.")
 
     async def _jog(self, delta: int) -> None:
         await self._prepare_motion()
+        self._check_stop()
         await self.axis.jog(delta, *self._profile(self.settings.motion.travel_speed_mm_s))
 
     async def _go(self, position: int) -> None:
@@ -314,8 +309,9 @@ class Machine:
             pre = target - direction * backlash
             pre = min(max(pre, self.axis.min_position), self.axis.max_position)
             if pre != target:
-                await self.axis.move_to(pre, speed, accel)
                 self._check_stop()
+                await self.axis.move_to(pre, speed, accel)
+        self._check_stop()
         await self.axis.move_to(target, speed, accel)
 
     async def _sweep(self, plan: StackPlan) -> None:
@@ -330,7 +326,7 @@ class Machine:
 
     async def _run_stack(self, run: StackRun) -> None:
         await self._prepare_motion()
-        await run.run()
+        await run.run()  # a stop during preparation is seen by the run itself
 
     async def _capture_test(self) -> None:
         capture = await self.camera.capture()

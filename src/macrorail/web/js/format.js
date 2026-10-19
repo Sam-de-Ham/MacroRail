@@ -3,7 +3,6 @@
 export const toMm = (steps, stepsPerMm) => steps / stepsPerMm;
 export const toUm = (steps, stepsPerMm) => (steps * 1000) / stepsPerMm;
 export const fromUm = (um, stepsPerMm) => Math.round((um * stepsPerMm) / 1000);
-export const fromMm = (mm, stepsPerMm) => Math.round(mm * stepsPerMm);
 
 export function mm(steps, stepsPerMm) {
   return toMm(steps, stepsPerMm).toFixed(3);

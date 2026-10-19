@@ -79,6 +79,7 @@ class StackRun:
         self._pause_requested = False
         self._stop_requested = False
         self._resume = asyncio.Event()
+        self._shot_clock: list[float] = []  # active time at each shot, for the ETA
 
     # -- control (from the event loop, any time) ----------------------------------------------
 
@@ -101,7 +102,7 @@ class StackRun:
             return
         self._stop_requested = True
         self._resume.set()
-        if self.phase in ("preparing", "running"):
+        if self.phase in ("preparing", "running", "returning"):
             await self._axis.stop()  # interrupts a move in progress; otherwise a no-op
 
     # -- progress -----------------------------------------------------------------------------
@@ -113,10 +114,11 @@ class StackRun:
 
     @property
     def remaining_s(self) -> float | None:
-        if len(self.shots) < 2 or self.phase not in ("running", "paused", "camera_error"):
+        clock = self._shot_clock
+        if len(clock) < 2 or self.phase not in ("running", "paused", "camera_error"):
             return None
-        per_shot = (self.shots[-1].time - self.shots[0].time) / (len(self.shots) - 1)
-        return per_shot * (self.plan.count - len(self.shots))
+        per_shot = (clock[-1] - clock[0]) / (len(clock) - 1)
+        return per_shot * (self.plan.count - len(clock))
 
     def snapshot(self) -> dict[str, object]:
         return {
@@ -140,6 +142,8 @@ class StackRun:
         outcome: Phase = "done"
         self._log.info(f"Stack started: {self.plan.count} shots.")
         try:
+            if self._stop_requested:
+                raise _StopRequested
             await self._approach(self.plan.start, self.plan.direction)
             self._set_phase("running")
             while len(self.shots) < self.plan.count:
@@ -150,7 +154,7 @@ class StackRun:
         except AxisError as exc:
             self.error = str(exc)
             outcome = "failed"
-        if outcome != "failed":
+        if outcome != "failed" and self.phase != "preparing":  # stopped before reaching the start
             await self._return_to_start()
         self._finish(outcome)
 
@@ -167,6 +171,7 @@ class StackRun:
             self._set_phase("camera_error")
             return  # the checkpoint waits for resume, then this slice is retaken
         self.shots.append(Shot(index, position, capture.name, time.time(), capture.duration_s))
+        self._shot_clock.append(self.elapsed_s)
         self._on_change()
 
     async def _checkpoint(self) -> None:
@@ -191,6 +196,8 @@ class StackRun:
         self._set_phase("returning")
         try:
             await self._approach(self.plan.start, self.plan.direction)
+        except MotionInterrupted:
+            self._log.info("Return to the start was stopped.")
         except AxisError as exc:
             self.error = f"Could not return to the start: {exc}"
             self._log.error(self.error)

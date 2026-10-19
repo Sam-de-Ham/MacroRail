@@ -14,7 +14,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 - **v1 (now):** custom macro rail (Arduino Nano + TMC2209) + Sony A6400 over USB (gphoto2).
 - **v1.1:** 3D printer as the motion source (Marlin G-code over USB, jog X/Y/Z), and a relay
-  shutter-cable trigger on the Nano (D7 reserved). Add these as new `Axis` / `Camera`
+  shutter-cable trigger on the Nano (D9 reserved). Add these as new `Axis` / `Camera`
   implementations; nothing else should need to change.
 - **Later ideas:** review captured JPEGs in the browser, a low-res live stack preview,
   auto-detecting start/end from live view, StallGuard crash detection, a Tr8×2 screw for 10×.
@@ -40,7 +40,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Lead screw:** Tr8×8, 8 mm/rev, not self-locking.
 - **Motor:** generic Anet A8 NEMA 17 (42SHDC3025-24B), rating unknown.
 - **Resolution:** full step 40 µm; 1/16 microstep = **2.5 µm** (400 steps/mm).
-- **Driver:** TMC2209 at 12 V: STEP/DIR for motion, UART (SoftwareSerial D10/D11) for setup.
+- **Driver:** TMC2209 at 12 V: STEP/DIR for motion, UART (SoftwareSerial D7 RX / D8 TX via 1 kΩ) for setup.
 - **Nano:** the pin map is in `firmware/src/config.h` and `docs/wiring.md`. The home switch should be
   wired NC (fails safe). The firmware assumes NC; flip `ENDSTOP_ACTIVE_LEVEL` if it is NO.
 - **Pi:** 3B+, Debian 13 64-bit, Python 3.13.5, `ssh pi`. `sudo` needs a password, so the user
@@ -70,6 +70,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Images stay on the card. Never use a blocking `capture()`; it dropped USB on Sony in MacroScanner3.
 - **Stacks:**
   - Two modes: start + end + step (default), or start + step + count.
+  - If the covering last shot would run past the travel limit, it is placed on the limit.
   - The range is always covered: count = ceil(range/step) + 1.
   - Steps snap to the microstep grid.
 - **Stack runner:**
@@ -78,7 +79,15 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - A camera error pauses the stack, and resume retakes that slice.
   - Stop or completion returns to start.
   - Each stack writes a JSON record to `~/.local/share/macrorail/stacks/`.
-- **Live view** is paused during stacks.
+- **Live view** is paused during stacks. Tap-to-zoom is a 3× zoom around the tap point: the
+  A6400 preview frames are only about 640 px wide, so a true 1:1 crop would show nothing extra.
+- **Camera reconnect** is automatic: retried every 3 s, and right away after a loss. There is no
+  Reconnect button. The capture timeout lives in `config.toml`, not the UI.
+- **Stop:**
+  - Always sent to the controller. There is no HALT command; motion is slow enough that a
+    decelerating stop is immediate in practice.
+  - During a stack's approach, Stop stops in place. While shooting, it stops and returns to
+    the start. During the return, it stops the return.
 - **Control:** one controlling client id at a time; the first to connect gets it, and
   "Take control" hands it over. Stop is allowed from any device.
 - **Stack:** FastAPI + WebSocket + MJPEG; plain ES-module UI, no build step; uv; PlatformIO.
@@ -96,7 +105,9 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 ## Status
 
 - **2026-10-19:**
-  - v1 software is complete and tested against the simulator: 63 tests; ruff, mypy (strict) and the firmware build are green.
+  - v1 software is complete and tested against the simulator: 78 tests; ruff, mypy (strict) and the firmware build are green.
+  - An independent code review was done and its findings were fixed: a double-tap Start could orphan a stack, Stop could be missed in several places, and live view was never enabled for gphoto. Link, watchdog and gphoto tests were added.
+  - The driver UART moved to D7/D8, so all signals use one row (D3–D8).
   - The UI was checked in the browser at phone and desktop sizes: home, set range, stack, pause/resume, stop-and-return, take control.
   - On the Pi, the app was deployed to `~/macrorail` and ran in sim mode: it starts in about 5 s and live view streams.
   - The service is not installed yet because `sudo` needs a password.
@@ -104,7 +115,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 ## Next: hardware bring-up (with the user)
 
 1. **Pi setup:** run `~/macrorail/deploy/install.sh` on the Pi. Use a proper PSU.
-2. **Wiring:** wire per `docs/wiring.md` (switch NC, 1 kΩ on D11, EN pull-up).
+2. **Wiring:** wire per `docs/wiring.md` (switch NC, 1 kΩ on D8, EN pull-up).
 3. **Firmware:** flash with `pio run -d firmware -e nano -t upload`.
 4. **Config:** set `rail.port` in the config (`ls /dev/serial/by-id/`).
 5. **First power-up checks:** detect the driver, check the switch reading, direction and homing.

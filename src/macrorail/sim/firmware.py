@@ -167,7 +167,7 @@ class SimRail:
                 self._emit("! FAULT code=driver_lost")
             return
         if self.pending.interrupt is None and now - self.last_rx > LINK_TIMEOUT_S:
-            self._interrupt("LINK", halt=False)
+            self._interrupt("LINK")
         if now - self.last_pos_report >= POS_REPORT_S:
             self.last_pos_report = now
             self._emit(f"! POS pos={self._pos}")
@@ -247,13 +247,11 @@ class SimRail:
         self._emit(f"{self.pending.id} {status} pos={self._pos}")
         self.pending = _Pending()
 
-    def _interrupt(self, reason: str, *, halt: bool) -> None:
+    def _interrupt(self, reason: str) -> None:
+        """Decelerate: retarget to the stopping point."""
         self.pending.interrupt = reason
-        if halt:
-            self._halt()
-        else:  # decelerate: retarget to the stopping point
-            stopping = self.velocity**2 / (2 * self.accel)
-            self.target = round(self.position + math.copysign(stopping, self.velocity))
+        stopping = self.velocity**2 / (2 * self.accel)
+        self.target = round(self.position + math.copysign(stopping, self.velocity))
 
     # Commands
     def _handle(self, line: str) -> None:
@@ -267,7 +265,7 @@ class SimRail:
         except ValueError:
             self._emit(f"{request_id} ERR ARG")
             return
-        arity = {"INFO": 0, "STATUS": 0, "STOP": 0, "HALT": 0, "ENABLE": 0, "DISABLE": 0,
+        arity = {"INFO": 0, "STATUS": 0, "STOP": 0, "ENABLE": 0, "DISABLE": 0,
                  "CURRENT": 2, "LIMITS": 2, "HOME": 5, "MOVE": 3, "JOG": 3}  # fmt: skip
         if name not in arity:
             self._emit(f"{request_id} ERR UNKNOWN")
@@ -276,7 +274,7 @@ class SimRail:
             self._emit(f"{request_id} ERR ARG")
             return
         busy = self.pending.motion is not _Motion.NONE
-        if busy and name not in ("INFO", "STATUS", "STOP", "HALT"):
+        if busy and name not in ("INFO", "STATUS", "STOP"):
             self._emit(f"{request_id} ERR BUSY")
             return
         reply = getattr(self, f"_cmd_{name.lower()}")(request_id, *args)
@@ -298,12 +296,7 @@ class SimRail:
 
     def _cmd_stop(self, _id: int) -> str:
         if self.pending.motion is not _Motion.NONE and self.pending.interrupt is None:
-            self._interrupt("STOPPED", halt=False)
-        return "OK"
-
-    def _cmd_halt(self, _id: int) -> str:
-        if self.pending.motion is not _Motion.NONE and self.pending.interrupt is None:
-            self._interrupt("HALTED", halt=True)
+            self._interrupt("STOPPED")
         return "OK"
 
     def _cmd_enable(self, _id: int) -> str:
