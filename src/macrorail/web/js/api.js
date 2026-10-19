@@ -2,15 +2,21 @@
 
 const CLIENT_KEY = "macrorail.client";
 
+// crypto.randomUUID only exists on HTTPS/localhost pages; the Pi serves plain HTTP on the LAN.
+function newClientId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function loadClientId() {
   try {
     const existing = localStorage.getItem(CLIENT_KEY);
     if (existing) return existing;
-    const id = crypto.randomUUID();
+    const id = newClientId();
     localStorage.setItem(CLIENT_KEY, id);
     return id;
   } catch {
-    return crypto.randomUUID(); // storage unavailable: control lasts for this page only
+    return newClientId(); // storage unavailable: control lasts for this page only
   }
 }
 
