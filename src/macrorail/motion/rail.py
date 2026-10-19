@@ -111,6 +111,8 @@ class RailAxis:
     def _on_event(self, event: Event) -> None:
         if event.name == "POS":
             self._update(position=int(event.data["pos"]))
+        elif event.name == "SWITCH":
+            self._update(endstop=event.data.get("pressed") == "1")
         elif event.name == "FAULT":
             code = event.data.get("code", "")
             self._log.error(_FAULTS.get(code, f"Stepper driver fault: {code}."))
@@ -152,6 +154,8 @@ class RailAxis:
         except DeviceError as exc:
             if "pos" in exc.data:
                 self._update(position=int(exc.data["pos"]))
+            if exc.code == "ENDSTOP":
+                self._update(homed=False)  # as the controller just did
             if exc.code == "STOPPED":
                 raise MotionInterrupted("Stopped.") from None
             raise AxisError(_ERRORS.get(exc.code, f"Rail controller error {exc.code}.")) from None

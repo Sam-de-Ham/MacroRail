@@ -7,10 +7,10 @@
 #define PROTOCOL_VERSION 1
 
 // Pins
+constexpr uint8_t PIN_ENDSTOP = 2;   // switch to GND, internal pull-up; INT0 (hardware interrupt)
 constexpr uint8_t PIN_STEP = 3;
 constexpr uint8_t PIN_DIR = 4;
 constexpr uint8_t PIN_ENABLE = 5;    // TMC2209 EN, active low
-constexpr uint8_t PIN_ENDSTOP = 6;   // switch to GND, internal pull-up
 constexpr uint8_t PIN_UART_RX = 7;   // TMC2209 PDN_UART (direct)
 constexpr uint8_t PIN_UART_TX = 8;   // TMC2209 PDN_UART (through 1 kΩ)
 // D9 is reserved for the shutter-cable relay (v1.1).
@@ -19,7 +19,9 @@ constexpr uint8_t PIN_UART_TX = 8;   // TMC2209 PDN_UART (through 1 kΩ)
 // (C + NO), so the input reads LOW while pressed. If it is rewired normally-closed (C + NC),
 // set HIGH: the input then also reads "pressed" when a wire breaks, which fails safe.
 constexpr uint8_t ENDSTOP_ACTIVE_LEVEL = LOW;
-constexpr uint32_t ENDSTOP_DEBOUNCE_US = 500;
+// Settling time before a change of the switch's level is reported or used for decisions.
+// Stopping does not wait for it: the interrupt reacts to the very first contact.
+constexpr uint32_t ENDSTOP_DEBOUNCE_US = 2000;
 
 // Positive moves go away from the switch. Set for this rail's motor wiring; flip if the motor
 // is wired the other way round.
