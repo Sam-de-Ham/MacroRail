@@ -63,7 +63,8 @@ safe, at the cost of a stop whenever a connector works loose. Motor direction is
 3. **Direction:** with the motor connected, jog **Away** by 1 mm. The carriage must move
    away from the switch. If it moves toward it, swap the two wires of one coil (with power
    off), or set `INVERT_DIRECTION` in `firmware/src/config.h` and reflash.
-4. **Home**, then check that the rail stops on the switch and parks at 0.5 mm.
+4. **Home**, then check that the rail stops on the switch, backs off until the switch opens and
+   parks just clear of it. The activity log reports the switch's release distance.
 
 Never connect or disconnect the motor while the driver is powered.
 

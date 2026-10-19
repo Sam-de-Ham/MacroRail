@@ -46,7 +46,7 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
 | `DISABLE` | immediate | | De-energises the motor and **clears homed**. |
 | `CURRENT <run_mA> <hold_mA>` | immediate | | RMS currents. `100 ≤ run ≤ 1500` and `0 ≤ hold ≤ run`. |
 | `LIMITS <min> <max>` | immediate | | Soft limits, enforced once homed. |
-| `HOME <fast> <slow> <backoff> <max> <accel>` | motion | `pos=0` | Seek the switch at `fast`, back off `backoff`, re-approach at `slow`. The switch point becomes `0`. Fails after `max` steps without a trigger. |
+| `HOME <fast> <slow> <clearance> <max> <release_max> <accel>` | motion | `pos=0 release=` | Seek the switch at `fast` for up to `max` steps. Back off until the switch has released, then `clearance` further. Touch it again at `slow`; that point becomes `0`. `release` is how far past its trip point the switch released (its hysteresis). Fails with `SWITCH_STUCK` if the switch is still pressed after `release_max`. |
 | `MOVE <target> <speed> <accel>` | motion | `pos=` | Absolute move. Requires homed, and the target must be within limits. |
 | `JOG <delta> <speed> <accel>` | motion | `pos=` | Relative move. Allowed when not homed; once homed, the target must be within limits. |
 | `STOP` | immediate | | Decelerate. The pending motion then replies `ERR STOPPED pos=`. |
@@ -82,17 +82,18 @@ Fault codes:
 | `STOPPED` | The motion ended early on `STOP`. |
 | `ENDSTOP` | The switch closed during a move or jog, which stopped at once and cleared homed. A move toward the switch while it is already pressed is refused with this code without moving (homed unchanged). |
 | `NO_SWITCH` | Homing travelled `max` steps without finding the switch. |
-| `SWITCH_STUCK` | The switch was still pressed after backing off. |
+| `SWITCH_STUCK` | The switch was still pressed after backing off `release_max`. |
 | `LINK` | The watchdog stopped motion: no line from the host for 2 s. |
 
 ## Safety rules enforced by the firmware
 
 - The switch is always armed. Its first contact (a hardware interrupt) stops any motion, in either
   direction, before the next step. The only exception is a move that starts with the switch
-  pressed and backs away from it (positive direction); that move ignores the switch's release
-  bounce. While the switch is pressed, moves toward it are refused.
-- During homing, the first contact ends the seek; the back-off ignores the switch; the slow
-  re-approach ends on the next contact, which becomes position `0`.
+  pressed and backs away from it (positive direction): it ignores the switch only until the switch
+  has released, bounce included, and is armed again from then on. While the switch is pressed,
+  moves toward it are refused.
+- During homing, the first contact ends the seek. The back-off ignores the switch until it has
+  released. The slow re-approach ends on the next contact, which becomes position `0`.
 - `DISABLE`, an endstop hit, and any driver fault clear the homed flag. The host must home again
   before absolute moves.
 - While motion is in flight, the firmware stops the motor (with deceleration) if no line arrives

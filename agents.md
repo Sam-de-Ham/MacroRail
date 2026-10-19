@@ -51,12 +51,19 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 ## Decisions
 
-- **Homing:** microswitch at the motor end; position 0 = switch, park at `min_mm` (0.5 mm).
-  Work happens near the front.
+- **Homing (user asked for a slower seek):**
+  - Seek at 1 mm/s, stopping on the first contact.
+  - Back off until the switch has released (at most `homing_release_max_mm`, 5 mm), plus 0.5 mm clearance.
+    A roller lever releases well past its trip point, so a fixed back-off failed with SWITCH_STUCK.
+  - Re-approach at 0.2 mm/s. Position 0 is the second contact.
+  - The release distance is reported and logged.
+  - Park at whichever is further: `min_mm` (0.5 mm) or the release point plus the clearance,
+    so the switch rests open and armed. Work happens near the front.
 - **Home switch (user decision):** interrupt-driven and always armed.
   - The first contact stops any motion, in either direction, before its next step. It stops
     abruptly, with no ramp, within tens of µs (worst case one 2.5 µm step).
-  - The only exception: a move that starts on the pressed switch and backs away from it.
+  - The only exception: a move that starts on the pressed switch and backs away from it. It
+    ignores the switch only until it releases; after that the switch is armed again.
   - While pressed, moves toward the switch are refused.
   - Every level change is pushed to the host as a `! SWITCH` event, with no polling.
 - **Driver modes:** StealthChop, 1/16 + 256× interpolation. CoolStep and StallGuard are off.
@@ -138,11 +145,11 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Test the UI over the LAN: `crypto.randomUUID` only exists on HTTPS or localhost.
   - An unclean session end leaves the A6400 stuck until it is power-cycled, so the app closes the session on shutdown.
   - Supervisors must never die. A link error once killed every background task; they now log and recover.
-- **Open:** the user's session log shows homing ended four times with SWITCH_STUCK, plus one unexpected switch hit. It may be manual testing, or a 1 mm back-off that is too short for the roller lever's release travel. Check with the user.
+- **Fixed after bring-up:** homing failed with SWITCH_STUCK because a fixed 1 mm back-off was shorter than the roller lever's release travel. Homing now backs off until the switch releases and reports the release distance. Next step: confirm on the hardware.
 
 ## Next: hardware bring-up (with the user)
 
-1. **Homing:** confirm homing on the real switch, and resolve the SWITCH_STUCK question.
+1. **Homing:** confirm the new homing on the real switch, and note its reported release distance.
 2. **Calibrate:**
    - Measure the real travel and set `travel_mm` (default 140).
    - Tune the run current: smooth, cool, no lost steps at 2.5 µm moves.

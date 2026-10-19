@@ -50,7 +50,7 @@ class Axis(Protocol):
         """De-energise the motor. The position is lost, so the axis needs homing again."""
 
     async def home(self) -> None:
-        """Find the home switch, then park at `min_position`."""
+        """Find the home switch, then park clear of it (at `min_position` or beyond)."""
 
     async def move_to(self, target: int, speed: float, accel: float) -> int: ...
 

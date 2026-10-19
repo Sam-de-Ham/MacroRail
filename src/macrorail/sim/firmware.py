@@ -40,7 +40,10 @@ class _Pending:
     fast: float = 0
     slow: float = 0
     accel: float = 0
-    backoff: int = 0
+    clearance: int = 0
+    release_max: int = 0
+    trip_pos: int = 0
+    release_pos: int | None = None
 
 
 class SimTransport:
@@ -75,6 +78,7 @@ class SimRail:
         steps_per_mm: int = 400,
         travel_mm: float = 150.0,
         start_mm: float = 30.0,
+        switch_hysteresis_mm: float = 0.6,
         speedup: float = 1.0,
     ) -> None:
         self.steps_per_mm = steps_per_mm
@@ -82,7 +86,10 @@ class SimRail:
         self.speedup = speedup
         self.driver_powered = True
         self.switch_held = False  # tests: someone holds the switch down by hand
-        self.physical = start_mm * steps_per_mm  # carriage position, switch at 0 (steps)
+        self.physical = start_mm * steps_per_mm  # carriage position, switch trips at 0 (steps)
+        # Like a roller lever: trips at 0, but only releases once the carriage is this far away.
+        self.hysteresis = switch_hysteresis_mm * steps_per_mm
+        self.lever_closed = self.physical <= 0
         self._lock = threading.Lock()
         self._transport: SimTransport | None = None
         self._inbox: queue.Queue[tuple[SimTransport, str]] = queue.Queue()
@@ -145,7 +152,7 @@ class SimRail:
 
     @property
     def _endstop(self) -> bool:
-        return self.physical <= 0 or self.switch_held
+        return self.lever_closed or self.switch_held
 
     @property
     def _pos(self) -> int:
@@ -204,12 +211,19 @@ class SimRail:
 
     def _check_switch(self) -> bool:
         """Report level changes; return True if a fresh press stops the current motion."""
+        if self.physical <= 0:
+            self.lever_closed = True
+        elif self.physical > self.hysteresis:
+            self.lever_closed = False
         pressed = self._endstop
         edge = pressed and not self.switch_reported
         if pressed != self.switch_reported:
             self.switch_reported = pressed
             self._emit(f"! SWITCH pressed={int(pressed)}")
-        return edge and self.pending.motion is not _Motion.NONE and not self.pending.ignore_switch
+        p = self.pending
+        if p.motion in (_Motion.MOVE, _Motion.JOG) and p.ignore_switch and not pressed:
+            p.ignore_switch = False  # released: armed again
+        return edge and p.motion is not _Motion.NONE and not p.ignore_switch
 
     def _running(self) -> bool:
         return self.velocity != 0 or self._pos != self.target
@@ -233,20 +247,26 @@ class SimRail:
             return
         if p.motion is _Motion.HOME_SEEK:
             if tripped:
-                self._start(_Motion.HOME_BACKOFF, self._pos + p.backoff, p.fast)
+                self._start_backoff()
             elif done:
                 self._finish("ERR NO_SWITCH")
-        elif p.motion is _Motion.HOME_BACKOFF and done:
-            if self._endstop:
-                self._finish("ERR SWITCH_STUCK")
-            else:
-                self._start(_Motion.HOME_PROBE, self._pos - 2 * p.backoff, p.slow)
+        elif p.motion is _Motion.HOME_BACKOFF:
+            if p.release_pos is None and not self._endstop:  # released: add the clearance
+                p.release_pos = self._pos
+                self.target = self._pos + p.clearance
+            elif done:
+                if p.release_pos is None:
+                    self._finish("ERR SWITCH_STUCK")
+                else:
+                    self._start(_Motion.HOME_PROBE, p.trip_pos - p.clearance, p.slow)
         elif p.motion is _Motion.HOME_PROBE:
             if tripped:
+                release = (p.release_pos or 0) - p.trip_pos
                 self.position = 0.0
                 self.target = 0
                 self.homed = True
-                self._finish("OK")
+                self._emit(f"{p.id} OK pos=0 release={release}")
+                self.pending = _Pending()
             elif done:
                 self._finish("ERR NO_SWITCH")
         elif linear:
@@ -254,6 +274,11 @@ class SimRail:
                 self._finish("ERR ENDSTOP")
             elif done:
                 self._finish("OK")
+
+    def _start_backoff(self) -> None:
+        self.pending.trip_pos = self._pos
+        self.pending.release_pos = None
+        self._start(_Motion.HOME_BACKOFF, self._pos + self.pending.release_max, self.pending.fast)
 
     def _start(self, motion: _Motion, target: int, speed: float) -> None:
         self.pending.motion = motion
@@ -284,7 +309,7 @@ class SimRail:
             self._emit(f"{request_id} ERR ARG")
             return
         arity = {"INFO": 0, "STATUS": 0, "STOP": 0, "ENABLE": 0, "DISABLE": 0,
-                 "CURRENT": 2, "LIMITS": 2, "HOME": 5, "MOVE": 3, "JOG": 3}  # fmt: skip
+                 "CURRENT": 2, "LIMITS": 2, "HOME": 6, "MOVE": 3, "JOG": 3}  # fmt: skip
         if name not in arity:
             self._emit(f"{request_id} ERR UNKNOWN")
             return
@@ -340,19 +365,22 @@ class SimRail:
     def _check_profile(self, speed: int, accel: int) -> bool:
         return 0 < speed <= 4000 and 0 < accel <= 40000
 
-    def _cmd_home(self, request_id: int, fast: int, slow: int, backoff: int, max_steps: int,
-                  accel: int) -> str | None:  # fmt: skip
+    def _cmd_home(self, request_id: int, fast: int, slow: int, clearance: int, max_steps: int,
+                  release_max: int, accel: int) -> str | None:  # fmt: skip
         if not (self._check_profile(fast, accel) and self._check_profile(slow, accel)):
             return "ERR ARG"
-        if backoff <= 0 or max_steps <= 0:
+        if clearance <= 0 or max_steps <= 0 or release_max <= clearance:
             return "ERR ARG"
         if not self.enabled:
             return "ERR DISABLED"
         self.homed = False
         self.accel = accel
-        self.pending = _Pending(request_id, fast=fast, slow=slow, accel=accel, backoff=backoff)
+        self.pending = _Pending(
+            request_id, fast=fast, slow=slow, accel=accel, clearance=clearance,
+            release_max=release_max,
+        )  # fmt: skip
         if self._endstop:
-            self._start(_Motion.HOME_BACKOFF, self._pos + backoff, fast)
+            self._start_backoff()
         else:
             self._start(_Motion.HOME_SEEK, self._pos - max_steps, fast)
         return None

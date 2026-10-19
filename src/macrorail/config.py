@@ -23,12 +23,20 @@ class RailConfig(_Section):
     port: str = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
     steps_per_mm: int = Field(400, gt=0, description="Microsteps per mm of carriage travel.")
     min_mm: float = Field(
-        0.5, ge=0, description="Soft limit nearest the switch; parked here after homing."
+        0.5,
+        ge=0,
+        description="Soft limit nearest the switch. After homing the rail parks here, or just "
+        "past the switch's release point if that is further.",
     )
     travel_mm: float = Field(140.0, gt=0, description="Soft limit furthest from the switch.")
-    homing_speed_mm_s: float = Field(2.0, gt=0)
+    homing_speed_mm_s: float = Field(1.0, gt=0)
     homing_probe_speed_mm_s: float = Field(0.2, gt=0)
-    homing_backoff_mm: float = Field(1.0, gt=0)
+    homing_clearance_mm: float = Field(
+        0.5, gt=0, description="How far past the switch's release point to back off."
+    )
+    homing_release_max_mm: float = Field(
+        5.0, gt=0, description="Homing fails if the switch is still pressed after this."
+    )
     homing_accel_mm_s2: float = Field(10.0, gt=0)
 
 
