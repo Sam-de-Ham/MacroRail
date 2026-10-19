@@ -42,6 +42,12 @@ class Axis(Protocol):
     async def run(self) -> None:
         """Keep the connection alive for the lifetime of the app (reconnecting as needed)."""
 
+    def diagnostics(self) -> dict[str, object]:
+        """Connection and link health, for the diagnostics panel."""
+
+    async def read_driver(self) -> dict[str, str]:
+        """The motor driver's own status, for the diagnostics panel (only while idle)."""
+
     async def set_current(self, run_ma: int, hold_ma: int) -> None: ...
 
     async def enable(self) -> None: ...

@@ -366,6 +366,39 @@ void cmdStatus(uint16_t id, const long*) {
   Serial.println(state.driverOk ? F("ok") : F("missing"));
 }
 
+// Driver health for diagnostics, decoded from one DRV_STATUS read. Idle only (driver UART).
+void cmdDriver(uint16_t id, const long*) {
+  if (!state.driverOk) return replyErr(id, F("DRIVER"));
+  const uint32_t s = driver.DRV_STATUS();
+  const uint8_t temp = (s & (1UL << 11)) ? 157 : (s & (1UL << 10)) ? 150
+                     : (s & (1UL << 9))  ? 143 : (s & (1UL << 8))  ? 120 : 0;
+  beginReply(id);
+  Serial.print(F("OK cs="));
+  Serial.print((s >> 16) & 0x1F);
+  Serial.print(F(" stealth="));
+  Serial.print((s >> 30) & 1);
+  Serial.print(F(" stst="));
+  Serial.print((s >> 31) & 1);
+  Serial.print(F(" temp="));
+  Serial.print(temp);
+  Serial.print(F(" otpw="));
+  Serial.print(s & 1);
+  Serial.print(F(" ot="));
+  Serial.print((s >> 1) & 1);
+  Serial.print(F(" short="));
+  Serial.print((s & 0b111100) ? 1 : 0);
+  Serial.print(F(" openload="));
+  Serial.print((s >> 6) & 0b11 ? 1 : 0);
+  Serial.print(F(" irun="));
+  Serial.print(driver.irun());
+  Serial.print(F(" ihold="));
+  Serial.print(driver.ihold());
+  Serial.print(F(" mres="));
+  Serial.print(driver.microsteps());
+  Serial.print(F(" up="));
+  Serial.println(millis() / 1000);
+}
+
 void cmdStop(uint16_t id, const long*) {
   if (pending.motion != Motion::None && pending.abort == Abort::None) {
     pending.abort = Abort::Stopped;
@@ -481,6 +514,7 @@ const char N_LIMITS[] PROGMEM = "LIMITS";
 const char N_HOME[] PROGMEM = "HOME";
 const char N_MOVE[] PROGMEM = "MOVE";
 const char N_JOG[] PROGMEM = "JOG";
+const char N_DRIVER[] PROGMEM = "DRIVER";
 
 const Command COMMANDS[] = {
     {N_INFO, 0, true, cmdInfo},          {N_STATUS, 0, true, cmdStatus},
@@ -488,7 +522,7 @@ const Command COMMANDS[] = {
     {N_ENABLE, 0, false, cmdEnable},     {N_DISABLE, 0, false, cmdDisable},
     {N_CURRENT, 2, false, cmdCurrent},   {N_LIMITS, 2, false, cmdLimits},
     {N_HOME, 6, false, cmdHome},         {N_MOVE, 3, false, cmdMove},
-    {N_JOG, 3, false, cmdJog},
+    {N_JOG, 3, false, cmdJog},           {N_DRIVER, 0, false, cmdDriver},
 };
 
 void handleLine(char* text) {

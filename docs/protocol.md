@@ -1,4 +1,4 @@
-# Rail controller protocol (v2)
+# Rail controller protocol (v3)
 
 This is the line protocol between the Raspberry Pi (host) and the Arduino Nano (firmware).
 It is the contract between `firmware/` and `src/macrorail/motion/`. The simulator in
@@ -31,8 +31,8 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
 - A line that cannot be parsed gets the reply `0 ERR SYNTAX` (or `0 ERR TOOLONG`).
 - **Flow control:** the Nano talks to the driver over a software UART that blocks its interrupts,
   which would drop bytes arriving from the host. So the firmware uses the driver UART only while
-  answering a request: `STATUS` when idle (a driver check at most once a second), `ENABLE` and
-  `CURRENT`. The host sends nothing while a request is unanswered. The only exception is a motion
+  answering a request: `STATUS` when idle (a driver check at most once a second), `ENABLE`,
+  `CURRENT` and `DRIVER`. The host sends nothing while a request is unanswered. The only exception is a motion
   command: once it has been sent, `STATUS` and `STOP` may follow, because the firmware never
   touches the driver while moving.
 
@@ -49,6 +49,7 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
 | `HOME <fast> <slow> <clearance> <max> <release_max> <accel>` | motion | `pos=0 release=` | Seek the switch at `fast` for up to `max` steps. Back off until the switch has released, then `clearance` further. Touch it again at `slow`; that point becomes `0`. `release` is how far past its trip point the switch released (its hysteresis). Fails with `SWITCH_STUCK` if the switch is still pressed after `release_max`. |
 | `MOVE <target> <speed> <accel>` | motion | `pos=` | Absolute move. Requires homed, and the target must be within limits. |
 | `JOG <delta> <speed> <accel>` | motion | `pos=` | Relative move. Allowed when not homed; once homed, the target must be within limits. |
+| `DRIVER` | immediate, idle only | `cs= stealth= stst= temp= otpw= ot= short= openload= irun= ihold= mres= up=` | Driver health for diagnostics, from one read of the TMC2209's DRV_STATUS. `cs`: actual current scale (0–31). `stst`: standstill. `temp`: highest temperature threshold passed (0, 120, 143, 150, 157 °C). `irun`/`ihold`: configured current scales. `mres`: microsteps. `up`: controller uptime in seconds. `ERR DRIVER` without a driver. |
 | `STOP` | immediate | | Decelerate. The pending motion then replies `ERR STOPPED pos=`. |
 
 ## Events

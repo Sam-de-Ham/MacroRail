@@ -20,6 +20,7 @@ from .camera.base import Camera, CameraError
 from .camera.liveview import LiveView
 from .config import Config
 from .control import ControlLease
+from .diagnostics import Diagnostics
 from .focus.analysis import AnalysisError
 from .focus.scan import FocusScanner
 from .focus.scan import Motion as ScanMotion
@@ -69,6 +70,9 @@ class Machine:
         )
         self.scanner = FocusScanner(axis, camera, self._approach, self._check_stop, self.changed)
         self.review = ReviewStore(config.data_dir / "stacks", activity_log, self.changed)
+        self.diagnostics = Diagnostics(
+            axis, camera, config.data_dir, self._driver_idle, self.changed
+        )
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task[None] | None = None
         self._stop_requested = False
@@ -86,6 +90,7 @@ class Machine:
             group.create_task(self.camera.run())
             group.create_task(self.live_view.run())
             group.create_task(self._idle_current_loop())
+            group.create_task(self.diagnostics.run())
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -122,6 +127,7 @@ class Machine:
             },
             "scan": self.scanner.snapshot(),
             "review": self.review.snapshot(),
+            "diagnostics": self.diagnostics.snapshot(),
             "plan": self._plan_summary(),
             "stack": self.stack.snapshot() if self.stack else None,
         }
@@ -361,6 +367,11 @@ class Machine:
                     self._full_hold = False
                 except AxisError:
                     continue
+
+    def _driver_idle(self) -> bool:
+        """Whether the driver may be queried now (the controller only answers while idle)."""
+        rail = self.axis.state
+        return not self.busy and rail.connected and rail.driver_ok
 
     def _check_stop(self) -> None:
         if self._stop_requested:
