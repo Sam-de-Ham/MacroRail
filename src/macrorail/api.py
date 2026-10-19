@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,6 +20,8 @@ from starlette.websockets import WebSocketDisconnect
 from . import __version__
 from .log import LogEntry
 from .machine import Machine, OperationError, Point
+
+log = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).parent / "web"
 STATE_INTERVAL_S = 0.05  # at most 20 state messages a second per client
@@ -42,8 +45,9 @@ def create_app(machine: Machine) -> FastAPI:
         task = asyncio.create_task(machine.run())
         yield
         task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        (outcome,) = await asyncio.gather(task, return_exceptions=True)
+        if not isinstance(outcome, asyncio.CancelledError | None):
+            log.error("background tasks failed", exc_info=outcome)
 
     app = FastAPI(title="MacroRail", version=__version__, lifespan=lifespan)
 
