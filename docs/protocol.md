@@ -1,4 +1,4 @@
-# Rail controller protocol (v1)
+# Rail controller protocol (v2)
 
 This is the line protocol between the Raspberry Pi (host) and the Arduino Nano (firmware).
 It is the contract between `firmware/` and `src/macrorail/motion/`. The simulator in
