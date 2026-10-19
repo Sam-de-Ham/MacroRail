@@ -145,6 +145,8 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Test the UI over the LAN: `crypto.randomUUID` only exists on HTTPS or localhost.
   - An unclean session end leaves the A6400 stuck until it is power-cycled, so the app closes the session on shutdown.
   - Supervisors must never die. A link error once killed every background task; they now log and recover.
+- **Firmware on the Nano:** protocol 2, with release-based homing and the re-armed switch. Flashed 2026-10-19. The Pi's config was refreshed from the new example; it had been unmodified.
+- **Open:** the test suite failed once (1 of 10 full runs) and the failure wasn't captured. Suspect a timing-tight test, such as the 0.3 s switch-push test. Rerun under load and fix if it recurs.
 - **Fixed after bring-up:** homing failed with SWITCH_STUCK because a fixed 1 mm back-off was shorter than the roller lever's release travel. Homing now backs off until the switch releases and reports the release distance. Next step: confirm on the hardware.
 
 ## Next: hardware bring-up (with the user)
