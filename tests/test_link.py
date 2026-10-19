@@ -37,7 +37,7 @@ async def open_scripted() -> tuple[Link, ScriptedTransport, list[Event]]:
     transport = ScriptedTransport()
     events: list[Event] = []
     transport.incoming.put("garbage from the bootloader")
-    transport.incoming.put("! READY fw=1.0.0 proto=1 driver=ok")
+    transport.incoming.put("! READY fw=1.0.0 proto=2 driver=ok")
     link, _ = await Link.open(lambda: transport, events.append)
     return link, transport, events
 
