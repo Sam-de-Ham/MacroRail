@@ -88,7 +88,7 @@ async def test_complete_stack_returns_to_start(machine: Machine) -> None:
     assert stack.phase == "done"
     assert [s.position for s in stack.shots] == list(range(4000, 4045, 4))
     assert machine.axis.state.position == 4000
-    records = list((machine.config.data_dir / "stacks").glob("stack-*.json"))
+    records = list((machine.config.data_dir / "stacks").glob("*/stack.json"))
     assert len(records) == 1
     assert json.loads(records[0].read_text())["outcome"] == "done"
 

@@ -16,9 +16,15 @@ from functools import cached_property
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from ..camera.base import CameraError, CameraState, Capture
+from ..camera.base import CameraError, CameraSetting, CameraState, Capture
 
 WIDTH, HEIGHT = 960, 640
+SETTINGS = (
+    CameraSetting("iso", "ISO", "100", ("100", "200", "400", "800", "1600"), False),
+    CameraSetting("shutterspeed", "Shutter", "1/125", ("1/60", "1/125", "1/250", "1/500"), False),
+    CameraSetting("f-number", "Aperture", "f/5.6", ("f/4", "f/5.6", "f/8"), False),
+    CameraSetting("imagequality", "Image quality", "RAW+JPEG", ("JPEG", "RAW", "RAW+JPEG"), False),
+)
 # Blur radius for each step out of focus: fine steps give smooth sharpness peaks, like real optics.
 BLUR_LEVELS = tuple(0.8 * level for level in range(16))
 BAND = 6  # depth units (of 255 across the subject) per blur level
@@ -41,7 +47,8 @@ class SimCamera:
         self._shots = 0
         self.fail_next_captures = 0  # tests: make the next N captures fail
         self._state = CameraState(connected=True, model="Simulated camera", battery="100%",
-                                  live_view=True)  # fmt: skip
+                                  live_view=True, settings=SETTINGS)  # fmt: skip
+        self._files: dict[str, bytes] = {}  # what each capture "wrote", for download()
 
     @property
     def state(self) -> CameraState:
@@ -64,7 +71,31 @@ class SimCamera:
             self.fail_next_captures -= 1
             raise CameraError("The camera did not confirm the shot within 10 s.")
         self._shots += 1
-        return Capture(name=f"DSC{self._shots:05d}.ARW", duration_s=self._capture_s)
+        name = f"DSC{self._shots:05d}.JPG"
+        self._files[name] = await asyncio.to_thread(self._render, self._focus_mm())
+        return Capture(folder="/", name=name, duration_s=self._capture_s)
+
+    async def download(self, capture: Capture) -> bytes:
+        if not self._state.connected:
+            raise CameraError(self._state.problem or "The camera is not connected.")
+        return self._files.pop(capture.name)
+
+    async def refresh_settings(self) -> None:
+        if not self._state.connected:
+            raise CameraError(self._state.problem or "The camera is not connected.")
+
+    async def set_setting(self, key: str, value: str) -> None:
+        if not self._state.connected:
+            raise CameraError(self._state.problem or "The camera is not connected.")
+        settings = list(self._state.settings)
+        for i, setting in enumerate(settings):
+            if setting.key == key:
+                if setting.choices and value not in setting.choices:
+                    raise CameraError(f"The camera refused {key} = {value}.")
+                settings[i] = replace(setting, value=value)
+                self._state = replace(self._state, settings=tuple(settings))
+                return
+        raise CameraError(f"The camera has no setting called {key}.")
 
     async def preview(self) -> bytes:
         if not self._state.connected:

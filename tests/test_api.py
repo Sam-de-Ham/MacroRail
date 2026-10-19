@@ -99,3 +99,22 @@ def test_serves_ui(client: TestClient) -> None:
     assert response.status_code == 200
     assert "<title>MacroRail</title>" in response.text
     assert response.headers["cache-control"] == "no-cache"
+
+
+def test_review_endpoints_reject_unknown_and_crafted_ids(client: TestClient) -> None:
+    assert client.get("/api/stacks").json() == []
+    for stack_id in ("20260101-120000", "..", "..%2F..%2Fsettings.json"):
+        assert client.get(f"/api/stacks/{stack_id}/preview").status_code == 404
+
+
+def test_camera_settings_endpoint(client: TestClient) -> None:
+    client.post("/api/control/take", headers=as_client("phone"))
+    body = {"key": "iso", "value": "800"}
+    assert (
+        client.post("/api/camera/settings", json=body, headers=as_client("phone")).status_code
+        == 204
+    )
+    iso = next(
+        s for s in client.get("/api/state").json()["camera"]["settings"] if s["key"] == "iso"
+    )
+    assert iso["value"] == "800"

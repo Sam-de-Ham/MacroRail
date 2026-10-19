@@ -19,12 +19,24 @@ from typing import Any
 
 from ..config import CameraConfig
 from ..log import ActivityLog
-from .base import CameraError, CameraState, Capture
+from .base import CameraError, CameraSetting, CameraState, Capture
 
 logger = logging.getLogger(__name__)
 
 CHECK_INTERVAL_S = 30.0
 RETRY_INTERVAL_S = 3.0
+
+# The settings shown in the UI, by gphoto2 widget name. Ones a camera lacks are skipped.
+SETTINGS = (
+    ("iso", "ISO"),
+    ("shutterspeed", "Shutter"),
+    ("f-number", "Aperture"),
+    ("exposurecompensation", "Exposure compensation"),
+    ("whitebalance", "White balance"),
+    ("imagequality", "Image quality"),
+    ("imagesize", "Image size"),
+    ("focusmode", "Focus mode"),
+)
 
 _GP_ERROR_MODEL_NOT_FOUND = -105
 _GP_ERROR_IO_USB_CLAIM = -53
@@ -69,6 +81,7 @@ class GPhotoCamera:
             if not self._state.connected:
                 try:
                     model, battery = await self._call(self._open)
+                    settings = await self._call(self._read_settings)
                 except CameraError as exc:
                     if str(exc) != last_problem:
                         self._log.warning(str(exc))
@@ -78,7 +91,12 @@ class GPhotoCamera:
                     continue
                 last_problem = None
                 self._update(
-                    connected=True, model=model, battery=battery, live_view=True, problem=None
+                    connected=True,
+                    model=model,
+                    battery=battery,
+                    live_view=True,
+                    settings=settings,
+                    problem=None,
                 )
                 self._log.info(f"Camera connected: {model}.")
             self._lost_event.clear()
@@ -87,7 +105,7 @@ class GPhotoCamera:
             if self._state.connected:
                 try:
                     battery = await self._call(self._battery)
-                    self._update(battery=battery)
+                    self._update(battery=battery, settings=await self._call(self._read_settings))
                 except CameraError as exc:
                     self._lost(exc)
 
@@ -106,6 +124,10 @@ class GPhotoCamera:
                 self._lost(second)
                 raise
 
+    async def download(self, capture: Capture) -> bytes:
+        self._require_connected()
+        return await self._call(lambda: self._download(capture))
+
     async def preview(self) -> bytes:
         self._require_connected()
         try:
@@ -113,6 +135,15 @@ class GPhotoCamera:
         except CameraError as exc:
             self._lost(exc)
             raise
+
+    async def refresh_settings(self) -> None:
+        self._require_connected()
+        self._update(settings=await self._call(self._read_settings))
+
+    async def set_setting(self, key: str, value: str) -> None:
+        self._require_connected()
+        await self._call(lambda: self._write_setting(key, value))
+        self._update(settings=await self._call(self._read_settings))
 
     # -- helpers on the event loop ------------------------------------------------------------
 
@@ -175,12 +206,45 @@ class GPhotoCamera:
             while time.monotonic() < deadline:
                 event, data = camera.wait_for_event(250)
                 if event == gp.GP_EVENT_FILE_ADDED:
-                    return Capture(name=data.name, duration_s=time.monotonic() - started)
+                    elapsed = time.monotonic() - started
+                    return Capture(folder=data.folder, name=data.name, duration_s=elapsed)
         except gp.GPhoto2Error as exc:
             raise CameraError(_describe(exc)) from None
         raise CameraError(
             f"The camera did not confirm the shot within {self._config.capture_timeout_s:g} s."
         )
+
+    def _download(self, capture: Capture) -> bytes:
+        gp = self._gp
+        try:
+            file = self._camera.file_get(capture.folder, capture.name, gp.GP_FILE_TYPE_NORMAL)
+            return bytes(file.get_data_and_size())
+        except gp.GPhoto2Error as exc:
+            raise CameraError(f"Could not download {capture.name}: {_describe(exc)}") from None
+
+    def _read_settings(self) -> tuple[CameraSetting, ...]:
+        gp = self._gp
+        settings = []
+        for key, label in SETTINGS:
+            try:
+                widget = self._camera.get_single_config(key)
+            except gp.GPhoto2Error:
+                continue  # this camera doesn't have it
+            listed = widget.get_type() in (gp.GP_WIDGET_RADIO, gp.GP_WIDGET_MENU)
+            choices = tuple(str(c) for c in widget.get_choices()) if listed else ()
+            readonly = bool(widget.get_readonly())
+            value = str(widget.get_value())
+            settings.append(CameraSetting(key, label, value, choices, readonly))
+        return tuple(settings)
+
+    def _write_setting(self, key: str, value: str) -> None:
+        gp = self._gp
+        try:
+            widget = self._camera.get_single_config(key)
+            widget.set_value(value)
+            self._camera.set_single_config(key, widget)
+        except gp.GPhoto2Error as exc:
+            raise CameraError(f"The camera refused {key} = {value}: {_describe(exc)}") from None
 
     def _preview(self) -> bytes:
         try:

@@ -3,23 +3,27 @@
 The stage only ever moves in the stack direction while shooting, so lead-screw backlash
 never shifts a slice. A camera failure pauses the stack (the user fixes it and resumes,
 which retakes the same slice); a stop or the last shot returns the stage to the start.
+
+When the camera sends a JPEG for each shot, a small copy is downloaded for review while the
+stage moves on, and a quick preview stack is made at the end.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime
-from pathlib import Path
 from typing import Literal
 
-from ..camera.base import Camera, CameraError
+from ..camera.base import Camera, CameraError, Capture
 from ..log import ActivityLog
 from ..motion.base import Axis, AxisError, MotionInterrupted
+from ..review.store import ReviewError, ReviewStore
 from .plan import StackPlan
+
+logger = logging.getLogger(__name__)
 
 Phase = Literal[
     "preparing", "running", "paused", "camera_error", "returning", "done", "stopped", "failed"
@@ -57,9 +61,12 @@ class StackRun:
         settle_s: float,
         log: ActivityLog,
         on_change: Callable[[], None],
-        record_dir: Path,
+        store: ReviewStore,
+        name: str = "",
+        download_previews: bool = True,
     ) -> None:
         self.plan = plan
+        self.name = name
         self._axis = axis
         self._camera = camera
         self._approach = approach
@@ -68,7 +75,12 @@ class StackRun:
         self._settle_s = settle_s
         self._log = log
         self._on_change = on_change
-        self._record_dir = record_dir
+        self._store = store
+        self._download_previews = download_previews
+        self._downloads: list[asyncio.Task[None]] = []
+        self._preview_task: asyncio.Task[None] | None = None  # kept so it isn't collected
+        self._download_problem_logged = False
+        self.previews = 0  # small JPEG copies downloaded so far
         self.phase: Phase = "preparing"
         self.shots: list[Shot] = []
         self.error: str | None = None
@@ -80,6 +92,7 @@ class StackRun:
         self._stop_requested = False
         self._resume = asyncio.Event()
         self._shot_clock: list[float] = []  # active time at each shot, for the ETA
+        self.id = store.create(self.started_at)
 
     # -- control (from the event loop, any time) ----------------------------------------------
 
@@ -122,6 +135,9 @@ class StackRun:
 
     def snapshot(self) -> dict[str, object]:
         return {
+            "id": self.id,
+            "name": self.name,
+            "previews": self.previews,
             "phase": self.phase,
             "pausing": self._pause_requested and self.phase == "running",
             "stopping": self._stop_requested and self.active,
@@ -156,7 +172,7 @@ class StackRun:
             outcome = "failed"
         if outcome != "failed" and self.phase != "preparing":  # stopped before reaching the start
             await self._return_to_start()
-        self._finish(outcome)
+        await self._finish(outcome)
 
     async def _shoot(self, index: int) -> None:
         position = self.plan.positions[index]
@@ -173,6 +189,34 @@ class StackRun:
         self.shots.append(Shot(index, position, capture.name, time.time(), capture.duration_s))
         self._shot_clock.append(self.elapsed_s)
         self._on_change()
+        if self._download_previews:
+            self._fetch_later(index + 1, capture)
+
+    def _fetch_later(self, number: int, capture: Capture) -> None:
+        """Download the shot's JPEG while the stage moves on (the camera queues it before
+        the next shot)."""
+        if not capture.is_jpeg:
+            self._download_problem(
+                f"The camera sends {capture.name.rsplit('.', 1)[-1].upper()} files to the Pi, so "
+                "there are no previews. Set it to send JPEGs to the computer to get them."
+            )
+            return
+        self._downloads.append(asyncio.create_task(self._fetch(number, capture)))
+
+    async def _fetch(self, number: int, capture: Capture) -> None:
+        try:
+            jpeg = await self._camera.download(capture)
+            await self._store.add_frame(self.id, number, jpeg)
+        except (CameraError, OSError, ValueError) as exc:
+            self._download_problem(f"Could not download a preview ({exc}). Stacking continues.")
+            return
+        self.previews += 1
+        self._on_change()
+
+    def _download_problem(self, message: str) -> None:
+        if not self._download_problem_logged:
+            self._download_problem_logged = True
+            self._log.warning(message)
 
     async def _checkpoint(self) -> None:
         if self._stop_requested:
@@ -202,7 +246,8 @@ class StackRun:
             self.error = f"Could not return to the start: {exc}"
             self._log.error(self.error)
 
-    def _finish(self, outcome: Phase) -> None:
+    async def _finish(self, outcome: Phase) -> None:
+        await asyncio.gather(*self._downloads)
         self._pause_clock()
         self.finished_at = time.time()
         self._set_phase(outcome)
@@ -214,6 +259,17 @@ class StackRun:
         else:
             self._log.error(f"Stack failed after {taken}: {self.error}")
         self._save_record()
+        if self.previews >= 2:
+            self._preview_task = asyncio.create_task(self._build_preview())
+
+    async def _build_preview(self) -> None:
+        try:
+            await self._store.build_preview(self.id)
+        except ReviewError as exc:
+            self._log.warning(f"No preview stack: {exc}")
+        except Exception:
+            logger.exception("preview stack failed")
+            self._log.warning("The preview stack could not be made.")
 
     def _pause_clock(self) -> None:
         if self._active_since is not None:
@@ -225,8 +281,8 @@ class StackRun:
         self._on_change()
 
     def _save_record(self) -> None:
-        stamp = datetime.fromtimestamp(self.started_at).strftime("%Y%m%d-%H%M%S")
         record = {
+            "name": self.name,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "outcome": self.phase,
@@ -243,10 +299,8 @@ class StackRun:
             "shots": [asdict(shot) for shot in self.shots],
         }
         try:
-            self._record_dir.mkdir(parents=True, exist_ok=True)
-            path = self._record_dir / f"stack-{stamp}.json"
-            path.write_text(json.dumps(record, indent=2), encoding="utf-8")
-        except OSError as exc:
+            self._store.write_record(self.id, record)
+        except (OSError, ReviewError) as exc:
             self._log.warning(f"Could not save the stack record: {exc}")
 
 
