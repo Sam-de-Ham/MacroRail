@@ -141,6 +141,16 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - **Camera:** an unclean session end leaves the A6400 stuck (`-10` timeouts) until it is power-cycled, so the app now closes the session on shutdown.
   - **Running the app by hand on the Pi:** `cd ~/macrorail && setsid nohup .venv/bin/macrorail > ~/macrorail.log 2>&1 < /dev/null &`. Stop it with `pkill -f "^/home/pi/macrorail/[.]venv/bin/python"`; the anchored pattern avoids killing your own SSH shell.
 
+- **2026-10-19, hardware bring-up, part 1:**
+  - The driver was detected over UART on first power-up.
+  - The switch was wired NO, so the firmware now uses `ENDSTOP_ACTIVE_LEVEL = LOW`. The motor ran the wrong way, so `INVERT_DIRECTION = true`.
+  - **UI fix:** it used `crypto.randomUUID`, which is HTTPS/localhost-only, so it was dead over `http://pi.local`. Lesson: always test the UI from a LAN host, not localhost.
+  - **Switch reworked (user request):** interrupt-driven on D2, always armed, pushed to the host.
+  - **Link bug found and fixed:** the driver's SoftwareSerial dropped bytes from the host. The link is now half-duplex around the driver UART (see `docs/protocol.md`, Flow control). A stress test of 3,353 requests in 60 s had 0 errors.
+  - **Supervisors hardened:** that bug had crashed the rail supervisor, which took down all background tasks. Supervisors now log and recover, and shutdown errors are logged.
+  - **Camera:** an unclean session end leaves the A6400 stuck (`-10` timeouts) until it is power-cycled, so the app now closes the session on shutdown.
+  - **Running the app by hand on the Pi:** `cd ~/macrorail && setsid nohup .venv/bin/macrorail > ~/macrorail.log 2>&1 &`. Stop it with `pkill -f "^/home/pi/macrorail/[.]venv/bin/python"`; the anchored pattern avoids killing your own SSH shell.
+
 ## Next: hardware bring-up (with the user)
 
 1. **Pi setup:** the user runs `~/macrorail/deploy/install.sh` on the Pi (it needs sudo).
