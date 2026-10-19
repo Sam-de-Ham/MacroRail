@@ -12,7 +12,7 @@ from typing import Annotated, Any
 
 import anyio
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
@@ -20,6 +20,7 @@ from starlette.websockets import WebSocketDisconnect
 from . import __version__
 from .log import LogEntry
 from .machine import Machine, OperationError, Point
+from .review.store import ReviewError
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +40,11 @@ class MotorsBody(BaseModel):
     enabled: bool
 
 
+class CameraSettingBody(BaseModel):
+    key: str
+    value: str
+
+
 def create_app(machine: Machine) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -54,6 +60,10 @@ def create_app(machine: Machine) -> FastAPI:
     @app.exception_handler(OperationError)
     async def refused(_: Request, exc: OperationError) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(ReviewError)
+    async def not_found(_: Request, exc: ReviewError) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=404)
 
     @app.middleware("http")
     async def no_stale_ui(
@@ -190,9 +200,63 @@ def create_app(machine: Machine) -> FastAPI:
     async def test_shot() -> None:
         machine.capture_test()
 
+    @app.post("/api/scan/range", status_code=204, dependencies=controlled)
+    async def find_range() -> None:
+        machine.find_range()
+
+    @app.post("/api/scan/range/apply", status_code=204, dependencies=controlled)
+    async def apply_range() -> None:
+        machine.apply_range()
+
+    @app.post("/api/scan/backlash", status_code=204, dependencies=controlled)
+    async def measure_backlash() -> None:
+        machine.measure_backlash()
+
+    @app.post("/api/scan/backlash/apply", status_code=204, dependencies=controlled)
+    async def apply_backlash() -> None:
+        machine.apply_backlash()
+
+    @app.post("/api/camera/settings", status_code=204, dependencies=controlled)
+    async def set_camera_setting(body: CameraSettingBody) -> None:
+        await machine.set_camera_setting(body.key, body.value)
+
+    @app.post("/api/camera/settings/refresh", status_code=204)
+    async def refresh_camera_settings() -> None:
+        await machine.refresh_camera_settings()
+
+    # -- review -------------------------------------------------------------------------------
+
+    @app.get("/api/stacks")
+    async def stacks() -> list[dict[str, Any]]:
+        return machine.review.stacks()
+
+    @app.get("/api/stacks/{stack_id}/frames/{number}")
+    async def frame(stack_id: str, number: int) -> FileResponse:
+        return _image(machine.review.frame_path(stack_id, number))
+
+    @app.get("/api/stacks/{stack_id}/preview")
+    async def preview_image(stack_id: str) -> FileResponse:
+        return _image(machine.review.preview_path(stack_id))
+
+    @app.post("/api/stacks/{stack_id}/preview", status_code=204, dependencies=controlled)
+    async def build_preview(stack_id: str) -> None:
+        await machine.build_preview(stack_id)
+
+    @app.delete("/api/stacks/{stack_id}", status_code=204, dependencies=controlled)
+    async def delete_stack(stack_id: str) -> None:
+        machine.delete_stack(stack_id)
+
     @app.patch("/api/settings", status_code=204, dependencies=controlled)
     async def update_settings(patch: dict[str, dict[str, Any]]) -> None:
         await machine.update_settings(patch)
 
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
     return app
+
+
+def _image(path: Path) -> FileResponse:
+    if not path.is_file():
+        raise ReviewError("No such image.")
+    # Stack images never change once written (a new preview replaces the file, and the UI
+    # asks for it with the stack's revision), so browsers may keep them.
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})

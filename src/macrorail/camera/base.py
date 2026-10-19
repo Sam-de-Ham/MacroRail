@@ -12,8 +12,22 @@ class CameraError(Exception):
 
 @dataclass(frozen=True)
 class Capture:
-    name: str  # file name on the camera's card
+    folder: str  # where the camera reported the new file
+    name: str
     duration_s: float  # trigger to confirmation
+
+    @property
+    def is_jpeg(self) -> bool:
+        return self.name.lower().endswith((".jpg", ".jpeg"))
+
+
+@dataclass(frozen=True)
+class CameraSetting:
+    key: str  # the camera's own name for it, e.g. "iso"
+    label: str
+    value: str
+    choices: tuple[str, ...]  # empty when the camera offers no list
+    readonly: bool
 
 
 @dataclass(frozen=True)
@@ -22,6 +36,7 @@ class CameraState:
     model: str | None = None
     battery: str | None = None
     live_view: bool = False  # whether this camera can stream preview frames
+    settings: tuple[CameraSetting, ...] = ()
     problem: str | None = None
 
 
@@ -35,5 +50,13 @@ class Camera(Protocol):
     async def capture(self) -> Capture:
         """Take one picture and return once the camera confirms it was written."""
 
+    async def download(self, capture: Capture) -> bytes:
+        """Fetch a captured file from the camera."""
+
     async def preview(self) -> bytes:
         """One live-view frame as JPEG."""
+
+    async def refresh_settings(self) -> None:
+        """Re-read the camera's settings (they can change on the camera itself)."""
+
+    async def set_setting(self, key: str, value: str) -> None: ...

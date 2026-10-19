@@ -26,6 +26,7 @@ from .focus.scan import Motion as ScanMotion
 from .log import ActivityLog
 from .motion.base import Axis, AxisError, MotionInterrupted
 from .optics import Optics
+from .review.store import ReviewError, ReviewStore
 from .settings import Settings, SettingsStore
 from .stack.plan import PlanError, StackPlan, estimate_seconds, plan_count, plan_range
 from .stack.runner import StackRun
@@ -67,6 +68,7 @@ class Machine:
             camera, config.camera.liveview_max_fps, paused=lambda: self.activity == "stacking"
         )
         self.scanner = FocusScanner(axis, camera, self._approach, self._check_stop, self.changed)
+        self.review = ReviewStore(config.data_dir / "stacks", activity_log, self.changed)
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task[None] | None = None
         self._stop_requested = False
@@ -119,6 +121,7 @@ class Machine:
                 "suggested_step": self._optics().suggested_step(self.axis.steps_per_mm),
             },
             "scan": self.scanner.snapshot(),
+            "review": self.review.snapshot(),
             "plan": self._plan_summary(),
             "stack": self.stack.snapshot() if self.stack else None,
         }
@@ -218,7 +221,9 @@ class Machine:
             settle_s=self.settings.stack.settle_s,
             log=self.log,
             on_change=self.changed,
-            record_dir=self.config.data_dir / "stacks",
+            store=self.review,
+            name=self.settings.stack.name,
+            download_previews=self.settings.camera.download_previews,
         )
         self._start("stacking", self._run_stack(self.stack))
 
@@ -235,6 +240,35 @@ class Machine:
             self._stop_requested = True
             with contextlib.suppress(AxisError):
                 await self.axis.stop()
+
+    async def set_camera_setting(self, key: str, value: str) -> None:
+        self._require_camera()
+        self._require_idle()
+        try:
+            await self.camera.set_setting(key, value)
+        except CameraError as exc:
+            raise OperationError(str(exc)) from None
+
+    async def refresh_camera_settings(self) -> None:
+        self._require_camera()
+        try:
+            await self.camera.refresh_settings()
+        except CameraError as exc:
+            raise OperationError(str(exc)) from None
+
+    async def build_preview(self, stack_id: str) -> None:
+        try:
+            await self.review.build_preview(stack_id)
+        except ReviewError as exc:
+            raise OperationError(str(exc)) from None
+
+    def delete_stack(self, stack_id: str) -> None:
+        if self.stack is not None and self.stack.active and self.stack.id == stack_id:
+            raise OperationError("That stack is still running.")
+        try:
+            self.review.delete(stack_id)
+        except ReviewError as exc:
+            raise OperationError(str(exc)) from None
 
     def capture_test(self) -> None:
         if not self.camera.state.connected:
@@ -467,6 +501,10 @@ class Machine:
         self._require_rail()
         if not self.axis.state.homed:
             raise OperationError("Home the rail first.")
+
+    def _require_camera(self) -> None:
+        if not self.camera.state.connected:
+            raise OperationError(self.camera.state.problem or "The camera is not connected.")
 
     def _require_live_view(self) -> None:
         camera = self.camera.state
