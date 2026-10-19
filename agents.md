@@ -127,6 +127,9 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 ## Status
 
+- **Released:** v1.0.0 on 2026-10-19, public at https://github.com/Sam-de-Ham/MacroRail (tag, GitHub release, CI green).
+  - `gh` here defaults to the work account (TT-SaWe), so push with the Sam-de-Ham token per command.
+  - `CLAUDE.md` is kept local (gitignored).
 - **Software (2026-10-19):** v1 is feature-complete.
   - 84 tests against the simulator; ruff, mypy (strict) and the firmware build are green.
   - An independent review was done and its findings fixed.
@@ -157,7 +160,12 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Next: flash, re-home, and compare the release distance. If it is still about 3–4 mm, the user checks the switch with a meter (does C–NO beep exactly at the click?) or replaces it.
   - Flash is pending until the Pi is reachable (SSH was timing out).
 
-## Next: hardware bring-up (with the user)
+## Next
+
+- Pick features for v1.1+ with the user from the brainstormed ideas list. Record the chosen ones here.
+- Hardware items still open are below.
+
+## Hardware bring-up (with the user)
 
 1. **Homing:** flash the homing-unfiltered firmware, re-home, and compare the release distance with 3.79 mm.
 2. **Calibrate:**
