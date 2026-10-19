@@ -19,13 +19,16 @@ from .analysis import (
     BACKLASH_ROUNDS,
     RangeResult,
     Sample,
+    curve_shift,
     find_range,
-    peak_position,
     strongest_tile,
 )
 from .sharpness import tile_sharpness
 
 Approach = Callable[[int, int], Awaitable[None]]
+
+# The largest backlash a measurement looks for. A worn lead-screw nut is well under this.
+MAX_BACKLASH_MM = 0.25
 
 
 @dataclass(frozen=True)
@@ -38,7 +41,7 @@ class Motion:
 @dataclass(frozen=True)
 class BacklashResult:
     backlash: float  # steps the carriage lags behind the motor after a reversal
-    spread: float  # how much the forward peaks varied between rounds (repeatability), steps
+    spread: float  # how much the rounds disagreed (repeatability), steps
     suggested_takeup: int  # steps of overshoot to use when approaching a position
 
 
@@ -83,29 +86,31 @@ class FocusScanner:
             self._end()
 
     async def measure_backlash(self, center: int, dof: int, motion: Motion) -> BacklashResult:
-        """Find a sharp detail near `center`, then pass through its focus peak forwards and
+        """Find a sharp detail near `center`, then pass through its focus forwards and
         backwards. The carriage lags the motor by the backlash after each reversal, so the
-        backward peak lands that much lower on the motor's scale."""
+        backward pass sees the same sharpness curve that much lower on the motor's scale."""
         coarse = self._positions(center - 6 * dof, center + 6 * dof, max(1, dof // 2))
-        fine_step = max(1, dof // 6)
-        window = 2 * dof
-        sweep = len(self._positions(0, 2 * window, fine_step))
-        self._begin("backlash", len(coarse) + 2 * BACKLASH_ROUNDS * sweep)
+        max_backlash = round(MAX_BACKLASH_MM * self._axis.steps_per_mm)
+        fine_step = max(1, dof // 4)
+        # The coarse scan ran forwards, so its best frame is near the forward peak; the
+        # backward peak lies up to `max_backlash` below it.
+        span = (4 * dof + max_backlash) // fine_step * fine_step
+        self._begin("backlash", len(coarse) + 2 * BACKLASH_ROUNDS * (span // fine_step + 1))
         try:
             samples = await self._sweep(coarse, motion)
             tile = strongest_tile(samples)
             best = max(samples, key=lambda s: float(s.tiles.ravel()[tile]))
-            up = self._positions(best.position - window, best.position + window, fine_step)
-            forward: list[float] = []
-            backward: list[float] = []
+            top = min(best.position + 2 * dof, self._axis.max_position)
+            up = self._positions(top - span, top, fine_step)
+            shifts = []
             for _ in range(BACKLASH_ROUNDS):
-                forward.append(self._peak(await self._sweep(up, motion), tile))
-                backward.append(self._peak(await self._sweep(up[::-1], motion), tile))
-            lag = sum(forward) / len(forward) - sum(backward) / len(backward)
-            backlash = max(0.0, lag)
+                forward = self._values(await self._sweep(up, motion), tile)
+                backward = self._values(await self._sweep(up[::-1], motion), tile)[::-1]
+                shifts.append(curve_shift(up, forward, backward, max_backlash + dof))
+            backlash = sum(shifts) / len(shifts)
             self.backlash = BacklashResult(
                 backlash=round(backlash, 1),
-                spread=round(max(forward) - min(forward), 1),
+                spread=round(max(shifts) - min(shifts), 1),
                 suggested_takeup=math.ceil(2 * backlash) + max(1, dof),
             )
             return self.backlash
@@ -139,10 +144,8 @@ class FocusScanner:
         return samples
 
     @staticmethod
-    def _peak(samples: list[Sample], tile: int) -> float:
-        positions = [s.position for s in samples]
-        values = [float(s.tiles.ravel()[tile]) for s in samples]
-        return peak_position(positions, values)
+    def _values(samples: list[Sample], tile: int) -> list[float]:
+        return [float(s.tiles.ravel()[tile]) for s in samples]
 
     def _begin(self, task: str, total: int) -> None:
         self.task, self.done, self.total = task, 0, total

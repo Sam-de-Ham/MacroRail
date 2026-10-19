@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import math
 import time
 from collections.abc import Callable, Coroutine
 from dataclasses import asdict
@@ -207,7 +208,10 @@ class Machine:
         result = self.scanner.backlash
         if result is None:
             raise OperationError("Measure the backlash first.")
-        takeup_mm = min(2.0, round(result.suggested_takeup / self.axis.steps_per_mm + 0.005, 2))
+        # Rounded up to 0.01 mm, as the UI shows it.
+        takeup_mm = min(
+            2.0, math.ceil(result.suggested_takeup / self.axis.steps_per_mm * 100) / 100
+        )
         self._save(self.settings.merged({"motion": {"backlash_mm": takeup_mm}}))
 
     def start_stack(self) -> None:
@@ -425,7 +429,12 @@ class Machine:
         await self._prepare_motion()
         self.log.info("Scanning for the subject's front and back…")
         center = self.axis.state.position
-        result = await self.scanner.find_range(center, span, step, self._scan_motion())
+        try:
+            result = await self.scanner.find_range(center, span, step, self._scan_motion())
+        except AnalysisError:
+            await self._approach(center, self._stack_direction())
+            raise
+        await self._approach(center, self._stack_direction())  # back to where the scan began
         self.log.info(
             f"Subject in focus from {self._mm(result.start)} to {self._mm(result.end)} mm."
         )
@@ -438,9 +447,13 @@ class Machine:
     async def _measure_backlash(self, dof: int) -> None:
         await self._prepare_motion()
         self.log.info("Measuring backlash…")
-        result = await self.scanner.measure_backlash(
-            self.axis.state.position, dof, self._scan_motion()
-        )
+        start = self.axis.state.position
+        try:
+            result = await self.scanner.measure_backlash(start, dof, self._scan_motion())
+        except AnalysisError:
+            await self._approach(start, self._stack_direction())
+            raise
+        await self._approach(start, self._stack_direction())  # back to where the scan began
         um = 1000 / self.axis.steps_per_mm
         self.log.info(
             f"Backlash is about {result.backlash * um:.0f} µm (repeatability "

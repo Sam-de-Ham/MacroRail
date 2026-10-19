@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import mimetypes
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +26,7 @@ from .review.store import ReviewError
 log = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).parent / "web"
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 STATE_INTERVAL_S = 0.05  # at most 20 state messages a second per client
 
 

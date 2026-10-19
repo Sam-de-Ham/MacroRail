@@ -44,6 +44,13 @@ export async function command(method, path, body) {
 
 export const post = (path, body) => command("POST", path, body);
 export const patch = (path, body) => command("PATCH", path, body);
+export const remove = (path) => command("DELETE", path);
+
+export async function getJson(path) {
+  const response = await fetch(`/api/${path}`, { headers: { "X-Client-Id": clientId } });
+  if (!response.ok) throw new CommandError(`Request failed (${response.status}).`);
+  return response.json();
+}
 
 // Keeps a WebSocket to the server open, reconnecting with backoff.
 export function connectUpdates({ onState, onLog, onConnection }) {
