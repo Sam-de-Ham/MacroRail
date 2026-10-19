@@ -157,7 +157,9 @@ void fault(const __FlashStringHelper* code) {
   Serial.println(code);
 }
 
-// Runs only while no motion is in flight: UART reads stall the step loop for a few ms.
+// The driver UART (SoftwareSerial) blocks interrupts for each byte, long enough to drop bytes
+// arriving from the host and to stall the step loop. So it is used only while answering a host
+// request that the host waits for (STATUS when idle, ENABLE, CURRENT), never while moving.
 void checkDriver() {
   if (driver.version() != TMC2209_VERSION) {
     if (state.driverOk) {
@@ -308,6 +310,11 @@ void cmdInfo(uint16_t id, const long*) {
 }
 
 void cmdStatus(uint16_t id, const long*) {
+  const uint32_t now = millis();
+  if (pending.motion == Motion::None && now - lastDriverCheckMs >= DRIVER_CHECK_MS) {
+    lastDriverCheckMs = now;
+    checkDriver();
+  }
   beginReply(id);
   Serial.print(F("OK pos="));
   Serial.print(stepper.currentPosition());
@@ -511,9 +518,6 @@ void serviceTimers() {
       Serial.print(F("! POS pos="));
       Serial.println(stepper.currentPosition());
     }
-  } else if (now - lastDriverCheckMs >= DRIVER_CHECK_MS) {
-    lastDriverCheckMs = now;
-    checkDriver();
   }
 }
 

@@ -145,12 +145,14 @@ class RailAxis:
 
     # -- commands -----------------------------------------------------------------------------
 
-    async def _request(self, command: str, *args: int, timeout: float = 1.0) -> dict[str, str]:
+    async def _request(
+        self, command: str, *args: int, timeout: float = 1.0, motion: bool = False
+    ) -> dict[str, str]:
         link = self._link
         if link is None:
             raise AxisError(self._state.problem or "The rail controller is not connected.")
         try:
-            data = await link.request(command, *args, timeout=timeout)
+            data = await link.request(command, *args, timeout=timeout, motion=motion)
         except DeviceError as exc:
             if "pos" in exc.data:
                 self._update(position=int(exc.data["pos"]))
@@ -168,7 +170,7 @@ class RailAxis:
     async def _motion(self, command: str, *args: int, timeout: float) -> int:
         self._update(moving=True)
         try:
-            await self._request(command, *args, timeout=timeout)
+            await self._request(command, *args, timeout=timeout, motion=True)
         finally:
             self._update(moving=False)
         return self._state.position
