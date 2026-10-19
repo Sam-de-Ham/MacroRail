@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -11,6 +12,8 @@ from ..log import ActivityLog
 from .base import AxisError, AxisState, MotionInterrupted
 from .link import DeviceError, Link, LinkError, Transport
 from .protocol import PROTOCOL_VERSION, Event
+
+logger = logging.getLogger(__name__)
 
 STATUS_INTERVAL_S = 0.5
 RETRY_INTERVAL_S = 2.0
@@ -68,6 +71,10 @@ class RailAxis:
                 problem = "Lost connection to the rail controller."
             except (LinkError, OSError, AxisError) as exc:
                 problem = self._describe_failure(exc)
+            except Exception as exc:  # the supervisor must outlive any bug: reconnect instead
+                logger.exception("rail session failed")
+                problem = f"Rail controller error ({exc}). Reconnecting."
+
             if self._state.connected or problem != last_problem:
                 self._log.warning(problem)
             last_problem = problem

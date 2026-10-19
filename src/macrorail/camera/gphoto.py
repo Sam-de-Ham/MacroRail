@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +20,8 @@ from typing import Any
 from ..config import CameraConfig
 from ..log import ActivityLog
 from .base import CameraError, CameraState, Capture
+
+logger = logging.getLogger(__name__)
 
 CHECK_INTERVAL_S = 30.0
 RETRY_INTERVAL_S = 3.0
@@ -48,7 +51,13 @@ class GPhotoCamera:
 
     async def run(self) -> None:
         try:
-            await self._supervise()
+            while True:
+                try:
+                    await self._supervise()
+                except Exception as exc:  # the supervisor must outlive any bug: reconnect
+                    logger.exception("camera supervision failed")
+                    self._lost(CameraError(f"Unexpected camera error ({exc}). Reconnecting."))
+                    await asyncio.sleep(RETRY_INTERVAL_S)
         finally:
             # End the camera's remote session cleanly: a Sony left mid-session stops answering
             # until it is switched off and on again.
@@ -132,14 +141,14 @@ class GPhotoCamera:
     def _open(self) -> tuple[str, str | None]:
         self._close()
         gp = self._gp
-        camera = gp.Camera()
         try:
+            camera = gp.Camera()
             camera.init()
+            self._camera = camera
+            return str(camera.get_abilities().model), self._battery()
         except gp.GPhoto2Error as exc:
+            self._close()
             raise CameraError(_describe(exc)) from None
-        self._camera = camera
-        model = str(camera.get_abilities().model)
-        return model, self._battery()
 
     def _close(self) -> None:
         if self._camera is not None:
