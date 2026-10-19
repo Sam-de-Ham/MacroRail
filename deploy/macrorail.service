@@ -1,0 +1,14 @@
+[Unit]
+Description=MacroRail focus-stacking controller
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/.venv/bin/macrorail
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
