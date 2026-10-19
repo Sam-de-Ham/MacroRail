@@ -53,9 +53,14 @@ float currentAccel = 0;
 //
 // A hardware interrupt latches the very first contact, so even a brief touch of a short-throw
 // switch stops the motor before its next step, whatever the direction of travel.
+// Two latches: `switchTouched` takes any closing edge at all, `switchTripped` only one that is
+// still closed when the interrupt runs (a few µs later), which rejects motor-noise spikes.
+// Homing expects the switch and uses the first touch, so a chattering contact counts from its
+// very first blip; every other motion uses the filtered trip.
 // `endstopActive` is the debounced level: it decides whether a move may start, and every
 // change of it is reported to the host straight away.
 
+volatile bool switchTouched = false;
 volatile bool switchTripped = false;
 bool endstopActive = false;
 bool endstopRaw = false;
@@ -65,7 +70,8 @@ uint32_t endstopSeenUs = 0;  // last time the raw input read "pressed"
 bool readEndstopRaw() { return digitalRead(PIN_ENDSTOP) == ENDSTOP_ACTIVE_LEVEL; }
 
 void onSwitchEdge() {
-  if (readEndstopRaw()) switchTripped = true;  // still pressed on entry: not an EMI spike
+  switchTouched = true;
+  if (readEndstopRaw()) switchTripped = true;  // still pressed on entry: not a noise spike
 }
 
 void updateEndstop() {
@@ -271,11 +277,14 @@ void finishHome() {
 void serviceMotion() {
   // Consume a latched trip first, so a touch stops the motor before its next step.
   noInterrupts();  // read-and-clear must not lose a trip that lands in between
-  const bool trip = switchTripped;
-  switchTripped = false;
+  const bool touched = switchTouched;
+  const bool filtered = switchTripped;
+  switchTouched = switchTripped = false;
   interrupts();
   if (pending.motion == Motion::None) return;  // a touch while idle stops nothing
 
+  const bool homing = pending.motion == Motion::HomeSeek || pending.motion == Motion::HomeProbe;
+  const bool trip = homing ? touched : filtered;
   const bool linearMove = pending.motion == Motion::Move || pending.motion == Motion::Jog;
   // A move that started on the pressed switch ignores it only until it has released.
   if (linearMove && pending.ignoreSwitch && micros() - endstopSeenUs >= ENDSTOP_DEBOUNCE_US) {

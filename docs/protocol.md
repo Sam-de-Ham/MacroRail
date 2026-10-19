@@ -92,6 +92,9 @@ Fault codes:
   pressed and backs away from it (positive direction): it ignores the switch only until the switch
   has released, bounce included, and is armed again from then on. While the switch is pressed,
   moves toward it are refused.
+- Outside homing, a contact counts only if the switch is still closed a few µs later, which rejects
+  motor-noise spikes. Homing expects the switch, so there any closing edge counts, and a chattering
+  contact stops the seek at its very first blip.
 - During homing, the first contact ends the seek. The back-off ignores the switch until it has
   released. The slow re-approach ends on the next contact, which becomes position `0`.
 - `DISABLE`, an endstop hit, and any driver fault clear the homed flag. The host must home again
