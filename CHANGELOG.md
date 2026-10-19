@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Tabbed interface: a fixed live view with Shoot, Camera, Review and System tabs, and a
+  status strip showing whatever is running.
+- Auto range: a scan through focus finds where the subject starts and ends.
+- Step-size helper from the lens's magnification and numerical aperture.
+- Backlash measurement from live view, with a suggested take-up.
+- Camera settings in the browser (ISO, shutter, aperture, exposure compensation, white
+  balance, quality, size, focus mode) and a test shot.
+- Stack names; small JPEG copies of each shot kept on the Pi; a review gallery with a quick
+  all-in-focus preview stack.
+- Installable as an app; a chime, vibration, tab title and (over HTTPS) a notification when a
+  stack ends or needs attention.
+- Diagnostics: motor driver status, link round trip, camera, and the Pi's temperature, power,
+  load, memory and disk.
+- Firmware protocol 3: `DRIVER` reports the TMC2209's status. Reflash the Nano.
+- CI on current actions, a CI badge, and steadier switch tests.
+
 ## 1.0.0: 2026-10-19
 
 First release: a complete rewrite of the MacroScanner experiments.

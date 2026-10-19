@@ -13,11 +13,16 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 ## Scope
 
 - **v1 (now):** custom macro rail (Arduino Nano + TMC2209) + Sony A6400 over USB (gphoto2).
-- **v1.1:** 3D printer as the motion source (Marlin G-code over USB, jog X/Y/Z), and a relay
-  shutter-cable trigger on the Nano (D9 reserved). Add these as new `Axis` / `Camera`
-  implementations; nothing else should need to change.
-- **Later ideas:** review captured JPEGs in the browser, a low-res live stack preview,
-  auto-detecting start/end from live view, StallGuard crash detection, a Tr8×2 screw for 10×.
+- **v1.1 (built, untested on hardware; user's picks from the ideas list):** auto start/end,
+  step-size helper (popup), tabbed UI, camera settings, stack names, small JPEG copies + review
+  gallery + quick preview stack, stack-done alerts + installable app, diagnostics, backlash
+  measurement, upkeep. README screenshots/photos come later from the user.
+- **Next major:** a rotation stage (3D scanning): focus scans are built to be rerun per angle.
+- **Deferred:** 3D printer as motion source (Marlin, new `Axis`), relay shutter trigger (D9
+  reserved, new `Camera`), one-click flashing, PCB.
+- **Not wanted for now (user):** focus peaking, sharpness meter, lens profiles, grid overlay,
+  auto settle, multi-shot, export, bad-frame detection, hold-to-jog, keyboard shortcuts,
+  first-run wizard, repeatability test, Tr8×2 screw, docs site.
 
 ## Principles and how we work
 
@@ -117,6 +122,21 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Config vs settings:** hardware constants live in `~/.config/macrorail/config.toml`. User
   settings, start/end and the step live in `~/.local/share/macrorail/settings.json`. `--sim` uses a `sim/` subfolder.
 - **No presets/profiles for now.**
+- **Focus scans** (`focus/`): sharpness = Laplacian energy per tile (8×6) of live-view frames.
+  - Auto range: tiles whose peak is ≥ 2× their median are subject; the range is where any of
+    them is above halfway to its peak, plus half a step. Warns if clipped by the scan span.
+  - Backlash: coarse sweep picks the most contrasty tile; then 2 rounds of forward + backward
+    fine sweeps (DOF/4 steps) over a window sized for up to 0.25 mm. Backlash = the shift that
+    best matches the backward curve onto the forward one (not peak fitting: a broad or noisy
+    top threw peaks off by 35 µm). Take-up suggested = 2× backlash + one DOF.
+  - Every scan returns the rail to where it began (also when nothing was found; not after Stop).
+- **Previews/review:** the runner downloads each shot's JPEG in the background (needs the camera
+  set to PC+Camera, PC Save Img: JPEG Only), shrinks it to 1600 px into
+  `stacks/<id>/frames/`, and builds `preview.jpg` (per-pixel sharpest frame) after the stack.
+- **App/alerts:** manifest + a service worker without caching (a stale UI could mismatch the
+  server). Notifications and install need HTTPS or localhost; chime/vibration/title work on
+  HTTP after the page was touched once.
+- **Diagnostics** refresh every 5 s; the driver (`DRIVER`, protocol 3) is read only while idle.
 - **License:** PolyForm Noncommercial 1.0.0 (code), CC BY-NC 4.0 (hardware).
 
 ## Repository map
@@ -130,10 +150,10 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Released:** v1.0.0 on 2026-10-19, public at https://github.com/Sam-de-Ham/MacroRail (tag, GitHub release, CI green).
   - `gh` here defaults to the work account (TT-SaWe), so push with the Sam-de-Ham token per command.
   - `CLAUDE.md` is kept local (gitignored).
-- **Software (2026-10-19):** v1 is feature-complete.
-  - 84 tests against the simulator; ruff, mypy (strict) and the firmware build are green.
-  - An independent review was done and its findings fixed.
-  - The UI was checked at phone and desktop sizes, from localhost and over the LAN.
+- **Software (2026-10-19):** v1.1 features built and committed locally (not pushed).
+  - 109 tests against the simulator; ruff, mypy (strict) and the firmware build are green.
+  - Every tab was checked in the simulator at desktop and phone sizes; auto range and backlash
+    give the simulated values (backlash exact for 0.04–0.15 mm at 2×, 4× and 10×).
 - **Pi:**
   - The code is deployed to `~/macrorail` and run by hand, because the systemd install needs the user's sudo.
   - Power is fine on the new PSU. Startup takes about 5 s.
@@ -152,8 +172,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Test the UI over the LAN: `crypto.randomUUID` only exists on HTTPS or localhost.
   - An unclean session end leaves the A6400 stuck until it is power-cycled, so the app closes the session on shutdown.
   - Supervisors must never die. A link error once killed every background task; they now log and recover.
-- **Firmware on the Nano:** protocol 2, with release-based homing and the re-armed switch. Flashed 2026-10-19. The Pi's config was refreshed from the new example; it had been unmodified.
-- **Open:** the test suite failed once (1 of 10 full runs) and the failure wasn't captured. Suspect a timing-tight test, such as the 0.3 s switch-push test. Rerun under load and fix if it recurs.
+- **Firmware on the Nano:** protocol 2 (release-based homing, unfiltered homing contact). Protocol 3 (`DRIVER`) must be flashed with the v1.1 app.
 - **Homing on hardware:** works. The measured release distance is 3.79 mm, but a microswitch should be well under 1 mm, and the user hears the click 2–3 mm before the stop.
   - Wiring is C + NO (open at rest, closed when pressed).
   - Suspects: contact chatter rejected by the noise filter (now unfiltered while homing), or a worn switch.
@@ -162,22 +181,23 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 ## Next
 
-- Pick features for v1.1+ with the user from the brainstormed ideas list. Record the chosen ones here.
+- The user tests v1.1 on hardware (12 V + camera) from the checklist given on 2026-10-19:
+  homing release distance, auto range, backlash, camera settings, previews/review, alerts,
+  diagnostics. Fix what they find, then release v1.1.0 (CHANGELOG date, tag, push when agreed).
 - Hardware items still open are below.
 
 ## Hardware bring-up (with the user)
 
-1. **Homing:** flash the homing-unfiltered firmware, re-home, and compare the release distance with 3.79 mm.
+1. **Homing:** re-home on the current firmware and compare the release distance with 3.79 mm.
 2. **Calibrate:**
    - Measure the real travel and set `travel_mm` (default 140).
    - Tune the run current: smooth, cool, no lost steps at 2.5 µm moves.
    - Tune the settle time on 4× live view.
-3. **Camera:** measure the JPEG-download cost to decide whether a review gallery is worth it.
+3. **Camera:** check that JPEG downloads don't slow a stack, and which settings the A6400 exposes.
 4. **Full stacks:** run them at 2× and 4×, including a 100+ shot stack and a camera unplug mid-stack.
 5. **Pi install:** the user runs `~/macrorail/deploy/install.sh` (it needs sudo) for autostart.
 6. **Release polish:**
-   - README screenshots from the real setup, and a sample stack.
-   - The date in the CHANGELOG, and a local `v1.0.0` tag.
+   - README screenshots and photos from the real setup (the user supplies them), and a sample stack.
    - Push to GitHub only when the user says so.
 
 ## Reference: old projects (read-only inspiration)

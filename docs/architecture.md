@@ -28,9 +28,12 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
 | `motion/rail.py` | The rail as an `Axis`: connection supervision, status polling (which doubles as the controller's watchdog), homing, moves, errors in plain language. |
 | `camera/gphoto.py` | gphoto2 session on one worker thread: trigger + wait for `FILE_ADDED`, re-init and one retry, live-view frames. |
 | `stack/plan.py` | Pure planning: positions on the microstep grid. The range is always fully covered (the last shot lands on or just past the end). |
-| `stack/runner.py` | Move → settle → shoot → confirm. Pause, resume, stop-and-return. A camera error pauses the stack and the slice is retaken on resume. Writes a JSON record per stack. |
-| `machine.py` | Commands and their preconditions, the backlash-aware approach, range preview, motor current policy, settings persistence. |
-| `api.py`, `web/` | REST + WebSocket + MJPEG. A plain ES-module UI with no build step. |
+| `stack/runner.py` | Move → settle → shoot → confirm. Pause, resume, stop-and-return. A camera error pauses the stack and the slice is retaken on resume. Downloads each shot's JPEG in the background while the rail moves on, and writes a record per stack. |
+| `focus/` | Focus scans: step through positions reading per-tile sharpness from live view. Finds a subject's front and back (auto range), and measures backlash by how far the backward pass through focus lies from the forward one. Built to be reused per angle by a future rotation stage. |
+| `review/` | The Pi's copy of each stack: its record, small JPEG copies of the shots, and a quick preview stack (per pixel, the sharpest frame). |
+| `optics.py`, `diagnostics.py` | Depth of field and the suggested step; driver, link, camera and Pi health, refreshed every few seconds (the driver only while the rail is idle). |
+| `machine.py` | Commands and their preconditions, the backlash-aware approach, range preview, scans, motor current policy, settings persistence. |
+| `api.py`, `web/` | REST + WebSocket + MJPEG. A plain ES-module UI with no build step, one module per tab; installable as an app (manifest + service worker, no offline cache). |
 | `firmware/` | Nano firmware: step generation (AccelStepper), TMC2209 setup over UART, homing state machine, soft limits, link watchdog, driver fault checks. |
 
 ## Motion decisions
