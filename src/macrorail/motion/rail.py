@@ -167,13 +167,12 @@ class RailAxis:
             self._update(position=int(data["pos"]))
         return data
 
-    async def _motion(self, command: str, *args: int, timeout: float) -> int:
+    async def _motion(self, command: str, *args: int, timeout: float) -> dict[str, str]:
         self._update(moving=True)
         try:
-            await self._request(command, *args, timeout=timeout, motion=True)
+            return await self._request(command, *args, timeout=timeout, motion=True)
         finally:
             self._update(moving=False)
-        return self._state.position
 
     async def set_current(self, run_ma: int, hold_ma: int) -> None:
         self._current = (run_ma, hold_ma)
@@ -192,13 +191,24 @@ class RailAxis:
         c, spm = self._config, self.steps_per_mm
         fast = round(c.homing_speed_mm_s * spm)
         slow = round(c.homing_probe_speed_mm_s * spm)
-        backoff = round(c.homing_backoff_mm * spm)
+        clearance = round(c.homing_clearance_mm * spm)
+        release_max = round(c.homing_release_max_mm * spm)
         accel = round(c.homing_accel_mm_s2 * spm)
         max_steps = self.max_position + round(20 * spm)
-        timeout = _motion_time(max_steps, fast, accel) + _motion_time(3 * backoff, slow, accel)
-        await self._motion("HOME", fast, slow, backoff, max_steps, accel, timeout=timeout)
+        timeout = (
+            _motion_time(max_steps, fast, accel)
+            + _motion_time(release_max, fast, accel)
+            + _motion_time(release_max + 2 * clearance, slow, accel)
+        )
+        reply = await self._motion(
+            "HOME", fast, slow, clearance, max_steps, release_max, accel, timeout=timeout
+        )
         self._update(homed=True)
-        await self.move_to(self.min_position, fast, accel)
+        release = int(reply.get("release", 0))
+        self._log.info(f"Homed. The switch releases {release / spm:.2f} mm past where it trips.")
+        # Park where the switch is open again, so it rests released and armed.
+        park = min(max(self.min_position, release + clearance), self.max_position)
+        await self.move_to(park, fast, accel)
 
     async def move_to(self, target: int, speed: float, accel: float) -> int:
         if not self._state.homed:
@@ -206,18 +216,20 @@ class RailAxis:
         if not self.min_position <= target <= self.max_position:
             raise AxisError(_ERRORS["LIMIT"])
         distance = abs(target - self._state.position)
-        return await self._motion(
+        await self._motion(
             "MOVE", target, round(speed), round(accel), timeout=_motion_time(distance, speed, accel)
         )
+        return self._state.position
 
     async def jog(self, delta: int, speed: float, accel: float) -> int:
         if self._state.homed and not (
             self.min_position <= self._state.position + delta <= self.max_position
         ):
             raise AxisError(_ERRORS["LIMIT"])
-        return await self._motion(
+        await self._motion(
             "JOG", delta, round(speed), round(accel), timeout=_motion_time(abs(delta), speed, accel)
         )
+        return self._state.position
 
     async def stop(self) -> None:
         # Always sent: the controller ignores it when idle, and the local `moving` flag can

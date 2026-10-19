@@ -76,7 +76,8 @@ config (`ls /dev/serial/by-id/`).
 
 ## Shooting a stack
 
-1. **Home** the rail. It finds the switch, then parks just in front of it.
+1. **Home** the rail. It finds the switch, backs off until it opens, touches it again slowly, and
+   parks just clear of it.
 2. **Find the front of the subject** on the live view with the jog buttons, and press **Set here** for Start.
    Tap the live view to zoom in; the button in its corner pauses or resumes it.
 3. **Find the back of the subject** and press **Set here** for End.

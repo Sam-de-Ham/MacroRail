@@ -288,7 +288,6 @@ class Machine:
         self._check_stop()
         self.log.info("Homing…")
         await self.axis.home()
-        self.log.info("Homed.")
 
     async def _jog(self, delta: int) -> None:
         await self._prepare_motion()

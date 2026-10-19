@@ -10,9 +10,12 @@ steps_per_mm = 400
 # Soft limits, in mm from the home switch. The rail parks at min_mm after homing.
 min_mm = 0.5
 travel_mm = 140.0
-homing_speed_mm_s = 2.0
+# Homing: seek the switch, back off until it releases plus a clearance, then touch it again
+# slowly. The touch point becomes 0.
+homing_speed_mm_s = 1.0
 homing_probe_speed_mm_s = 0.2
-homing_backoff_mm = 1.0
+homing_clearance_mm = 0.5
+homing_release_max_mm = 5.0
 homing_accel_mm_s2 = 10.0
 
 [camera]

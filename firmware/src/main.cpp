@@ -36,7 +36,10 @@ struct {
   float fast = 0;
   float slow = 0;
   float accel = 0;
-  long backoff = 0;
+  long clearance = 0;   // homing: how far past the release point to back off
+  long releaseMax = 0;  // homing: give up if the switch hasn't released by then
+  long tripPos = 0;     // homing: where the seek tripped the switch
+  long releasePos = 0;  // homing: where it released again (-1 while still pressed)
 } pending;
 
 Fault reportedFault = Fault::None;
@@ -57,6 +60,7 @@ volatile bool switchTripped = false;
 bool endstopActive = false;
 bool endstopRaw = false;
 uint32_t endstopChangedUs = 0;
+uint32_t endstopSeenUs = 0;  // last time the raw input read "pressed"
 
 bool readEndstopRaw() { return digitalRead(PIN_ENDSTOP) == ENDSTOP_ACTIVE_LEVEL; }
 
@@ -67,6 +71,7 @@ void onSwitchEdge() {
 void updateEndstop() {
   const bool raw = readEndstopRaw();
   const uint32_t now = micros();
+  if (raw) endstopSeenUs = now;
   if (raw != endstopRaw) {
     endstopRaw = raw;
     endstopChangedUs = now;
@@ -224,18 +229,43 @@ void startHomeSeek(long maxSteps) {
   pending.ignoreSwitch = false;
 }
 
+// Back away until the switch has stayed released for the debounce time, then `clearance`
+// further. Roller-lever switches release well past the point where they trip, so a fixed
+// back-off distance can end with the switch still closed.
 void startHomeBackoff() {
+  pending.tripPos = stepper.currentPosition();
+  pending.releasePos = -1;
+  endstopSeenUs = micros();  // it is pressed now, even if the debounced level hasn't caught up
   setProfile(pending.fast, pending.accel);
-  stepper.move(pending.backoff);
+  stepper.move(pending.releaseMax);
   pending.motion = Motion::HomeBackoff;
   pending.ignoreSwitch = true;
 }
 
-void startHomeProbe() {
+void serviceHomeBackoff(bool done) {
+  const bool released = micros() - endstopSeenUs >= ENDSTOP_DEBOUNCE_US;
+  if (pending.releasePos < 0 && released) {
+    pending.releasePos = stepper.currentPosition();
+    stepper.moveTo(pending.releasePos + pending.clearance);
+    return;
+  }
+  if (!done) return;
+  if (pending.releasePos < 0) return finishErr(F("SWITCH_STUCK"));
+  // Probe slowly back toward the switch; it should trip near tripPos.
   setProfile(pending.slow, pending.accel);
-  stepper.move(-2 * pending.backoff);
+  stepper.moveTo(pending.tripPos - pending.clearance);
   pending.motion = Motion::HomeProbe;
   pending.ignoreSwitch = false;
+}
+
+void finishHome() {
+  const long release = pending.releasePos - pending.tripPos;
+  stepper.setCurrentPosition(0);
+  state.homed = true;
+  beginReply(pending.id);
+  Serial.print(F("OK pos=0 release="));
+  Serial.println(release);
+  finish();
 }
 
 void serviceMotion() {
@@ -246,12 +276,16 @@ void serviceMotion() {
   interrupts();
   if (pending.motion == Motion::None) return;  // a touch while idle stops nothing
 
+  const bool linearMove = pending.motion == Motion::Move || pending.motion == Motion::Jog;
+  // A move that started on the pressed switch ignores it only until it has released.
+  if (linearMove && pending.ignoreSwitch && micros() - endstopSeenUs >= ENDSTOP_DEBOUNCE_US) {
+    pending.ignoreSwitch = false;
+  }
   const bool tripped = trip && !pending.ignoreSwitch;
   if (tripped) haltNow();
   else stepper.run();
 
   const bool done = !stepper.isRunning();
-  const bool linearMove = pending.motion == Motion::Move || pending.motion == Motion::Jog;
   if (tripped && linearMove) state.homed = false;
 
   if (pending.abort != Abort::None) {
@@ -265,18 +299,11 @@ void serviceMotion() {
       else if (done) finishErr(F("NO_SWITCH"));
       break;
     case Motion::HomeBackoff:
-      if (!done) break;
-      if (endstopActive) finishErr(F("SWITCH_STUCK"));
-      else startHomeProbe();
+      serviceHomeBackoff(done);
       break;
     case Motion::HomeProbe:
-      if (tripped) {
-        stepper.setCurrentPosition(0);
-        state.homed = true;
-        finishOk();
-      } else if (done) {
-        finishErr(F("NO_SWITCH"));
-      }
+      if (tripped) finishHome();
+      else if (done) finishErr(F("NO_SWITCH"));
       break;
     case Motion::Move:
     case Motion::Jog:
@@ -377,8 +404,10 @@ void cmdLimits(uint16_t id, const long* args) {
 }
 
 void cmdHome(uint16_t id, const long* args) {
-  const long fast = args[0], slow = args[1], backoff = args[2], maxSteps = args[3], accel = args[4];
-  if (!validProfile(fast, accel) || !validProfile(slow, accel) || backoff <= 0 || maxSteps <= 0) {
+  const long fast = args[0], slow = args[1], clearance = args[2], maxSteps = args[3],
+             releaseMax = args[4], accel = args[5];
+  if (!validProfile(fast, accel) || !validProfile(slow, accel) || clearance <= 0 ||
+      maxSteps <= 0 || releaseMax <= clearance) {
     return replyErr(id, F("ARG"));
   }
   if (!state.enabled) return replyErr(id, F("DISABLED"));
@@ -387,14 +416,16 @@ void cmdHome(uint16_t id, const long* args) {
   pending.fast = fast;
   pending.slow = slow;
   pending.accel = accel;
-  pending.backoff = backoff;
+  pending.clearance = clearance;
+  pending.releaseMax = releaseMax;
   lastPosMs = millis();
   if (endstopActive) startHomeBackoff();
   else startHomeSeek(maxSteps);
 }
 
 // Starts a move or jog. While the switch is pressed only moves away from it may start; those
-// ignore its release bounce. Every other move stops on the first touch.
+// ignore it until it has released (bounce included), then it is armed again. Every other move
+// stops on the first touch.
 void startLinear(uint16_t id, Motion motion, long target, long speed, long accel) {
   if (endstopActive && target < stepper.currentPosition()) return replyErrPos(id, F("ENDSTOP"));
   if (target == stepper.currentPosition()) return replyOkPos(id);
@@ -447,12 +478,12 @@ const Command COMMANDS[] = {
     {N_STOP, 0, true, cmdStop},
     {N_ENABLE, 0, false, cmdEnable},     {N_DISABLE, 0, false, cmdDisable},
     {N_CURRENT, 2, false, cmdCurrent},   {N_LIMITS, 2, false, cmdLimits},
-    {N_HOME, 5, false, cmdHome},         {N_MOVE, 3, false, cmdMove},
+    {N_HOME, 6, false, cmdHome},         {N_MOVE, 3, false, cmdMove},
     {N_JOG, 3, false, cmdJog},
 };
 
 void handleLine(char* text) {
-  constexpr uint8_t MAX_ARGS = 5;
+  constexpr uint8_t MAX_ARGS = 6;
   char* save = nullptr;
   const char* idText = strtok_r(text, " ", &save);
   const char* name = strtok_r(nullptr, " ", &save);

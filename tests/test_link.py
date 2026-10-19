@@ -112,6 +112,6 @@ async def test_controller_stops_motion_when_the_host_goes_quiet() -> None:
     link, _ = await Link.open(rail.open, lambda _: None)
     await link.request("ENABLE")
     with pytest.raises(DeviceError) as error:  # no STATUS polling, so the watchdog fires
-        await link.request("HOME", 800, 80, 400, 60000, 4000, timeout=10)
+        await link.request("HOME", 800, 80, 200, 60000, 2000, 4000, timeout=10)
     assert error.value.code == "LINK"
     await link.close()
