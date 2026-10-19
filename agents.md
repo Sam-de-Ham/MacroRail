@@ -42,7 +42,8 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Resolution:** full step 40 µm; 1/16 microstep = **2.5 µm** (400 steps/mm).
 - **Driver:** TMC2209 at 12 V: STEP/DIR for motion, UART (SoftwareSerial D7 RX / D8 TX via 1 kΩ) for setup.
 - **Nano:** the pin map is in `firmware/src/config.h` and `docs/wiring.md`. The home switch should be
-  wired NC (fails safe). The firmware assumes NC; flip `ENDSTOP_ACTIVE_LEVEL` if it is NO.
+  on **D2** (INT0). This rail's switch is wired **normally-open** (C → GND, NO → D2), so
+  `ENDSTOP_ACTIVE_LEVEL = LOW`. The motor needed `INVERT_DIRECTION = true`.
 - **Pi:** 3B+, Debian 13 64-bit, Python 3.13.5, `ssh pi`. `sudo` needs a password, so the user
   runs `deploy/install.sh` themselves. It showed under-voltage on the bench supply; use a
   proper PSU for real runs.
@@ -52,6 +53,11 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 
 - **Homing:** microswitch at the motor end; position 0 = switch, park at `min_mm` (0.5 mm).
   Work happens near the front.
+- **Home switch (user decision):** interrupt-driven and always armed.
+  - The first contact stops any motion, in either direction, before its next step.
+  - The only exception: a move that starts on the pressed switch and backs away from it.
+  - While pressed, moves toward the switch are refused.
+  - Every level change is pushed to the host as a `! SWITCH` event, with no polling.
 - **Driver modes:** StealthChop, 1/16 + 256× interpolation. CoolStep and StallGuard are off.
 - **Current policy:** full run current (default 600 mA) from the first move until idle for
   30 s, then low hold (200 mA). No current change during a stack.
@@ -128,7 +134,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 ## Next: hardware bring-up (with the user)
 
 1. **Pi setup:** the user runs `~/macrorail/deploy/install.sh` on the Pi (it needs sudo).
-2. **Wiring:** wire per `docs/wiring.md` (switch NC, 1 kΩ on D8, EN pull-up).
+2. **Wiring:** done on a breadboard. The switch moves to D2 (from D6).
 3. **Firmware and port:** already flashed (1.0.0), and the default port path matches this Nano.
 4. **First power-up checks:** detect the driver, check the switch reading, direction and homing.
 5. **Calibrate:**

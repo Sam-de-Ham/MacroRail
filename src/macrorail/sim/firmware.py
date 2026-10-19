@@ -35,7 +35,8 @@ class _Motion(Enum):
 class _Pending:
     id: int = 0
     motion: _Motion = _Motion.NONE
-    interrupt: str | None = None
+    abort: str | None = None
+    ignore_switch: bool = False  # backing off a pressed switch
     fast: float = 0
     slow: float = 0
     accel: float = 0
@@ -80,6 +81,7 @@ class SimRail:
         self.travel_steps = travel_mm * steps_per_mm
         self.speedup = speedup
         self.driver_powered = True
+        self.switch_held = False  # tests: someone holds the switch down by hand
         self.physical = start_mm * steps_per_mm  # carriage position, switch at 0 (steps)
         self._lock = threading.Lock()
         self._transport: SimTransport | None = None
@@ -107,6 +109,10 @@ class SimRail:
     def physical_mm(self) -> float:
         return self.physical / self.steps_per_mm
 
+    def hold_switch(self, held: bool) -> None:
+        with self._lock:
+            self.switch_held = held
+
     def cut_driver_power(self) -> None:
         with self._lock:
             self.driver_powered = False
@@ -127,6 +133,7 @@ class SimRail:
         self.pending = _Pending()
         self.last_rx = time.monotonic()
         self.last_pos_report = 0.0
+        self.switch_reported = self._endstop
 
     def _identity(self) -> str:
         driver = "ok" if self.driver_ok else "missing"
@@ -138,7 +145,7 @@ class SimRail:
 
     @property
     def _endstop(self) -> bool:
-        return self.physical <= 0
+        return self.physical <= 0 or self.switch_held
 
     @property
     def _pos(self) -> int:
@@ -156,6 +163,9 @@ class SimRail:
                         self.last_rx = now
                         self._handle(line)
                 self._step((now - last) * self.speedup)
+                tripped = self._check_switch()
+                if self.pending.motion is not _Motion.NONE:
+                    self._service(tripped)
                 self._timers(now)
             last = now
 
@@ -166,8 +176,8 @@ class SimRail:
                 self.enabled = self.homed = False
                 self._emit("! FAULT code=driver_lost")
             return
-        if self.pending.interrupt is None and now - self.last_rx > LINK_TIMEOUT_S:
-            self._interrupt("LINK")
+        if self.pending.abort is None and now - self.last_rx > LINK_TIMEOUT_S:
+            self._abort("LINK")
         if now - self.last_pos_report >= POS_REPORT_S:
             self.last_pos_report = now
             self._emit(f"! POS pos={self._pos}")
@@ -191,7 +201,15 @@ class SimRail:
             delta = -self.physical  # the switch trips exactly where it is, whatever the tick size
         self.position += delta
         self.physical = min(self.physical + delta, self.travel_steps)
-        self._service()
+
+    def _check_switch(self) -> bool:
+        """Report level changes; return True if a fresh press stops the current motion."""
+        pressed = self._endstop
+        edge = pressed and not self.switch_reported
+        if pressed != self.switch_reported:
+            self.switch_reported = pressed
+            self._emit(f"! SWITCH pressed={int(pressed)}")
+        return edge and self.pending.motion is not _Motion.NONE and not self.pending.ignore_switch
 
     def _running(self) -> bool:
         return self.velocity != 0 or self._pos != self.target
@@ -201,21 +219,20 @@ class SimRail:
         self.position = float(self._pos)
         self.target = self._pos
 
-    def _service(self) -> None:
+    def _service(self, tripped: bool) -> None:
         p = self.pending
-        hit = self._endstop and self.target < self.position
-        if hit:
+        if tripped:
             self._halt()
         done = not self._running()
         linear = p.motion in (_Motion.MOVE, _Motion.JOG)
-        if hit and linear:
+        if tripped and linear:
             self.homed = False
-        if p.interrupt is not None:
-            if done or hit:
-                self._finish(f"ERR {p.interrupt}")
+        if p.abort is not None:
+            if done or tripped:
+                self._finish(f"ERR {p.abort}")
             return
         if p.motion is _Motion.HOME_SEEK:
-            if hit:
+            if tripped:
                 self._start(_Motion.HOME_BACKOFF, self._pos + p.backoff, p.fast)
             elif done:
                 self._finish("ERR NO_SWITCH")
@@ -225,7 +242,7 @@ class SimRail:
             else:
                 self._start(_Motion.HOME_PROBE, self._pos - 2 * p.backoff, p.slow)
         elif p.motion is _Motion.HOME_PROBE:
-            if hit:
+            if tripped:
                 self.position = 0.0
                 self.target = 0
                 self.homed = True
@@ -233,13 +250,14 @@ class SimRail:
             elif done:
                 self._finish("ERR NO_SWITCH")
         elif linear:
-            if hit:
+            if tripped:
                 self._finish("ERR ENDSTOP")
             elif done:
                 self._finish("OK")
 
     def _start(self, motion: _Motion, target: int, speed: float) -> None:
         self.pending.motion = motion
+        self.pending.ignore_switch = motion is _Motion.HOME_BACKOFF
         self.target = target
         self.max_speed = speed
 
@@ -247,9 +265,9 @@ class SimRail:
         self._emit(f"{self.pending.id} {status} pos={self._pos}")
         self.pending = _Pending()
 
-    def _interrupt(self, reason: str) -> None:
+    def _abort(self, reason: str) -> None:
         """Decelerate: retarget to the stopping point."""
-        self.pending.interrupt = reason
+        self.pending.abort = reason
         stopping = self.velocity**2 / (2 * self.accel)
         self.target = round(self.position + math.copysign(stopping, self.velocity))
 
@@ -295,8 +313,8 @@ class SimRail:
         return f"OK pos={self._pos} {parts} driver={'ok' if self.driver_ok else 'missing'}"
 
     def _cmd_stop(self, _id: int) -> str:
-        if self.pending.motion is not _Motion.NONE and self.pending.interrupt is None:
-            self._interrupt("STOPPED")
+        if self.pending.motion is not _Motion.NONE and self.pending.abort is None:
+            self._abort("STOPPED")
         return "OK"
 
     def _cmd_enable(self, _id: int) -> str:
@@ -348,10 +366,7 @@ class SimRail:
             return "ERR NOT_HOMED"
         if not self.min_limit <= target <= self.max_limit:
             return "ERR LIMIT"
-        if target == self._pos:
-            return f"OK pos={self._pos}"
-        self._begin_linear(request_id, _Motion.MOVE, target, speed, accel)
-        return None
+        return self._begin_linear(request_id, _Motion.MOVE, target, speed, accel)
 
     def _cmd_jog(self, request_id: int, delta: int, speed: int, accel: int) -> str | None:
         target = self._pos + delta
@@ -361,15 +376,17 @@ class SimRail:
             return "ERR DISABLED"
         if self.homed and not self.min_limit <= target <= self.max_limit:
             return "ERR LIMIT"
-        if delta < 0 and self._endstop:
-            return f"ERR ENDSTOP pos={self._pos}"
-        if delta == 0:
-            return f"OK pos={self._pos}"
-        self._begin_linear(request_id, _Motion.JOG, target, speed, accel)
-        return None
+        return self._begin_linear(request_id, _Motion.JOG, target, speed, accel)
 
     def _begin_linear(self, request_id: int, motion: _Motion, target: int, speed: int,
-                      accel: int) -> None:  # fmt: skip
+                      accel: int) -> str | None:  # fmt: skip
+        """Like the firmware: with the switch pressed, only moves away from it may start."""
+        if self._endstop and target < self._pos:
+            return f"ERR ENDSTOP pos={self._pos}"
+        if target == self._pos:
+            return f"OK pos={self._pos}"
         self.pending = _Pending(request_id)
         self.accel = accel
         self._start(motion, target, speed)
+        self.pending.ignore_switch = self._endstop
+        return None

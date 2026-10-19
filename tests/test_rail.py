@@ -95,3 +95,39 @@ async def test_driver_power_loss_is_reported(rail: RailAxis, sim_rail: SimRail) 
     assert "12 V" in rail.state.problem
     with pytest.raises(AxisError, match="12 V"):
         await rail.enable()
+
+
+async def test_switch_stops_motion_in_any_direction(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    await rail.home()
+    move = asyncio.create_task(rail.move_to(rail.max_position, SPEED, ACCEL))  # away from it
+    await until(lambda: rail.state.position > 2000)
+    sim_rail.hold_switch(True)  # e.g. a cable snagging the lever
+    with pytest.raises(AxisError, match="home switch"):
+        await move
+    assert not rail.state.homed
+
+
+async def test_switch_changes_are_pushed(rail: RailAxis, sim_rail: SimRail) -> None:
+    sim_rail.hold_switch(True)
+    await until(lambda: rail.state.endstop, timeout=0.3)  # well within one status poll
+    sim_rail.hold_switch(False)
+    await until(lambda: not rail.state.endstop, timeout=0.3)
+
+
+async def test_pressed_switch_allows_only_backing_off(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    sim_rail.hold_switch(True)
+    await until(lambda: rail.state.endstop)
+    with pytest.raises(AxisError, match="home switch"):
+        await rail.jog(-40, SPEED, ACCEL)
+    position = await rail.jog(400, SPEED, ACCEL)  # backing off is not stopped by the switch
+    assert position == 400
+
+
+async def test_homing_reports_a_stuck_switch(rail: RailAxis, sim_rail: SimRail) -> None:
+    await rail.enable()
+    sim_rail.hold_switch(True)
+    await until(lambda: rail.state.endstop)
+    with pytest.raises(AxisError, match="stayed pressed"):
+        await rail.home()

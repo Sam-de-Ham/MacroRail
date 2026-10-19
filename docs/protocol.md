@@ -51,6 +51,7 @@ It is the contract between `firmware/` and `src/macrorail/motion/`. The simulato
 |---|---|
 | `! READY fw=<semver> proto=<n> driver=<ok\|missing>` | After boot (and so after every port open). |
 | `! POS pos=<n>` | About every 100 ms while moving. |
+| `! SWITCH pressed=<0\|1>` | The home switch's debounced level changed. |
 | `! FAULT code=<code>` | When the idle driver check finds a problem. The motor is disabled and homed is cleared. |
 
 Fault codes:
@@ -73,14 +74,19 @@ Fault codes:
 | `LIMIT` | The target is outside the soft limits. |
 | `DRIVER` | The driver isn't responding, so the motor can't be enabled. |
 | `STOPPED` | The motion ended early on `STOP`. |
-| `ENDSTOP` | The switch triggered during a move toward it outside homing, and homed is cleared. A `JOG` toward the switch while it is already pressed is refused with this code without moving (homed unchanged). |
+| `ENDSTOP` | The switch closed during a move or jog, which stopped at once and cleared homed. A move toward the switch while it is already pressed is refused with this code without moving (homed unchanged). |
 | `NO_SWITCH` | Homing travelled `max` steps without finding the switch. |
 | `SWITCH_STUCK` | The switch was still pressed after backing off. |
 | `LINK` | The watchdog stopped motion: no line from the host for 2 s. |
 
 ## Safety rules enforced by the firmware
 
-- Moving toward the switch (negative direction) halts the moment the switch triggers, homed or not.
+- The switch is always armed. Its first contact (a hardware interrupt) stops any motion, in either
+  direction, before the next step. The only exception is a move that starts with the switch
+  pressed and backs away from it (positive direction); that move ignores the switch's release
+  bounce. While the switch is pressed, moves toward it are refused.
+- During homing, the first contact ends the seek; the back-off ignores the switch; the slow
+  re-approach ends on the next contact, which becomes position `0`.
 - `DISABLE`, an endstop hit, and any driver fault clear the homed flag. The host must home again
   before absolute moves.
 - While motion is in flight, the firmware stops the motor (with deceleration) if no line arrives

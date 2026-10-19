@@ -4,7 +4,9 @@
                  USB                          12 V supply
  Raspberry Pi ─────────── Arduino Nano          │   │
       │                   │                    (+) (−)
-      │ USB               D3 ─────── STEP        │   │
+      │ USB               D2 ──┐ home switch NO   │   │
+      │                   GND ─┘ home switch C    │   │
+      │                   D3 ─────── STEP        │   │
       │                   D4 ─────── DIR         │   │   100 µF across VM–GND,
    Camera                 D5 ──┬──── EN          │   │   close to the module
                                └ 10 kΩ ─ 5V      │   │
@@ -13,9 +15,9 @@
                           5V ─────── VIO    VM ──┘   │
                           GND ────── GND    GND ─────┘
                                      MS1 ─ GND
-                          D6 ──┐     MS2 ─ GND
-                          GND ─┤     OA1/OA2 ── motor coil A
-                       switch NC/C   OB1/OB2 ── motor coil B
+                                     MS2 ─ GND
+                                     OA1/OA2 ── motor coil A
+                                     OB1/OB2 ── motor coil B
                                     TMC2209
 ```
 
@@ -23,6 +25,7 @@
 
 | Nano | TMC2209 module / other | Notes |
 |---|---|---|
+| D2 | Home switch NO | Switch C (common) → GND. D2 is the Nano's hardware-interrupt pin (INT0). |
 | D3 | STEP | |
 | D4 | DIR | |
 | D5 | EN | Active low. A 10 kΩ pull-up to 5 V keeps the motor off while the Nano boots. |
@@ -33,16 +36,22 @@
 | — | MS1, MS2 → GND | UART address 0. |
 | — | VM ← 12 V | Add a 100 µF electrolytic across VM–GND at the module. |
 | — | OA1/OA2, OB1/OB2 | One motor coil each. Find coil pairs with a multimeter (a few Ω between the two wires of a pair). |
-| D6 | Home switch NC | Switch C (common) → GND. |
 | D9 | Relay (reserved for v1.1) | |
 
 ## Home switch
 
-Wire the roller microswitch **normally-closed** (C and NC terminals). The input then reads
-"triggered" when the switch is pressed **or** when a wire breaks, so a loose connector stops
-the rail instead of letting it crash into the motor block. The firmware expects this; if
-the switch only has two terminals (normally-open), change `ENDSTOP_ACTIVE_LEVEL` in
-`firmware/src/config.h` to `LOW`.
+The roller microswitch is wired **normally-open**: C to GND, NO to D2, NC empty. It closes
+when the carriage presses it.
+
+The switch is always armed. Its first contact fires a hardware interrupt, and any motion
+stops before its next step, in either direction. The only exception is a move that starts with
+the switch already pressed and backs away from it; that move ignores the switch's release
+bounce. While the switch is pressed, moves toward it are refused.
+
+To wire it normally-closed instead (C + NC), set `ENDSTOP_ACTIVE_LEVEL` to `HIGH` in
+`firmware/src/config.h` and reflash. A broken wire then also reads as "pressed", so it fails
+safe, at the cost of a stop whenever a connector works loose. Motor direction is set by
+`INVERT_DIRECTION` in the same file.
 
 ## First power-up checks
 
