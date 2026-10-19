@@ -66,6 +66,10 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
     ignores the switch only until it releases; after that the switch is armed again.
   - While pressed, moves toward the switch are refused.
   - Every level change is pushed to the host as a `! SWITCH` event, with no polling.
+  - **Noise filter (user decision):** outside homing, a contact must still be closed a few µs
+    later, which rejects motor-noise spikes. Homing (seek and probe) takes the very first blip,
+    because the switch stopped 2–3 mm after its click (release distance 3.79 mm), possibly from
+    contact chatter.
 - **Driver modes:** StealthChop, 1/16 + 256× interpolation. CoolStep and StallGuard are off.
 - **Current policy:** full run current (default 600 mA) from the first move until idle for
   30 s, then low hold (200 mA). No current change during a stack.
@@ -147,11 +151,15 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Supervisors must never die. A link error once killed every background task; they now log and recover.
 - **Firmware on the Nano:** protocol 2, with release-based homing and the re-armed switch. Flashed 2026-10-19. The Pi's config was refreshed from the new example; it had been unmodified.
 - **Open:** the test suite failed once (1 of 10 full runs) and the failure wasn't captured. Suspect a timing-tight test, such as the 0.3 s switch-push test. Rerun under load and fix if it recurs.
-- **Fixed after bring-up:** homing failed with SWITCH_STUCK because a fixed 1 mm back-off was shorter than the roller lever's release travel. Homing now backs off until the switch releases and reports the release distance. Next step: confirm on the hardware.
+- **Homing on hardware:** works. The measured release distance is 3.79 mm, but a microswitch should be well under 1 mm, and the user hears the click 2–3 mm before the stop.
+  - Wiring is C + NO (open at rest, closed when pressed).
+  - Suspects: contact chatter rejected by the noise filter (now unfiltered while homing), or a worn switch.
+  - Next: flash, re-home, and compare the release distance. If it is still about 3–4 mm, the user checks the switch with a meter (does C–NO beep exactly at the click?) or replaces it.
+  - Flash is pending until the Pi is reachable (SSH was timing out).
 
 ## Next: hardware bring-up (with the user)
 
-1. **Homing:** confirm the new homing on the real switch, and note its reported release distance.
+1. **Homing:** flash the homing-unfiltered firmware, re-home, and compare the release distance with 3.79 mm.
 2. **Calibrate:**
    - Measure the real travel and set `travel_mm` (default 140).
    - Tune the run current: smooth, cool, no lost steps at 2.5 µm moves.
