@@ -6,8 +6,8 @@ import pytest
 from macrorail.focus.analysis import (
     AnalysisError,
     Sample,
+    curve_shift,
     find_range,
-    peak_position,
     strongest_tile,
 )
 from macrorail.machine import Machine, OperationError
@@ -46,15 +46,24 @@ def test_range_needs_something_in_focus() -> None:
         find_range(scan({}), margin=0)
 
 
-def test_peak_position_is_sub_sample() -> None:
-    values = [float(np.exp(-(((p - 503.0) / 40) ** 2))) for p in POSITIONS]
-    assert peak_position(POSITIONS, values) == pytest.approx(503.0, abs=1.0)
+def test_curve_shift_matches_a_flat_topped_curve() -> None:
+    """A broad, noisy top has no clear peak; the flanks still pin the shift down."""
+    rng = np.random.default_rng(1)
+
+    def curve(offset: float) -> list[float]:
+        return [
+            float(np.clip(1 - abs(p - 500 - offset) / 200, 0, 0.6) + rng.normal(0, 0.01))
+            for p in POSITIONS
+        ]
+
+    assert curve_shift(POSITIONS, curve(0), curve(-37), max_shift=100) == pytest.approx(37, abs=2)
 
 
-def test_peak_at_the_edge_is_refused() -> None:
-    values = [float(np.exp(-(((p - 0.0) / 40) ** 2))) for p in POSITIONS]
-    with pytest.raises(AnalysisError, match="edge"):
-        peak_position(POSITIONS, values)
+def test_curve_shift_beyond_its_range_is_refused() -> None:
+    values = [float(np.exp(-(((p - 500) / 40) ** 2))) for p in POSITIONS]
+    shifted = [float(np.exp(-(((p - 300) / 40) ** 2))) for p in POSITIONS]
+    with pytest.raises(AnalysisError, match="did not line up"):
+        curve_shift(POSITIONS, values, shifted, max_shift=100)
 
 
 def test_strongest_tile() -> None:
@@ -80,6 +89,7 @@ async def test_auto_range_finds_the_simulated_subject(machine: Machine) -> None:
     await idle(machine)
     machine.find_range()
     await idle(machine, timeout=60)
+    assert machine.axis.state.position == 4300  # back where the scan began
     result = machine.scanner.range
     assert result is not None
     assert result.start == pytest.approx(4000, abs=40)  # the dome's top, at 10.0 mm
@@ -97,6 +107,7 @@ async def test_backlash_measurement_matches_the_simulator(machine: Machine) -> N
     await idle(machine)
     machine.measure_backlash()
     await idle(machine, timeout=60)
+    assert machine.axis.state.position == 4120
     result = machine.scanner.backlash
     assert result is not None
     assert result.backlash == pytest.approx(16, abs=3)  # SIM_BACKLASH_MM = 0.04 mm = 16 steps

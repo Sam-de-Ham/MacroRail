@@ -1,7 +1,7 @@
 """Turning a focus scan (sharpness per tile at each rail position) into answers. Pure functions.
 
 - `find_range`: where the subject starts and ends coming into focus.
-- `peak_position`: where one sharpness curve peaks, to sub-sample precision.
+- `curve_shift`: how far apart two passes through the same focus curve are.
 """
 
 from __future__ import annotations
@@ -16,6 +16,9 @@ PEAK_RATIO = 2.0
 PEAK_FLOOR = 0.02
 # A tile is "in focus" while it is above this fraction of the way from its typical to its peak.
 IN_FOCUS_LEVEL = 0.5
+# Two passes through focus match if what is left after shifting is under this share of the
+# curve's variance.
+CURVE_MISMATCH = 0.25
 # Forward/backward sweep pairs averaged by a backlash measurement.
 BACKLASH_ROUNDS = 2
 
@@ -79,23 +82,27 @@ def strongest_tile(samples: list[Sample]) -> int:
     return tile
 
 
-def peak_position(positions: list[int], values: list[float]) -> float:
-    """Where a sharpness curve peaks: a parabola fitted through the points around its top."""
+def curve_shift(
+    positions: list[int], forward: list[float], backward: list[float], max_shift: int
+) -> float:
+    """How far below the forward curve the backward one lies on the motor's scale: the shift
+    `L` for which backward(x) best matches forward(x + L), to a quarter step.
+
+    Matching the whole curves rather than their peaks uses the steep flanks, so a broad or
+    noisy top does not throw it off."""
     x = np.asarray(positions, dtype=np.float64)
-    y = np.asarray(values, dtype=np.float64)
-    top = int(np.argmax(y))
-    near = y >= y.min() + 0.5 * (y[top] - y.min())
-    lo, hi = top, top
-    while lo > 0 and near[lo - 1]:
-        lo -= 1
-    while hi < len(y) - 1 and near[hi + 1]:
-        hi += 1
-    lo, hi = max(lo, top - 8), min(hi, top + 8)  # the top of the peak, not its tails
-    if hi - lo < 2:
-        lo, hi = max(0, top - 1), min(len(y) - 1, top + 1)
-    if hi - lo < 2 or top in (0, len(y) - 1):
-        raise AnalysisError("The sharpness peak is at the edge of the scan. Focus closer to it.")
-    a, b, _ = np.polyfit(x[lo : hi + 1], y[lo : hi + 1], 2)
-    if a >= 0:  # not a peak: fall back to the best sample
-        return float(x[top])
-    return float(-b / (2 * a))
+    f = np.asarray(forward, dtype=np.float64)
+    b = np.asarray(backward, dtype=np.float64)
+    shifts = np.arange(0.0, max_shift + 0.25, 0.25)
+    errors = np.full(len(shifts), np.inf)
+    for i, shift in enumerate(shifts):
+        overlap = x + shift <= x[-1]
+        if overlap.sum() >= 3:
+            errors[i] = np.mean((b[overlap] - np.interp(x[overlap] + shift, x, f)) ** 2)
+    best = int(np.argmin(errors))
+    if best == len(shifts) - 1 or errors[best] > CURVE_MISMATCH * np.var(b):
+        raise AnalysisError(
+            "The two passes through focus did not line up: the backlash is larger than this "
+            "measurement covers, or the subject moved."
+        )
+    return float(shifts[best])
