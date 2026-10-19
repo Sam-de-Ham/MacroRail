@@ -19,9 +19,17 @@ stepper driver, and controls the camera over USB with gphoto2, including live vi
   - A camera hiccup pauses the stack instead of skipping a frame.
 - **Simple to use**
   - Home, find focus on the live view, set start and end, preview the range, press Start.
+  - Or let it find the range: a scan through focus finds where the subject starts and ends.
+  - A step-size helper works out the step from the lens's magnification and aperture.
   - The range is always fully covered, and the rail returns to the start when the stack ends.
+- **Check the result straight away**
+  - Small copies of each shot are saved on the Pi and combined into a quick preview stack.
+  - Camera settings (ISO, shutter, aperture, quality…) are set from the browser.
+- **Calibrated and observable**
+  - Measures the lead screw's backlash optically and suggests the take-up to use.
+  - A diagnostics panel shows the motor driver, the serial link, the camera and the Pi's health.
 - **Works from a phone**
-  - Dark, mobile-first UI.
+  - Dark, mobile-first UI that can be installed as an app, and alerts you when a stack ends.
   - One device is in control at a time, and handing control over is one tap.
   - Stop works from any device.
 
@@ -73,28 +81,33 @@ blurrier as the rail moves through focus.
    Use `enable --now` to turn it back on. To install without autostart, run
    `deploy/install.sh --no-autostart`. Logs: `journalctl -u macrorail -f`.
 
-Set the camera's USB connection to *PC Remote*. Check the Nano's serial port path in the
-config (`ls /dev/serial/by-id/`).
+Check the Nano's serial port path in the config (`ls /dev/serial/by-id/`).
+
+**Camera (Sony):** set *USB Connection* to *PC Remote*. For the review previews, also set
+*PC Remote Settings → Still Img. Save Dest.* to *PC+Camera* and *PC Save Img* to *JPEG Only*:
+full-resolution files (RAW too, if chosen) stay on the card and a JPEG comes over USB.
+
+**As an app:** the page can be added to a phone's home screen. Browsers allow installing it,
+and system notifications, only over HTTPS or on the Pi itself; over plain HTTP the stack alerts
+still chime, vibrate and mark the tab title.
 
 ## Shooting a stack
 
 1. **Home** the rail. It finds the switch, backs off until it opens, touches it again slowly, and
    parks just clear of it.
-2. **Find the front of the subject** on the live view with the jog buttons, and press **Set here** for Start.
-   Tap the live view to zoom in; the button in its corner pauses or resumes it.
-3. **Find the back of the subject** and press **Set here** for End.
-4. **Choose a step size.** The summary and the Start button show how many shots it will take, plus the estimated time.
-5. **Preview range** sweeps between the two points so you can check the framing.
-6. **Start stack.** You can pause and resume. Stop returns the rail to the start.
+2. **Set the range.** Either jog to the front of the subject on the live view and press
+   **Set here** for Start, then the same for End; or bring any part of it roughly into focus
+   and press **Find range automatically**. Tap the live view to zoom in; the button in its
+   corner pauses or resumes it.
+3. **Choose a step size**, or open **Which step?**: from the magnification and numerical
+   aperture it suggests half the depth of field (≈ λ/NA² + e/(M·NA)). The summary and the
+   Start button show how many shots it will take, plus the estimated time.
+4. **Preview range** sweeps between the two points so you can check the framing.
+5. **Start stack**, optionally named. You can pause and resume. Stop returns the rail to the start.
+6. **Review** shows each stack's shots and a quick all-in-focus preview built from them.
 
-**Step size.** Depth of field ≈ λ/NA² + e/(M·NA) (λ ≈ 0.55 µm, e = pixel pitch,
-3.9 µm on the A6400). A step of about half the depth of field gives a safe overlap:
-
-| Optics | Depth of field | Suggested step |
-|---|---|---|
-| 4× objective, NA 0.10 | ≈ 65 µm | 25–30 µm |
-| 10× objective, NA 0.25 | ≈ 10 µm | 4–5 µm |
-| 10× objective, NA 0.28 | ≈ 8 µm | 3.5–4 µm |
+Once per setup, **System → Measure backlash** (with a sharp detail in focus) measures the
+lead screw's play and offers the matching take-up distance.
 
 ## Development
 
