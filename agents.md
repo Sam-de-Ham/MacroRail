@@ -139,7 +139,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - **Deploy:** `git archive HEAD | ssh pi 'tar -x …'`. Never redirect SSH's stdin to `/dev/null` in that pipe.
   - **Flash:** `~/.local/bin/pio run -d firmware -e nano -t upload --upload-port /dev/ttyUSB0`.
     The app must be stopped first, because it owns the port.
-- **Hardware bring-up so far:** breadboard per the setup guide `MacroRail-quick-start.pdf` (untracked; built from HTML in the session scratchpad).
+- **Hardware bring-up so far:** breadboard per the setup guide `docs/setup-guide/MacroRail-setup-guide.pdf`. Rebuild it with `docs/setup-guide/build_html.py`, then print to PDF.
   - **Driver:** detected over UART.
   - **Switch:** wired NO on D2, so `ENDSTOP_ACTIVE_LEVEL = LOW`.
   - **Motor direction:** `INVERT_DIRECTION = true`.

@@ -1,5 +1,8 @@
 # Wiring
 
+For a step-by-step breadboard build with pictures and a wire checklist, see the
+[setup guide](setup-guide/MacroRail-setup-guide.pdf). This page is the compact reference.
+
 ```
                  USB                          12 V supply
  Raspberry Pi ─────────── Arduino Nano          │   │

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0: unreleased
+## 1.0.0: 2026-10-19
 
 First release: a complete rewrite of the MacroScanner experiments.
 
