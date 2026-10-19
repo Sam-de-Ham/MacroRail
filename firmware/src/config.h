@@ -21,8 +21,9 @@ constexpr uint8_t PIN_UART_TX = 8;   // TMC2209 PDN_UART (through 1 kΩ)
 constexpr uint8_t ENDSTOP_ACTIVE_LEVEL = LOW;
 constexpr uint32_t ENDSTOP_DEBOUNCE_US = 500;
 
-// Positive moves go away from the switch. Flip if the motor is wired the other way round.
-constexpr bool INVERT_DIRECTION = false;
+// Positive moves go away from the switch. Set for this rail's motor wiring; flip if the motor
+// is wired the other way round.
+constexpr bool INVERT_DIRECTION = true;
 
 // TMC2209
 constexpr float DRIVER_RSENSE_OHM = 0.11f;  // common TMC2209 modules (BTT, FYSETC)
