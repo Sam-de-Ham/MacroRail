@@ -57,26 +57,26 @@ PRINTED = [
     ("Fork", "1", "Base underside", "Bolts to the rail carriage; holds the tilt motor and the 608."),
     ("Cradle", "1", "Floor underside", "Swings on the tilt axis; carries the yaw motor and the head."),
     ("Yaw Head", "1", "Bell underside", "No supports. Snap off the thin fin under the spring housing."),
-    ("Centring Plate", "1", "Underside", "Domes up."),
-    ("Puck", "1 per specimen", "Underside (V-grooves)", "Nose up."),
+    ("Specimen Holder", "1", "Plate underside", "Centring plate, clamp column and nose in one part. Nose up."),
     ("Pin Pad", "1", "Any flat face", ""),
     ("Spring Plunger", "1", "Spigot end", "Tiny: use a brim."),
     ("Tilt Axle", "1", "Flange", "Shank vertical, so it comes out round."),
     ("Axle Spacer", "1", "Flat", ""),
     ("Carriage Washer", "4", "Flat", ""),
     ("Height Gauge", "1", "Underside", "A tool, not mounted."),
+    ("Endstop Bracket", "1", "Back (flat side)", "Holds the tilt home switch on the +Y upright."),
 ]
 
 HARDWARE = [
     ("28BYJ-48 + ULN2003 board", "2", "Tilt (outside the &minus;Y upright), yaw (under the cradle floor)"),
     ("608 bearing", "1", "+Y upright"),
     ("KY-024 hall board", "1", "Under the cradle floor"),
-    ("Magnet &Oslash;5.7 &times; 1.8", "1 + 3 + 3 per puck", "Hub underside, plate top, puck underside"),
+    ("Magnet &Oslash;5.7 &times; 1.8", "1", "Hub underside (yaw home)"),
     ("Pen spring &Oslash;4.6 &times; 19", "1", "Spring housing, behind the plunger"),
     ("M3 &times; 17.5 + nut", "5", "Base to carriage (4, with printed washers), tilt home flag (1)"),
-    ("M3 &times; 11.8 + nut", "9", "Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pad screw (1), set screw (1)"),
+    ("M3 &times; 11.8 + nut", "11", "Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pad screw (1), set screw (1), endstop bracket (2)"),
     ("M3 &times; 27.7 + nut", "1", "Tilt axle"),
-    ("Printer endstop (microswitch)", "1", "Tilt home, on a bracket on the +Y upright (bracket follows)"),
+    ("Microswitch 20 &times; 10 &times; 5.8", "1", "Tilt home, on a printed bracket on the +Y upright. Held by two small &Oslash;1.9 wood screws plus superglue."),
     ("Pin size 00, 0 or 1", "", "Specimen pin"),
 ]
 
@@ -88,8 +88,9 @@ TESTS = [
     ("tp-axle-socket", "The axle's spigot fits; the nut presses into its pocket."),
     ("tp-cradle-floor", "Yaw motor boss and ear bolts, KY-024 bolt and board seat, sensor pocket and lead slot."),
     ("Yaw Head (whole part)", "Fits the yaw shaft; nuts, magnet and spring go in; the fin snaps off cleanly."),
-    ("Centring Plate + Puck", "The puck clicks onto the domes in all three positions, doesn't rock, and the magnets hold."),
+    ("Specimen Holder", "Slides freely in the ring between the screw tips and the plunger; a pin passes through the nose hole."),
     ("Tilt Axle + Spacer", "The axle slips through the 608; the spacer slides over it."),
+    ("Endstop Bracket", "Bolts to the upright; the switch's holes line up with the pilot holes; the wood screws bite."),
     ("Pin Pad + Plunger", "The pad slides into its pocket and clamps pins 00 to 1; the plunger slides freely in its bore."),
 ]
 
@@ -108,8 +109,8 @@ cradle floor and turns all the way round. Home: a magnet in the head passes a ha
 <div class="box"><b>Centring</b> &mdash; the insect has to sit where the two axes cross. Two M3 screws
 push the centring plate in X and Y, a spring pushes it back. &plusmn;2.5 mm each way. Done once per
 specimen, with the app's wizard.</div>
-<div class="box"><b>Puck</b> &mdash; each specimen lives on its own puck. Three V-grooves on three domes,
-held by magnets, put it back in the same place to a few &micro;m.</div>
+<div class="box"><b>Specimen holder</b> &mdash; one printed part: the centring plate with the clamp column
+and nose on top. It stays in the head; to change specimens you swap the pin.</div>
 </div>
 </section>"""
 
@@ -150,8 +151,9 @@ def page_assembly():
         "<b>Spring.</b> Snap off the fin under the spring housing. Drop the spring in, then the plunger, "
         "cone first.",
         "<b>Centring screws.</b> Turn the X and Y screws in from outside until they just show inside.",
-        "<b>Plate.</b> Glue three magnets into the plate, all with the <i>same</i> pole up. Lay the plate "
-        "in the ring, domes up, between the two screw tips and the plunger.",
+        "<b>Holder.</b> Slide the pin pad into the holder's side pocket and the pad nut into its slot, and "
+        "turn the pad screw in until it just touches. Lay the holder in the ring, its rim between the two "
+        "screw tips and the plunger.",
     ])
     cradle = steps([
         "<b>KY-024.</b> Bend the hall sensor (the small black TO-92) flat, sensing face up. Bolt the board "
@@ -167,7 +169,7 @@ def page_assembly():
 <div class="two"><div><h3>Yaw head</h3>{head}</div><div><h3>Cradle</h3>{cradle}</div></div>
 </section>
 <section class="page">
-{fig('head_exploded', 'Yaw stack, top to bottom: puck with pin and pad screw, centring plate, head with screws, nuts and plunger, hub magnet, hall sensor, yaw motor, KY-024.', 'half')}
+{fig('head_exploded', 'Yaw stack, top to bottom: pin, specimen holder with pad, pad screw and nut, head with screws, nuts and plunger, hub magnet, hall sensor, yaw motor, KY-024.', 'half')}
 <h3>Fork and tilt</h3>
 {steps([
     "<b>Bearing.</b> Press the 608 into the +Y upright from the inside until it hits the lip.",
@@ -179,6 +181,9 @@ def page_assembly():
     "swing freely.",
     "<b>Flag.</b> M3 &times; 17.5 through the hole near the top of the +Y arm, head inside, nut outside. "
     "This is what presses the home switch.",
+    "<b>Endstop.</b> Screw the switch onto the bracket (pivot end towards the camera, pins down) with the "
+    "two wood screws and a drop of superglue. Press two M3 nuts into the pockets on the inside of the +Y "
+    "upright and bolt the bracket to its outside with two M3 &times; 11.8.",
     "<b>Carriage.</b> Set the fork on the carriage over its screw heads. Four M3 &times; 17.5 down through "
     "base and carriage, a printed washer and a nut underneath.",
 ])}
@@ -191,15 +196,17 @@ nut, the bearing blocks and the screw.</div>
 def page_homing():
     return f"""<section class="page">
 <h2>4 &middot; Homing</h2>
-{fig('endstop', 'Tilt at +95&deg;: the flag bolt on the +Y arm reaches the switch position on the upright (bracket holes below the bearing).', 'half')}
-<h3>Tilt: a microswitch</h3>
-<p>The switch is a normal printer endstop, on a small printed bracket bolted to the outside of the +Y
-upright with two M3 screws (the two holes under the bearing; nuts in the pockets on the inside). The flag
-is the M3 bolt through the +Y arm. Homing tilts the cradle slowly <i>away</i> from the lens, past +90&deg;;
-at about +95&deg; the flag presses the lever and the motor stops. That position is the zero for every tilt
-after it. Homing away from the lens means a missed switch can never drive the insect into the objective.</p>
-<div class="note">The bracket isn't drawn yet: it needs the endstop board's size, hole spacing and lever
-position. The holes and flag in the fork and cradle are already in place.</div>
+{fig('endstop', 'Tilt at +97&deg;: the flag bolt on the +Y arm presses the roller of the switch on its bracket.', 'half')}
+<h3>Tilt: a roller microswitch</h3>
+<p>The switch sits on a printed bracket bolted to the outside of the +Y upright with two M3 &times; 11.8
+(nuts in the pockets on the inside). It hangs just past the upright's front edge, lever up, roller
+under the path of the flag: the M3 bolt through the +Y arm. Homing tilts the cradle slowly <i>away</i>
+from the lens, past +90&deg;. The flag meets the roller at about +90&deg; and the switch clicks at
++97&deg;; that position is the zero for every tilt after it. Homing away from the lens means a
+missed switch can never drive the insect into the objective.</p>
+<p>Mount the switch with its pivot end towards the camera side and the pins down. Two small wood
+screws go through its holes into the pilot holes; a drop of superglue behind the switch keeps it from
+creeping. The click angle is the <code>home_t</code> parameter; the bracket follows it.</p>
 <h3>Yaw: magnet and hall sensor</h3>
 <p>The magnet in the head's hub passes 0.8 mm over the hall sensor once per turn. Homing turns the head
 until the KY-024's digital output switches; that is yaw zero. Set its threshold with the board's
@@ -215,17 +222,16 @@ def page_use():
     return f"""<section class="page">
 <h2>5 &middot; Mounting a specimen</h2>
 <div class="two">
-<div>{fig('puck', 'Puck on the plate: pin through the nose, pad screw clamping it from the side.')}</div>
+<div>{fig('holder', 'Specimen holder in the head: pin through the nose, pad screw clamping it from the side.')}</div>
 <div>{steps([
-    "<b>Pad.</b> Slide the pin pad into the puck's side pocket, the pad nut into its slot, and turn the "
-    "pad screw in until it just touches.",
+    "<b>Loosen.</b> Back the pad screw off a turn (hex key from the +X side; turn the yaw if it's out of "
+    "reach). The holder stays in the head.",
     "<b>Pin.</b> Push the specimen's pin down through the hole in the nose tip.",
     "<b>Height.</b> Stand the height gauge on the nose tip, the pin in its slot. Slide the pin until the "
     "<i>middle of the insect</i> is level with the 19 mm step: that is the tilt axis height. The 17, 18, 20 "
     "and 21 steps show how far off you are.",
-    "<b>Clamp.</b> Tighten the pad screw: the nut is captive inside the puck, the pad presses the pin "
+    "<b>Clamp.</b> Tighten the pad screw: the nut is captive inside the holder, the pad presses the pin "
     "against the wall.",
-    "<b>Seat.</b> Set the puck on the plate. It clicks onto the three domes; the magnets hold it.",
 ])}</div></div>
 <h2>6 &middot; Centring</h2>
 <div class="two">
@@ -235,7 +241,7 @@ tells you how many turns to give each screw. It then turns the head so the screw
 <p>An M3 screw moves 0.5 mm per turn, so an eighth of a turn with the hex key is about 60 &micro;m.
 That's finer than the wizard needs. Turn a screw in to push the plate away from it; the spring follows
 when you back it out. &plusmn;2.5 mm of travel covers any pin that's reasonably straight.</p>
-<p>Centre once per specimen. Taking the puck off and putting it back keeps the centring.</p></div>
+<p>Centre once per specimen: every new pin puts the insect somewhere slightly different.</p></div>
 </div>
 {fig('tilted', 'Tilt +60&deg;, yaw 40&deg;: the head turns towards the lens. Limits: &minus;33&deg; to +90&deg;.', 'small')}
 </section>"""

@@ -77,6 +77,26 @@ The board runs on 5–12 V and has IN1–IN4 headers and a 5-pin motor socket (p
 | M3 nuts | From the lens-mount project: plain, 5.2 across flats (standard is 5.5) × 2.2. A 5.7 AF × 2.6 deep pocket fit them. |
 | M4 bolts and nuts | Not used: **M3 for everything** (user, plenty of M3 bolts and nuts). M3 with washers through the carriage's Ø4.5 holes. |
 
+## Tilt home microswitch (round 3, 2026-10-21)
+
+Roller-lever microswitch. Seen from the hole side, pivot end on the left, pins down.
+
+| Label | Meaning | Value |
+|---|---|---|
+| — | Body length × height × thickness | 20 × 10 × 5.8 |
+| S1 | Hole spacing, centre to centre | 9 |
+| L1 | Pivot end to first hole centre | 4.7 |
+| H1 | Pin edge to hole centres | 2.7 |
+| d1 | Hole diameter | 2.5 (too small for M3) |
+| L2 | Pivot end to roller centre, along the body | 16.4 |
+| P1 | Lever edge to roller top, free | 10.8 (6.2 to the metal under the roller) |
+| P2 | Lever edge to roller top, at the click | 7.1 |
+| P3 | Pin length below the body | 3.5 |
+| — | Roller type | Roller |
+| — | Wood screws (to hold it) | Ø1.8–1.9, 11.5 overall, head Ø3.2 × 1 |
+
+The user screws it on with the wood screws and also glues it (doesn't trust the screws alone).
+
 Lighting (COB LEDs, panels, heatsinks): deferred by the user.
 
 ## Derived values (computed, not measured)
@@ -102,7 +122,7 @@ Lighting (COB LEDs, panels, heatsinks): deferred by the user.
 ## Still to measure / confirm
 
 - [ ] A second 608 bearing (or a pack). Tilt and yaw each need one: see the sketch page.
-- [ ] Tilt home: an endstop microswitch (for example from the old printer), or a second hall board.
+- [x] Tilt home: roller microswitch, measured (round 3).
 - [ ] KY-024 board size and hole position (when the home sensors are designed).
 - [ ] 2× setup: working distance and field width (optional).
 - [x] L4 shaft (9.7) and flats (7.8); pin sizes; fasteners (M3 throughout); springs (round 2).

@@ -50,8 +50,8 @@ centring is done by hand once per specimen.
 ```
 camera ──▶ lens axis ──▶ insect (on both axes)
                           │ pin, 19 mm exposed
-                          ├ puck: nose + pin clamp (pad screw)      ← removable, magnets
-                          ├ centring plate + ring (X/Y screws)
+                          ├ specimen holder: nose + pin clamp (pad screw)
+                          │   on the centring plate, one part; ring + X/Y screws
                           ├ yaw 28BYJ-48 (head straight on its shaft)
                           └ cradle floor
 cradle arms ── tilt axis ── uprights: 608 on one side, tilt 28BYJ-48 on the other
@@ -63,33 +63,28 @@ base plate ── 4 × M3 ── rail carriage (focus axis, unchanged)
 | **Mount** | Base plate on the carriage's four free holes (60 × 20, Ø4.5), M3 bolts with washers and nuts. Pockets for the bearing-block screw heads (1.3 tall) where the plate is wider than ±24. | The sample platform isn't fitted, so these holes are free. The app measures where the axes are, so the M3-in-Ø4.5 slop doesn't matter. |
 | **Fork** | One printed body: base plate, both uprights and their ribs. The bearing seat and the motor recess come out coaxial by construction; as horizontal holes, they are checked with test pieces first. | Supported on both sides: stiff, and the axis is set by two fixed points. The camera looks between the uprights, and there's room to light from the front and back. |
 | **Tilt axis** | A U-cradle between the uprights. One side: a stub axle in the 608, in one upright. Other side: the **tilt 28BYJ-48, direct drive**. It's screwed to the outside of the other upright, with its Ø9 boss in a recess to centre it, and a D-hub on its shaft carries the cradle. | Simplest drive (user's choice). See "Torque" below. |
-| **Tilt home** | A printer endstop on an upright, hit by a flag on the cradle just past +90° (the dorsal end). | Homing moves away from the lens, never towards it. |
+| **Tilt home** | A roller microswitch on a printed bracket on the +Y upright, pressed by a flag bolt on the cradle arm. It clicks at +97°, past the +90° working limit. | Homing moves away from the lens, never towards it. |
 | **Tilt range** | −33° (belly towards the lens) to +90° (top view), confirmed by the CAD sweep. | The lens limits the belly side (see "Lens clearance"). |
 | **Yaw axis** | The **yaw 28BYJ-48** screwed under the cradle floor. The head mounts **straight on its shaft** through a D-hub, with no bearing (user's choice). | The yaw only carries the head (about 25 g). Shaft play causes a small, repeatable wobble that stays well inside the frame; the centring wizard shows how big it is. A 608 turntable can be added later if it matters. |
 | **Yaw home** | KY-024 linear hall board on the cradle floor, one Ø5.7 magnet in the head's underside. Homing reads the analog output and takes the field peak, the magnet's centre. | The peak repeats better than the board's on/off threshold. |
 | **Yaw range** | Unlimited in v1. | Nothing electrical turns with the head. |
 | **Centring (X/Y)** | One printed plate (Ø26 × 6) in a printed Ø43 ring on the yaw hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; a pen spring behind a printed plunger at 225° pushes back. The plate's rim has a 4 mm-wide V that holds the screw ends, so the plate can't lift. Plain button-head screws turned with a 2 mm hex key (no knobs). ±2.5 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
-| **Puck** | The removable specimen holder. Underneath: three printed bumps that seat in three V-grooves on the centring plate, held by three Ø5.7 × 1.8 magnets. On top: the Z carrier, clamp and nose. | Explained under "Why a puck". |
+| **Specimen holder** | One printed part: the centring plate with the clamp column, pad screw and nose on top. It stays in the head; specimens change by swapping the pin. | Explained under "Why no puck". |
 | **Pin clamp** | A V-groove channel running through a 45° tapered nose (Ø5 tip) and the clamp body, about 18 long. A printed pad on an M3 screw presses the pin; the screw sits at the bottom of the carrier. | Pins 00 to 1 (0.30–0.40) all sit on the same line. The tapered nose and low screw keep everything near the insect out of the lens's way. |
 | **Height (Z)** | Slide the pin against the printed stepped gauge (17 to 21 mm above the nose tip), then clamp it with the pad screw. The wizard measures any height error, and you re-set the pin with the gauge. A fine Z screw was dropped in CAD: there was no room for it inside the lens clearance cone. | Puts the insect on the tilt axis, for glued-tip and pinned-through specimens alike. Pins stay full length (39.4), no cutting needed. |
 | **Accessories** | Height gauge; a calibration puck with a straight needle (for measuring where the axes appear in the image). | Calibration happens once per machine; it's stored in `config.toml`. |
 | **Electronics** | 2 × ULN2003 from the user's 5 V supply, ground shared with the Nano. Pins below. | The Nano's USB 5 V shouldn't carry two motors (about 240 mA each while moving). |
 | **Lighting** | Deferred. Felt background, 2–3 lights and a bounce, as the user does now. | No dome needed. |
 
-### Why a puck (and the magnets)
+### Why no puck (user decision, 2026-10-21)
 
-The magnets have nothing to do with rotation; the yaw motor does that. They hold the
-**puck**, a small removable holder that carries the pin, onto the centring plate:
-
-- You mount and adjust a new insect at your desk, not 12 mm from the objective.
-- Lifting the puck off and clicking it back puts it in the same place, because three
-  bumps in three V-grooves can only sit one way. A re-scan doesn't need re-centring.
-- Specimens can stay on their own pucks between sessions, and you can have several.
-
-Strength: each Ø5.7 × 1.8 neodymium disc pulls with roughly 5 N at contact, and the puck
-weighs about 5 g, so three magnets hold it at any tilt. The bumps take the sideways
-load. If it ever turns out to be unnecessary, the clamp can be printed straight onto
-the centring plate.
+The first design had a removable puck: three bumps in three V-grooves on the centring
+plate, held by magnets, so a specimen could be lifted off and put back without
+re-centring. The user dropped it for v1: the holder is rarely taken off, because changing
+specimens means swapping the pin, not the holder. So the clamp is printed straight onto
+the centring plate as one part, the **specimen holder**. No magnets, domes or grooves; the
+centring works as before. The 0.5 mm seat gap went into the holder's neck (6.5 mm), so
+every height below the insect is unchanged.
 
 ### Torque (direct-drive tilt)
 
@@ -126,7 +121,7 @@ then a Ø29.8 adapter.
 
 ### Key dimensions (CAD)
 
-- **Under the insect:** pin 19, nose 10, clamp column 8, puck 6, gap 0.5, plate 6, ring floor
+- **Under the insect:** pin 19, nose 10, clamp column 8, holder neck 6.5, plate 6, ring floor
   2, bell hub 7, gap 1, floor 4, yaw motor 19. The motor's back is 82.5 below the insect.
 - **Tilt axis:** 95 above the carriage top, so the swinging cradle clears the base. The
   camera's tripod sets the lens to that height.
@@ -143,8 +138,8 @@ then a Ø29.8 adapter.
 
 ### One scan
 
-1. **Mount** the insect on a puck at the desk, set the pin height with the gauge, and
-   click the puck on (you, about 1 min).
+1. **Mount** the pinned insect in the holder's nose, set the pin height with the gauge,
+   and tighten the pad screw (you, about 1 min).
 2. **Centre** with the wizard. The app turns the insect to 4 yaw angles, finds it in the
    live view (sharp tiles) and with a focus scan, fits a circle, and says how far to turn
    each screw, then turns the head so that screw faces you. Repeat until under about 0.1 mm (you and the app, about 2 min). It also
@@ -185,15 +180,18 @@ Changes from the agreed concept, with reasons:
 - **Fine Z screw dropped:** a stepped height gauge replaces it.
 - **Tilt axis at 95** (planned 87), and a belly limit of −33° (planned −36°).
 
-- **Tilt home interface:** two M3 holes for an endstop bracket on the +Y upright (nut pockets
-  inside) and an M3 × 17.5 flag bolt through the +Y arm. The flag reaches the switch at about
-  +95°, homing away from the lens. The bracket itself waits for the endstop's measurements.
+- **Tilt home:** a printed bracket, bolted to the outside of the +Y upright with two M3
+  (nuts in pockets inside), holds a roller microswitch just past the upright's +X edge. It is
+  fixed with two small wood screws plus glue (the user's choice; the switch holes are too
+  small for M3). An M3 × 17.5 flag bolt through the +Y arm meets the roller at +90° and
+  clicks it at `home_t` = 97°, homing away from the lens.
+- **Specimen holder, no puck:** the plate and the clamp are one part (see "Why no puck").
 
 Assembly and use: [`hardware/scan-module/guide/MacroRail-scan-module-guide.pdf`](../hardware/scan-module/guide/MacroRail-scan-module-guide.pdf).
 STLs: `hardware/scan-module/exports/test-pieces/` and `exports/final/`.
 
-Next: print the test pieces and check them; measure the printer endstop and model its
-bracket; then print the final parts.
+Next: print the test pieces (including the endstop bracket and specimen holder) and check
+them; then print the final parts.
 
 Print fits from the lens-mount project (Prusa i3 MK3, validated in PLA): M3 clearance 3.4;
 M3 nut pocket 5.7 across flats × 2.6 deep; friction bore +0.6 on diameter; sliding fit 0.4
@@ -248,6 +246,5 @@ total clearance. No threads in plastic; counterbores, not countersinks.
 ## Open items
 
 - Torque near 90°: check on the first printed cradle; add counterweight if steps skip.
-- Tilt home endstop bracket: measure the printer endstop (board size, hole spacing and
-  diameter, lever position and travel). The holes and the flag are already in the model.
+- Tilt home click angle: check on the rig that the switch clicks near +97° (`home_t`).
 - Optional: screenshots of the user's old rotate-and-tilt build, for reference.

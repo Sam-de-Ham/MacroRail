@@ -30,13 +30,15 @@ SHOTS = {
     'head_exploded': lambda: (set_params(1), look((0, 0, -15), (1, -0.9, 0.55), 350, None, hide=ALWAYS_HIDE + tp_and_tools() + (
         'REF Objective', 'Fork', 'REF Carriage', 'REF Tilt Motor', 'Cradle', 'REF 608 Bearing', 'Tilt Axle', 'Axle Spacer',
         'REF Axle Bolt', 'REF Axle Nut', 'REF Flag Bolt', 'REF Flag Nut', 'Carriage Washer 1', 'Carriage Washer 2',
-        'Carriage Washer 3', 'Carriage Washer 4') + tuple('REF Carriage Bolt %d' % i for i in range(1, 5)) +
+        'Carriage Washer 3', 'Carriage Washer 4', 'Endstop Bracket', 'REF Switch', 'REF Switch Roller',
+        'REF Wood Screw 1', 'REF Wood Screw 2', 'REF Bracket Bolt 1', 'REF Bracket Bolt 2', 'REF Bracket Nut 1',
+        'REF Bracket Nut 2') + tuple('REF Carriage Bolt %d' % i for i in range(1, 5)) +
         tuple('REF Carriage Bolt Head %d' % i for i in range(1, 5)))),
-    'puck': lambda: (set_params(), look((0, 0, -32), (1.1, 0.9, 0.55), 160, None, hide=only((
-        'Puck', 'Pin Pad', 'REF Pad Screw', 'REF Pad Nut', 'REF Pin', 'REF Insect', 'Centring Plate', 'Yaw Head',
+    'holder': lambda: (set_params(), look((0, 0, -32), (1.1, 0.9, 0.55), 160, None, hide=only((
+        'Specimen Holder', 'Pin Pad', 'REF Pad Screw', 'REF Pad Nut', 'REF Pin', 'REF Insect', 'Yaw Head',
         'REF Screw X', 'REF Screw Y', 'Spring Plunger', 'REF Spring')))),
     'tilted': lambda: (set_params(0, 60, 40), look((0, 0, -35), (1, -0.55, 0.45), 450, None, hide=ALWAYS_HIDE + tp_and_tools() + ('REF Objective',))),
-    'endstop': lambda: (set_params(0, 95, 0), look((15, 40, -5), (0.9, 1.3, 0.6), 260, None, hide=ALWAYS_HIDE + tp_and_tools() + ('REF Objective',))),
+    'endstop': lambda: (set_params(0, 97, 0), look((32, 44, -10), (1, -0.35, 0.3), 260, 80, hide=ALWAYS_HIDE + tp_and_tools() + ('REF Objective',))),
     'hex_access': lambda: (set_params(0, 0, 180), look((0, 0, -45), (-1, -0.35, 0.45), 300, None, hide=ALWAYS_HIDE + tp_and_tools() + ('REF Objective',))),
     'test_pieces': lambda: (set_params(), look((0, -250, -40), (1, 0.7, 1.1), 500, None, hide=only(tuple(b.name for b in root.bRepBodies if b.name.startswith('TP '))))),
 }

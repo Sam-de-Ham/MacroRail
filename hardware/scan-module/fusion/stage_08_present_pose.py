@@ -7,15 +7,14 @@ import scanhelp
 importlib.reload(scanhelp)
 from scanhelp import *  # noqa
 
-YAW = ['Yaw Head', 'Centring Plate', 'Spring Plunger', 'REF Spring', 'REF Screw X',
-       'REF Screw Y', 'REF Nut X', 'REF Nut Y', 'REF Hub Magnet', 'REF Plate Magnet 1', 'REF Plate Magnet 2',
-       'REF Plate Magnet 3', 'Puck', 'Pin Pad', 'REF Pad Screw', 'REF Pad Nut', 'REF Puck Magnet 1',
-       'REF Puck Magnet 2', 'REF Puck Magnet 3', 'REF Insect', 'REF Pin']
+YAW = ['Yaw Head', 'Specimen Holder', 'Spring Plunger', 'REF Spring', 'REF Screw X',
+       'REF Screw Y', 'REF Nut X', 'REF Nut Y', 'REF Hub Magnet', 'Pin Pad', 'REF Pad Screw',
+       'REF Pad Nut', 'REF Insect', 'REF Pin']
 TILT_ONLY = ['Cradle', 'REF Yaw Motor', 'REF KY-024 PCB', 'REF KY-024 Components', 'REF Hall Sensor',
              'Tilt Axle', 'Axle Spacer', 'REF Axle Bolt', 'REF Axle Nut', 'REF Flag Bolt', 'REF Flag Nut']
-PRINTED = ['Fork', 'Cradle', 'Yaw Head', 'Centring Plate', 'Spring Plunger', 'Puck',
+PRINTED = ['Fork', 'Cradle', 'Yaw Head', 'Specimen Holder', 'Spring Plunger',
            'Pin Pad', 'Tilt Axle', 'Axle Spacer', 'Carriage Washer 1', 'Carriage Washer 2',
-           'Carriage Washer 3', 'Carriage Washer 4', 'Height Gauge']
+           'Carriage Washer 3', 'Carriage Washer 4', 'Height Gauge', 'Endstop Bracket']
 
 
 def find_appearance(*keys):

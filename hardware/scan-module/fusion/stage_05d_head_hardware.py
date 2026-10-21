@@ -1,5 +1,5 @@
 """Stage 05d: reference hardware in the head: the two centring screws (M3 button heads, turned
-with a 2 mm hex key; no knobs), their nuts, the hub magnet and the three plate magnets."""
+with a 2 mm hex key; no knobs), their nuts and the hub magnet."""
 import sys, importlib, os, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scanhelp
@@ -33,10 +33,4 @@ def run(_):
     s = sk('z', '-(d_hubBot)', 'PL Hub Bottom', 'REF Sk Hub Magnet')
     s.circle('ky_sensR', '0', 'mag_D')
     name_new(ext(s, NEW, 'REF Hub Magnet', 'mag_T', POS), 'REF Hub Magnet')
-    s = sk('z', '-(d_plateTop + mag_T)', 'PL Plate Magnet Bottom', 'REF Sk Plate Magnets')
-    s.circle('seat_r * cos(30 deg)', 'seat_r * sin(30 deg)', 'mag_D')
-    s.circle('-(seat_r * cos(30 deg))', 'seat_r * sin(30 deg)', 'mag_D')
-    s.circle('0', '-(seat_r)', 'mag_D')
-    repair(s)
-    name_all(ext(s, NEW, 'REF Plate Magnets', 'mag_T', POS), 'REF Plate Magnet')
     print(report())
