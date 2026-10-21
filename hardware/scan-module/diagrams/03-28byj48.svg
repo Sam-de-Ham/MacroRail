@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" width="760" height="330" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .part{fill:#eef2f1;stroke:#54635e;stroke-width:1.2}
+    .dl{stroke:#54635e;stroke-width:1;fill:none}
+    .ex{stroke:#9aaaa4;stroke-width:.8;stroke-dasharray:3 3;fill:none}
+    .lab{fill:#b3261e;font-size:13px;font-weight:600}
+    .cap{fill:#54635e;font-size:12px}
+    .ttl{fill:#15201d;font-size:15px;font-weight:700}
+  </style>
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#54635e"/></marker></defs>
+  <rect width="760" height="330" fill="#ffffff"/>
+  <text class="ttl" x="20" y="26">03 · 28BYJ-48, top view (shaft towards you) and side view, 4 px/mm</text>
+  <circle class="part" cx="130" cy="170" r="17"/><circle class="part" cx="270" cy="170" r="17"/>
+  <rect x="130" y="153" width="140" height="34" fill="#eef2f1"/>
+  <circle class="part" cx="200" cy="170" r="56"/>
+  <circle cx="130" cy="170" r="8.4" fill="#ffffff" stroke="#54635e"/><circle cx="270" cy="170" r="8.4" fill="#ffffff" stroke="#54635e"/>
+  <rect x="171" y="226" width="58" height="12" rx="2" fill="#b9d3e6" stroke="#2a6a9a"/>
+  <circle cx="200" cy="138" r="18" fill="#ffffff" stroke="#54635e"/>
+  <rect x="190" y="132" width="20" height="12" fill="#9aa4a6"/>
+  <line class="ex" x1="130" y1="153" x2="130" y2="56"/><line class="ex" x1="270" y1="153" x2="270" y2="56"/>
+  <line class="dl" x1="132" y1="62" x2="268" y2="62" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text class="lab" x="164" y="54">S2 = 35</text>
+  <text class="lab" x="60" y="134">d1 = 4.2</text><line class="ex" x1="104" y1="140" x2="124" y2="162"/>
+  <line class="ex" x1="200" y1="170" x2="262" y2="170"/><line class="ex" x1="200" y1="138" x2="262" y2="138"/>
+  <line class="dl" x1="254" y1="140" x2="254" y2="168" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text class="lab" x="276" y="150">O1 = 8</text>
+  <line class="ex" x1="144" y1="114" x2="40" y2="114"/><line class="ex" x1="144" y1="226" x2="40" y2="226"/>
+  <line class="dl" x1="48" y1="116" x2="48" y2="224" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text class="lab" x="56" y="210">D3 = 28</text>
+  <line class="ex" x1="171" y1="238" x2="171" y2="276"/><line class="ex" x1="229" y1="238" x2="229" y2="276"/>
+  <line class="dl" x1="173" y1="270" x2="227" y2="270" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text class="lab" x="128" y="294">W2 = 14.4 (17.2 max)</text>
+  <text class="lab" x="240" y="248">P2 = 3</text>
+  <text class="lab" x="226" y="108">D4 = 5 / flats 3</text>
+  <text class="lab" x="100" y="96">D5 = 9</text><line class="ex" x1="140" y1="100" x2="186" y2="128"/>
+  <!-- side view -->
+  <rect class="part" x="460" y="186" width="112" height="76"/>
+  <rect x="442" y="186" width="148" height="3" fill="#9aaaa4"/>
+  <rect class="part" x="530" y="180" width="36" height="6" fill="#ffffff"/>
+  <rect x="538" y="141" width="20" height="39" fill="#9aa4a6"/>
+  <line class="ex" x1="572" y1="262" x2="640" y2="262"/><line class="ex" x1="590" y1="186" x2="640" y2="186"/>
+  <line class="dl" x1="632" y1="188" x2="632" y2="260" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text class="lab" x="640" y="228">H3 = 19</text>
+  <line class="ex" x1="558" y1="141" x2="610" y2="141"/><line class="ex" x1="566" y1="180" x2="610" y2="180"/>
+  <line class="dl" x1="602" y1="143" x2="602" y2="178" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text class="lab" x="610" y="164">L4 = 7.8 (?)</text>
+  <text class="lab" x="470" y="170">H4 = 1.5</text>
+  <text class="lab" x="376" y="192">T1 = 0.7</text>
+  <text class="cap" x="420" y="300">Flats length given as 9.7, longer than the shaft: to confirm.</text>
+</svg>

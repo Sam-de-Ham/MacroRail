@@ -69,12 +69,12 @@ underneath, so M4 bolts with nuts below fit.
 | Part | v1 | Notes |
 |---|---|---|
 | Focus | Existing rail | Per-pose focus scan + stack, as today. |
-| Yaw (about the pin) | **Motor**: 28BYJ-48 + ULN2003 | Drives a turntable on its own bearing (see below). Hall sensor home. ±185° travel with a cable loop, so no slip ring. |
+| Yaw (about the pin) | **Motor**: 28BYJ-48 + ULN2003 | Drives a turntable on its own bearing (see below). Home: a KY-024 linear hall board and one Ø5.7 magnet on the turntable. Homing reads the analog output and takes the field peak (the magnet centre), which repeats better than the comparator threshold. ±185° travel with a cable loop, so no slip ring. |
 | Tilt (about the sideways axis) | **By hand** | Index pin in holes at −30°, 0°, 30°, 60°, 90°. Exact angles don't matter: SfM solves the camera poses. Tilting the belly toward the lens swings the cradle into it, so that side stops near −35°. |
 | Centring X/Y | **By hand**: two printed dovetail slides, captive M3 screws, ±3 mm | 0.5 mm per turn; a quarter turn is 0.125 mm, and ±0.2 mm is plenty. Spring preload so they can't rattle. |
 | Height | Coarse: the pin slides in a clamp on the puck, set with a printed gauge. Fine: a third M3 thumbscrew (Z, ±3 mm) | Puts the insect on the tilt axis. One clamp covers both glued-tip and pinned-through specimens, because the coarse setting takes up the different heights on the pin. |
 | Slide preload | Compression springs (pen springs) | Push each slide against its screw tip, so there is no play. |
-| Specimen | Puck on a 3-ball magnetic kinematic base | Swaps in seconds; it goes back in the same place, so the centring is kept. |
+| Specimen | Puck on a 3-point magnetic kinematic base: printed hemispheres in printed V-grooves, Ø5.7 magnets (no steel balls on hand) | Swaps in seconds; it goes back in the same place, so the centring is kept. |
 
 Why tilt about the sideways axis: tilt then moves things only in depth and vertically.
 Tilting about the lens axis would roll the insect sideways across the frame.
@@ -172,6 +172,8 @@ actuations, which is good enough to check coverage before the full run.
 
 Photos are in `reference-images/`.
 
+- **Measurements:** `hardware/scan-module/MEASUREMENTS.md` (with diagrams). Key numbers:
+  4.27× (5.5 mm field), 12 mm working distance with the sleeve on, 64 µm depth of field.
 - **Optics:** an AmScope Plan 4/0.10 objective (160 mm tube length, 0.17 mm cover glass),
   on a long printed adapter tube (printables model 143754). Its spring-loaded protective
   front sleeve can come off, but that shouldn't be needed. NA 0.10 gives a depth of field
