@@ -164,13 +164,15 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
   - Every tab was checked in the simulator at desktop and phone sizes; auto range and backlash
     give the simulated values (backlash exact for 0.04–0.15 mm at 2×, 4× and 10×).
 - **Pi:**
-  - The code is deployed to `~/macrorail` and run by hand, because the systemd install needs the user's sudo.
+  - Runs as the `macrorail` systemd service (installed by the user 2026-10-21, autostart on,
+    `Restart=on-failure`). Restarting needs sudo, so the user runs `sudo systemctl restart macrorail`.
+  - Never SIGKILL it to force a restart: an unclean exit leaves the A6400 stuck.
   - Power is fine on the new PSU. Startup takes about 5 s.
-  - **Run by hand:** `cd ~/macrorail && setsid nohup .venv/bin/macrorail > ~/macrorail.log 2>&1 < /dev/null &`
-  - **Stop:** `pkill -f "^/home/pi/macrorail/[.]venv/bin/python"` (anchored, so it can't kill your own SSH shell).
-  - **Deploy:** `git archive HEAD | ssh pi 'tar -x …'`. Never redirect SSH's stdin to `/dev/null` in that pipe.
-  - **Flash:** `~/.local/bin/pio run -d firmware -e nano -t upload --upload-port /dev/ttyUSB0`.
-    The app must be stopped first, because it owns the port.
+  - **Deploy:** `git archive HEAD | ssh pi 'tar -x …'` into `~/macrorail` (keep `.venv`), `uv sync
+    --frozen --no-dev`, then the user restarts. Never redirect SSH's stdin to `/dev/null` there.
+  - Check it is idle first (`curl localhost:8000/api/state` on the Pi): a restart ends a stack.
+- **Flash:** `~/.local/bin/pio run -d firmware -e nano -t upload --upload-port /dev/ttyUSB0`.
+    The service must be stopped first (`sudo systemctl stop macrorail`), because it owns the port.
 - **Hardware bring-up so far:** breadboard per the setup guide `docs/setup-guide/MacroRail-setup-guide.pdf`. Rebuild it with `docs/setup-guide/build_html.py`, then print to PDF.
   - **Driver:** detected over UART.
   - **Switch:** wired NO on D2, so `ENDSTOP_ACTIVE_LEVEL = LOW`.
