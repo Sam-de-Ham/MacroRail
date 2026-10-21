@@ -1,9 +1,14 @@
-# 3D scanning: design direction
+# 3D scanning
 
 The plan for the next major version: a full 3D scan of a pinned insect, driven by the
-existing focus rail. Chosen with the user on 2026-10-21. Nothing here is built yet.
+existing focus rail. The v1 module design below was agreed with the user on 2026-10-21.
+Nothing is built yet; the next step is CAD.
 
-![v1 scanning module](3d-scanning-module.svg)
+- Measurements and derived numbers: [`hardware/scan-module/MEASUREMENTS.md`](../hardware/scan-module/MEASUREMENTS.md)
+- Photos: [`reference-images/`](../reference-images/)
+- Concept sketches and a lens-checked 3D mock-up (private page):
+  https://claude.ai/artifact/JzWYc29WNLCKHEQN3GSxCa
+- Research study (private page): https://claude.ai/artifact/Rirv3GTEdBBLdavVmZ82GV
 
 ## Ground rule: 2D stays exactly as it is (user, 2026-10-21)
 
@@ -18,217 +23,214 @@ The rail must always work for normal focus stacking, exactly as it does today.
   If a 2D change looks worth it, propose it ("what about…?") and wait.
 - **Shared code:** refactoring shared code is fine only if 2D behaviour stays identical,
   the existing tests still pass unchanged, and the refactor is mentioned to the user.
-- **Firmware:** the yaw axis is purely additive. The firmware must run the rail normally
-  with no yaw motor plugged in, and rail commands keep their current meaning.
-- **Hardware:** the module bolts onto the platform. Without it, the rail is today's rail.
+- **Firmware:** the new axes are purely additive. The firmware must run the rail
+  normally with no module plugged in, and rail commands keep their current meaning.
+- **Hardware:** the module bolts onto the carriage. Without it, the rail is today's rail.
 
 ## Working together
 
 The user and the agent do the whole build together, step by step: plan, measure, model
-in CAD, print, program, set up, calibrate. Measurements come from the user. The rail's
-own geometry comes from the STLs in `hardware/rail/stl/`.
+in CAD, print, program, set up, calibrate. Measurements come from the user, never from
+guesses. The rail's own geometry comes from the STLs in `hardware/rail/stl/`.
 
-## The problem
+## The problem, in short
 
-An insect glued to a pin is never on the pin's axis, so when the pin turns, the insect
-travels a circle. Movement along the lens axis only changes focus, and running the focus
-scan at every pose absorbs it. Sideways (and, once tilted, vertical) movement pushes it out
-of frame. The frame is small: at 3× the A6400's 23.5 mm sensor sees 7.8 mm, so a 4 mm
-insect has only ±1.9 mm of room. Earlier attempts (rotate + focus; rotate + tilt on the
-rail) failed for this reason.
+An insect on a pin never sits exactly on the pin's axis, so when the pin turns, the insect
+travels a circle. Movement along the lens axis only changes focus, and a focus scan at
+every pose absorbs it. Sideways and vertical movement pushes it out of a 5.5 × 3.65 mm
+frame. Every published rotating-specimen rig (DISC3D, scAnt, the CSIRO prototype) solves
+this the same way: centre the insect once, where the rotation axes cross, then rotate
+freely. Photogrammetry doesn't need the insect centred, only whole and sharp in every view.
 
-Photogrammetry doesn't need the insect centred, only whole and sharp in every view.
+## v1 design (agreed 2026-10-21)
 
-## What others do (research, 2026-10-21)
+The insect's centre sits where the yaw and tilt axes cross. Both axes are motorised, and
+centring is done by hand once per specimen.
 
-- **DISC3D** (Ströbel et al. 2018): two-axis gimbal; the mount is adjusted by hand to the
-  gimbal's centre of rotation. Camera on a StackShot rail, 398 usable poses.
-- **scAnt** (Plum & Labonte 2021): yaw + tilt gimbal, centred by hand; the stack range is
-  set wide enough to cover the remaining wobble.
-- **CSIRO prototype** (Nguyen et al.): two laser pointers mark the rotation centre; the
-  specimen is moved until both hit it.
-- **Orbitoscope** (2026): specimen fixed, camera on an XYZ gantry plus two rotations;
-  42–67 h per specimen. Not a fit for a rail project.
-- **Crystallography goniometer heads**: cross-slides under the pin bring the sample onto
-  the axis; motorised heads centre themselves.
+```
+camera ──▶ lens axis ──▶ insect (on both axes)
+                          │ pin, 19 mm exposed
+                          ├ puck: nose + V-groove clamp + Z screw   ← removable, magnets
+                          ├ centring plate + ring (X/Y screws)
+                          ├ yaw 28BYJ-48 (head straight on its shaft)
+                          └ cradle floor
+cradle arms ── tilt axis ── uprights: 608 on one side, tilt 28BYJ-48 on the other
+base plate ── 4 × M3 ── rail carriage (focus axis, unchanged)
+```
 
-Every rotating-specimen rig centres once, on the rotating part, then rotates freely.
-None corrects the drift with extra linear axes during the scan.
-
-The full study (concepts A–G, tolerance chart, 3D model, scan-time calculator) is a
-private page: https://claude.ai/artifact/Rirv3GTEdBBLdavVmZ82GV
-
-## Decision: v1
-
-A module that bolts straight onto the carriage. The rig runs without the 80 × 80 sample
-platform. The carriage's four free M4 holes are the ones meant for that platform: a
-60 × 20 mm pattern at the carriage centre, 60 mm along the rail and 20 mm across, 4.5 mm
-diameter (from `03_carriage.stl`). They clear the nut carrier and the bearing blocks
-underneath, so M4 bolts with nuts below fit.
-
-| Part | v1 | Notes |
+| Part | Design | Why |
 |---|---|---|
-| Focus | Existing rail | Per-pose focus scan + stack, as today. |
-| Yaw (about the pin) | **Motor**: 28BYJ-48 + ULN2003 | Drives a turntable on its own bearing (see below). Home: a KY-024 linear hall board and one Ø5.7 magnet on the turntable. Homing reads the analog output and takes the field peak (the magnet centre), which repeats better than the comparator threshold. ±185° travel with a cable loop, so no slip ring. |
-| Tilt (about the sideways axis) | **By hand** | Index pin in holes at −30°, 0°, 30°, 60°, 90°. Exact angles don't matter: SfM solves the camera poses. Tilting the belly toward the lens swings the cradle into it, so that side stops near −35°. |
-| Centring X/Y | **By hand**: two printed dovetail slides, captive M3 screws, ±3 mm | 0.5 mm per turn; a quarter turn is 0.125 mm, and ±0.2 mm is plenty. Spring preload so they can't rattle. |
-| Height | Coarse: the pin slides in a clamp on the puck, set with a printed gauge. Fine: a third M3 thumbscrew (Z, ±3 mm) | Puts the insect on the tilt axis. One clamp covers both glued-tip and pinned-through specimens, because the coarse setting takes up the different heights on the pin. |
-| Slide preload | Compression springs (pen springs) | Push each slide against its screw tip, so there is no play. |
-| Specimen | Puck on a 3-point magnetic kinematic base: printed hemispheres in printed V-grooves, Ø5.7 magnets (no steel balls on hand) | Swaps in seconds; it goes back in the same place, so the centring is kept. |
+| **Mount** | Base plate on the carriage's four free holes (60 × 20, Ø4.5), M3 bolts with washers and nuts. Pockets for the bearing-block screw heads (1.3 tall) where the plate is wider than ±24. | The sample platform isn't fitted, so these holes are free. The app measures where the axes are, so the M3-in-Ø4.5 slop doesn't matter. |
+| **Fork** | Base plate plus two uprights, printed separately (flat, so the bearing bore and the motor recess come out round) and bolted together. | Supported on both sides: stiff, and the axis is set by two fixed points. The camera looks between the uprights, and there's room to light from the front and back. |
+| **Tilt axis** | A U-cradle between the uprights. One side: a stub axle in the 608, in one upright. Other side: the **tilt 28BYJ-48, direct drive**. It's screwed to the outside of the other upright, with its Ø9 boss in a recess to centre it, and a D-hub on its shaft carries the cradle. | Simplest drive (user's choice). See "Torque" below. |
+| **Tilt home** | A printer endstop on an upright, hit by a flag on the cradle just past +90° (the dorsal end). | Homing moves away from the lens, never towards it. |
+| **Tilt range** | −36° (belly towards the lens) to +90° (top view). | The lens limits the belly side (see "Lens clearance"). |
+| **Yaw axis** | The **yaw 28BYJ-48** screwed under the cradle floor. The head mounts **straight on its shaft** through a D-hub, with no bearing (user's choice). | The yaw only carries the head (about 25 g). Shaft play causes a small, repeatable wobble that stays well inside the frame; the centring wizard shows how big it is. A 608 turntable can be added later if it matters. |
+| **Yaw home** | KY-024 linear hall board on the cradle floor, one Ø5.7 magnet in the head's underside. Homing reads the analog output and takes the field peak, the magnet's centre. | The peak repeats better than the board's on/off threshold. |
+| **Yaw range** | Unlimited in v1. | Nothing electrical turns with the head. |
+| **Centring (X/Y)** | One printed plate in a printed Ø40 ring on the D-hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; one pen spring at 135° pushes back. The screws get printed knobs. ±3 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
+| **Puck** | The removable specimen holder. Underneath: three printed bumps that seat in three V-grooves on the centring plate, held by three Ø5.7 × 1.8 magnets. On top: the Z carrier, clamp and nose. | Explained under "Why a puck". |
+| **Pin clamp** | A V-groove channel running through a 45° tapered nose (Ø5 tip) and the clamp body, about 18 long. A printed pad on an M3 screw presses the pin; the screw sits at the bottom of the carrier. | Pins 00 to 1 (0.30–0.40) all sit on the same line. The tapered nose and low screw keep everything near the insect out of the lens's way. |
+| **Height (Z)** | Coarse: slide the pin until 19 mm sticks out, set with a printed gauge, then clamp. Fine: an M3 screw lifts the carrier ±3 mm. | Puts the insect on the tilt axis, for glued-tip and pinned-through specimens alike. Pins stay full length (39.4), no cutting needed. |
+| **Accessories** | Height gauge; a calibration puck with a straight needle (for measuring where the axes appear in the image). | Calibration happens once per machine; it's stored in `config.toml`. |
+| **Electronics** | 2 × ULN2003 from the user's 5 V supply, ground shared with the Nano. Pins below. | The Nano's USB 5 V shouldn't carry two motors (about 240 mA each while moving). |
+| **Lighting** | Deferred. Felt background, 2–3 lights and a bounce, as the user does now. | No dome needed. |
 
-Why tilt about the sideways axis: tilt then moves things only in depth and vertically.
-Tilting about the lens axis would roll the insect sideways across the frame.
+### Why a puck (and the magnets)
 
-The insect's centre goes where the yaw and tilt axes cross. There it stays in place for
-every yaw and tilt, so it is centred once per specimen. Each tilt change gets a quick
-check, adjusted only if the pin height was off.
+The magnets have nothing to do with rotation; the yaw motor does that. They hold the
+**puck**, a small removable holder that carries the pin, onto the centring plate:
+
+- You mount and adjust a new insect at your desk, not 12 mm from the objective.
+- Lifting the puck off and clicking it back puts it in the same place, because three
+  bumps in three V-grooves can only sit one way. A re-scan doesn't need re-centring.
+- Specimens can stay on their own pucks between sessions, and you can have several.
+
+Strength: each Ø5.7 × 1.8 neodymium disc pulls with roughly 5 N at contact, and the puck
+weighs about 5 g, so three magnets hold it at any tilt. The bumps take the sideways
+load. If it ever turns out to be unnecessary, the clamp can be printed straight onto
+the centring plate.
+
+### Torque (direct-drive tilt)
+
+- **Load:** the cradle hangs below the axis like a pendulum. With the head straight on the
+  yaw shaft it pulls about 40 mN·m at 90° and about 35 at 60°.
+- **Holding: fine, even unpowered.** The 28BYJ-48's gearbox friction torque is listed at
+  60–120 mN·m, so the user's intuition is right. The coils switch off between moves, so
+  no heat reaches the insect.
+- **Lifting: borderline near 90°.** Its pull-in torque is listed at about 34 mN·m, and
+  slow stepping gives a bit more.
+  - So the cradle arms extend above the axis with **counterweight pockets**: room for a
+    stack of coins or an 8 mm rod offcut.
+  - The first test runs them empty. If the tilt skips steps near 90°, the pockets get
+    weight; homing on the endstop would show any lost steps.
+- **Shaft offset:** yes, both motors' shafts are 8 off the body centre (O1). The tilt
+  motor's shaft is the axis, so its body sits 8 off it. Its shaft and the 608 share the
+  cradle's weight, so the motor shaft only carries about half of it.
+- **Alignment:** the motor shaft and the 608 must be coaxial, or the cradle binds. The
+  motor boss's recess and the bolted uprights fix that. The motor's own shaft play moves
+  one end of the axis a little; the insect, halfway between, moves half as much.
+
+### Lens clearance
+
+The 4× objective has a 12 mm working distance and a Ø21.9 sleeve, then a Ø23.4 knurled ring,
+then a Ø29.8 adapter.
+
+- **Keep-out zone:** those diameters plus 2 mm all round (in `MEASUREMENTS.md`).
+- **Rule:** to tilt the belly side 45° towards the lens, a part at depth d below the
+  insect and reach w from the pin needs d − w ≥ 18.
+- **Hence:** 19 mm of exposed pin, the 45° tapered nose, the clamp screw low on the
+  carrier, and the small centring ring.
+- **The mock-up's check:** −36° on the belly side; the dorsal side is free to +90°.
+- **CAD repeats this check** on the real geometry.
+
+### Key dimensions (mock-up; CAD will refine)
+
+- **Under the insect:** pin 19, nose 10, clamp body 8, puck 6, centring 6, hub 4, floor 4,
+  yaw motor 20.5. The cradle is about 78 deep.
+- **Tilt axis:** about 87 above the carriage top, so the swinging cradle clears the base.
+  The camera's tripod sets the lens to that height.
+- **Across the rail:** uprights at about ±41, and about 120 wide including the tilt motor.
+
+### Nano pins (2D pins untouched)
+
+- **Used today:** D2 home, D3 STEP, D4 DIR, D5 EN, D7/D8 driver UART, D9 reserved (relay).
+- **Yaw:** ULN2003 IN1–IN4 on D6, D10, D11 and D12; KY-024 analog output on A0.
+- **Tilt:** ULN2003 IN1–IN4 on D13, A1, A2 and A3. D13 drives the on-board LED too, which
+  is harmless. The endstop goes on A4.
+- **Left:** A5, plus A6 and A7 (analog only).
 
 ### One scan
 
-1. Mount the puck, set the pin height with the gauge (you, 30 s).
-2. Centring wizard: the app turns the insect to 4 yaw angles, finds it in the live view
-   (sharp tiles) and with a focus scan, fits a circle, and says how far to turn each screw.
-   Repeat until the offset is under ~0.1 mm (you + app, ~2 min).
-3. Scan a ring: yaw in 10° steps, focus scan + stack at each pose (automatic).
-4. Move the index pin to the next tilt; the app re-checks centring (you, 30 s).
-5. 3–4 rings plus a top view (automatic).
-6. Export one stacked image per pose for COLMAP or Meshroom (automatic).
+1. **Mount** the insect on a puck at the desk, set the pin height with the gauge, and
+   click the puck on (you, about 1 min).
+2. **Centre** with the wizard. The app turns the insect to 4 yaw angles, finds it in the
+   live view (sharp tiles) and with a focus scan, fits a circle, and says how far to turn
+   each knob. Repeat until under about 0.1 mm (you and the app, about 2 min). It also
+   checks height at two tilts, and the Z screw corrects it.
+3. **Scan, automatically:** rings of poses at several tilts (for example −30°, 0°, 30°,
+   60°, then a top view), yaw in 10° steps. At each pose: focus scan, then stack.
+4. **Export** one stacked image per pose for COLMAP or Meshroom.
 
-Math for the wizard: at yaw θ, an offset (x, y) shows sideways as x·cos θ − y·sin θ and in
-depth as x·sin θ + y·cos θ. With equally spaced angles the least-squares fit is a plain
-Fourier sum. The image gives the sideways curve precisely; the focus scan's depth curve
-is a cross-check. The machine's own axis positions in the image are measured once with a
-calibration needle on a puck and stored in `config.toml`.
+The wizard's maths: at yaw θ, an offset (x, y) shows sideways as x·cos θ − y·sin θ and
+in depth as x·sin θ + y·cos θ. With equally spaced angles the least-squares fit is a
+plain Fourier sum. The image gives the sideways curve precisely; the focus scan's depth
+curve is a cross-check.
 
-### Yaw motor: 28BYJ-48, not NEMA 17 (decided 2026-10-21)
+Backlash: every pose is approached turning the same way, the same trick as the rail's
+take-up. Rings run one way; going back unwinds past the start and comes forward again.
+Tilt backlash doesn't move the insect, because it sits on the tilt axis.
 
-- **Why:** about 35 g against about 280 g, and 28 mm across. A light, small cradle swings
-  more easily by hand, sits closer to the tilt axis and clears the lens better. It gives
-  2048 steps per turn (0.18°), and its torque is ample for a puck and slides.
-- **Its weak points, and how the design handles them:**
-  - *Gearbox backlash (about a degree):* every pose is approached turning the same way,
-    the same trick as the rail's take-up. Rings run one way; going back unwinds past the
-    start and approaches it again forwards.
-  - *Loose output shaft:* the turntable gets its own bearing, and the motor only turns it
-    through a coupler. Hanging the head on the shaft would let it rock. With the insect
-    30 mm up, 0.5° of rock is 0.26 mm sideways.
-  - *Heat from holding current:* the coils switch off once a move ends; the gearbox holds.
-    A warm motor under the insect would drift it through thermal expansion and air shimmer.
-- **Driver:** a ULN2003 board, as supplied (no rewiring). A TMC2209 with the 28BYJ's
-  bipolar modification would be quieter and smoother; it stays an option.
+## CAD plan (next)
 
-### Nano pins (v1)
+The user starts the CAD software; the agent models.
 
-Used today: D2 home, D3 STEP, D4 DIR, D5 EN, D7/D8 driver UART, D9 reserved (relay).
-Yaw takes ULN2003 IN1–IN4 on D6, D10, D11, D12 and the home sensor on A0. That leaves D13
-and A1–A5.
+1. **Test pieces first.** Hub on the 28BYJ-48's double-D shaft, the 608 bore, the Ø9 boss
+   recess, M3 nut pockets and clearance holes, the V-groove with pins 00, 0 and 1, the
+   magnet pockets, and one bump in its V-groove.
+2. **Fork:** base plate (carriage holes, screw-head pockets), two uprights (608 bore; motor
+   recess and tab holes; endstop mount).
+3. **Cradle:** arms with counterweight pockets, a stub axle, the tilt D-hub, and a floor
+   for the yaw motor and the KY-024.
+4. **Head:** yaw D-hub, centring ring with captive nuts and spring seat, centring plate
+   with V-grooves and magnet pockets, knobs.
+5. **Puck:** bumps and magnets, Z carrier and screw, clamp with pad and screw, tapered nose.
+6. **Gauge and calibration puck.**
+7. **Checks before printing:** collisions through the full tilt and yaw range against the
+   lens keep-out zone, no supports needed, all screws reachable, and the centre of mass
+   below the axis.
 
-### Print fits known from the lens-mount project
+Print fits from the lens-mount project (Prusa i3 MK3, validated in PLA): M3 clearance 3.4;
+M3 nut pocket 5.7 across flats × 2.6 deep; friction bore +0.6 on diameter; sliding fit 0.4
+total clearance. No threads in plastic; counterbores, not countersinks.
 
-Prusa i3 MK3. These were validated in PLA and used in PETG.
+## Later
 
-- M3 clearance hole 3.4 mm.
-- M3 nut pocket 5.7 mm across flats × 2.6 mm deep, for nuts measured at 5.2 mm across flats.
-- Friction-fit bore: +0.6 mm on diameter ("very good grip").
-- Sliding tongue in a slot: 0.4 mm total clearance, "nothing rocks".
-- Rules from that project: no threads in plastic (nuts or inserts), counterbores rather
-  than countersinks, and PETG creeps, so re-check bolt tension.
-- M3 button-head bolts on hand: roughly 11.8, 17.5, 19.4 and 27.7 mm long. Whether those
-  are under-head or overall lengths is unclear.
-
-## Later: v2, hands-off centring
-
-- The same captive screws get **2 × 28BYJ-48 + ULN2003** instead of knobs. That's fine
-  for this job: the moves are short and happen once per scan, the 1:64 gearbox is
-  slow but very fine on a 0.5 mm screw, and its backlash is a few µm there. The wizard
-  closes the loop through the camera, so no limit switches. The cost: about 35 g each
-  and 10 wires on the yaw. Design v1's knobs so a motor bracket and coupler can replace
-  them.
-- Tilt gets a motor (NEMA 17, 1:4 GT2 belt, counterweight, home switch).
-- Pins: 2 × 4 for the ULN2003s plus 3 for tilt is 11, and after v1 the Nano has 6 left. Move to an
-  **Arduino Mega 2560**: the same AVR toolchain, plenty of pins, and hardware UARTs, which
-  would also remove the half-duplex SoftwareSerial workaround for the drivers.
-  Not the Pi's GPIO: motion stays in the firmware (one owner per device).
-- Optional: track the insect between poses from the sharp tiles and nudge the slides.
+- **v2, hands-off centring:** 28BYJ-48s on the X/Y screws (so design the knobs to be
+  replaceable by a coupler and bracket). That needs 8 more pins, so it means moving to an
+  **Arduino Mega 2560**: the same AVR toolchain, and hardware UARTs, which also remove the
+  half-duplex SoftwareSerial workaround. Not the Pi's GPIO: motion stays in the firmware.
+- A 608 turntable under the yaw head, if the shaft wobble turns out to matter.
+- Tracking the insect between poses from the sharp tiles.
+- Tiling, for insects bigger than the frame.
+- **Cross-polarised lighting:** polariser film on each light, and an analyser behind the
+  objective in the adapter tube. A diffuser goes *before* the film, never after it,
+  because diffusers scramble polarisation.
 
 ## Scan time (rough)
 
-About 120 poses (10° yaw, rings at −30/0/30/60 thinned by cos(tilt), plus a top view).
-At 2.5 mm visible depth and a 20 µm step that's ~126 shots per pose: ~15,000 shots,
-~10 h and ~86 GB of JPEGs at 2.4 s per shot. A draft mode that sweeps the rail slowly
-while grabbing live-view frames (1024 × 680) would take ~45 min with no shutter
-actuations, which is good enough to check coverage before the full run.
+- **Full resolution:** about 120 poses at a 32.5 µm step and about 2.5 mm visible depth
+  is about 78 shots per pose. That's about 9,400 shots, roughly 6–7 h at 2.4 s per shot.
+- **Live-view draft:** sweep the rail slowly while grabbing live-view frames
+  (1024 × 680). It takes under an hour with no shutter wear, which is good for checking
+  coverage first.
 
 ## Software (sketch, against the current layout)
 
-- `motion/`: a rotary `Axis` for yaw (later tilt); the protocol gains an axis name.
-- `scan/` (new): scan plan (rings × yaw, the lens keep-out zone), the centring fit, and a
-  runner doing rotate → focus scan → stack per pose. `focus/` already reruns per angle.
-- `review/`: a folder per pose, a pose table, export for COLMAP/Meshroom.
+- `motion/`: a rotary `Axis` for yaw and for tilt; the protocol gains an axis name. Rail
+  commands keep their meaning.
+- `scan/` (new): scan plan (rings × yaw, tilt limits), the centring fit, and a runner
+  doing rotate → focus scan → stack per pose. `focus/` already reruns per angle.
+- `review/`: a folder per pose, a pose table, export for COLMAP or Meshroom.
 - Moving the sample changes magnification slightly during a stack. DISC3D corrects this
   with calibrated scaling, which matters for true-scale models.
 
-## Concept sketches (proposed 2026-10-21, awaiting the user's agreement)
+## Setup facts (user, 2026-10-21)
 
-Sketch page with options, concepts, iterations and a lens-checked 3D mock-up:
-https://claude.ai/artifact/JzWYc29WNLCKHEQN3GSxCa (private).
+- **Optics:** AmScope Plan 4/0.10 (160 mm tube, 0.17 cover glass) on a long printed
+  adapter (printables 143754).
+  - At 4× it gives 4.27×, a 5.5 × 3.65 mm field, 12 mm working distance with the sleeve on,
+    64 µm depth of field (step 32.5 µm).
+  - A 2× setup also exists, with more working distance.
+- **Camera:** on a tripod on the floor; the rail on the table. The camera looks along the
+  rail from the motor end. The focus point is kept near mid-travel, so the end blocks
+  never matter.
+- **Specimens:** aphids to grasshoppers, glued on the pin tip or pinned through. Bigger
+  insects get bigger pins. At 4×, anything over about 5 mm needs tiling or the 2× setup.
+- **Parts:** 4 × 28BYJ-48 and ULN2003, 1 × 608, 20 magnets, pen springs, 2 printer
+  endstops, 1 × KY-024, a 5 V supply, a 30 V / 10 A bench supply, plenty of M3.
 
-- **User's round-2 inputs:** M3 for everything; motorise the tilt now (bearing on one
-  side, motor on the other); pen springs; insect pins 00, 0 and 1.
-- **Recommended, concept 1:**
-  - Fork: two uprights carry a U-cradle, with a 608 on one side.
-  - Tilt: a worm and gear sector (about 1:30) on the other side, driven by a 28BYJ-48.
-    It's self-locking, so the coils stay off between moves.
-  - Yaw: a coaxial 28BYJ-48 under a turntable on a second 608. The motor never rotates,
-    so yaw is unlimited in v1.
-  - Centring: one plate in a Ø40 ring, pushed by two screws and held by one spring.
-  - Pin: a V-groove clamp on a Z carrier.
-  - Puck: three-bump kinematic base.
-- **Numbers that drove it:**
-  - The cradle pulls about 80 mN·m at 90°, against the 28BYJ-48's pull-in torque of about
-    30 mN·m. Direct drive fails, and spur gears need the coils kept on.
-  - The 4× objective (12 mm working distance, 22 mm sleeve) limits belly-side tilt. A part
-    at depth d below the insect and reach w from the pin needs d − w ≥ 18 mm to reach −45°.
-  - So: 19 mm of pin above a 45° tapered nose, the clamp's screw low on the carrier, and a
-    small centring ring. The mock-up gives a belly-side limit of −36° and a free dorsal
-    side to +90°.
-  - The cradle is 85 mm deep, with the tilt axis 94 mm above the carriage.
-- **Nano pins** (2D pins untouched):
-  - Yaw: ULN2003 on D6, D10, D11 and D12; KY-024 on A0.
-  - Tilt: ULN2003 on D13, A1, A2 and A3; home switch on A4.
-- **Still needed:** a second 608, a tilt home switch, and a 5 V supply for the motors.
+## Open items
 
-## Setup facts from the user (2026-10-21)
-
-Photos are in `reference-images/`.
-
-- **Measurements:** `hardware/scan-module/MEASUREMENTS.md` (with diagrams). Key numbers:
-  4.27× (5.5 mm field), 12 mm working distance with the sleeve on, 64 µm depth of field.
-- **Optics:** an AmScope Plan 4/0.10 objective (160 mm tube length, 0.17 mm cover glass),
-  on a long printed adapter tube (printables model 143754). Its spring-loaded protective
-  front sleeve can come off, but that shouldn't be needed. NA 0.10 gives a depth of field
-  of about 65 µm by the step helper's formula, so a step of about 30 µm.
-- **Camera:** on a tripod on the floor, so its height and position are free. The rail is on
-  the table. The long tube never gets in the way, so the module sets the lens axis height.
-  The camera looks along the rail from the motor end.
-- **Rail:** the user keeps the focus point near the middle of the rail's travel (over
-  150 mm), so the rail's end blocks never matter.
-- **Specimens:** anything from aphids to grasshoppers, glued on the pin tip or pinned
-  through. At 4× the frame is about 5.9 × 3.9 mm, which F1 will confirm. Anything longer
-  than about 5 mm needs tiling (phase 4) or a lower-magnification lens for a whole-body
-  scan. The module still has to clear a large specimen as it rotates.
-- **Lighting:** two small LED panels today, plus bright 10 W COB LED modules for a bench
-  supply. The COBs need a heatsink, and current limiting (the supply's constant-current
-  mode, or a driver). Plan: **cross-polarisation**, which removes specular glare and helps
-  photogrammetry.
-  - Linear polariser film goes on each light, and an analyser sits *behind* the objective,
-    inside the adapter tube, as in a polarising microscope. In front of the objective
-    there's no room at this working distance, and the film would sit in the image path.
-  - The analyser stays fixed, and the light films are turned until the glare is gone.
-  - The lights mount fixed relative to the camera, never on the turntable.
-
-## Open questions for the user
-
-- The measurement sheet (round 2): the objective's front geometry and working distance,
-  F1 (real field of view), the 28BYJ-48, pins, the COB LEDs, and parts on hand.
-- Parts from the earlier rotate-and-tilt build that could be reused.
+- Torque near 90°: check on the first printed cradle; add counterweight if steps skip.
+- Optional: screenshots of the user's old rotate-and-tilt build, for reference.
