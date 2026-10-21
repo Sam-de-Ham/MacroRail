@@ -17,7 +17,7 @@ pictures come from `fusion/render_guide.py`, one shot per call.
 
 - **Scripts are the source.** Every feature comes from the stage scripts in [`fusion/`](fusion/),
   run in order through the Fusion MCP. The whole model has been rebuilt from an empty timeline
-  with them, with an identical result: 57 bodies, every feature healthy, every sketch fully
+  with them, with an identical result: 59 bodies, every feature healthy, every sketch fully
   constrained. To rebuild, run each stage as a script that does
   `runpy.run_path(<stage file>)['run'](context)`:
 
@@ -27,9 +27,10 @@ pictures come from `fusion/render_guide.py`, one shot per call.
   | `stage_02_reference.py` | Carriage, objective + lens keep-out, insect, pin, 608, both motors, KY-024, hall sensor |
   | `stage_03_fork.py` | Fork (base + uprights + ribs, 608 seat, tilt motor seat, endstop bracket holes) |
   | `stage_04a_cradle.py`, `stage_04b_cradle_floor.py` | Cradle (arms, tilt hubs, counterweight holes, flag bolt hole, floor seats) |
-  | `stage_05a_head.py` … `stage_05d_head_hardware.py` | Yaw head (bell hub, ring), spring housing, plunger, snap-off fin, centring plate, head hardware |
-  | `stage_06_puck.py` | Puck (kinematic seat, clamp column, nose), pin pad, pad screw |
+  | `stage_05a_head.py` … `stage_05d_head_hardware.py` | Yaw head (bell hub, ring), spring housing, plunger, snap-off fin, base of the specimen holder (centring plate), head hardware |
+  | `stage_06_puck.py` | Top of the specimen holder (neck, clamp column, nose), pin pad, pad screw |
   | `stage_07a_axle_washers.py`, `stage_07b_gauge.py` | Tilt axle, spacer, carriage washers and bolts, height gauge |
+  | `stage_07c_endstop.py` | Endstop bracket (pilot holes for the switch), reference switch, roller, screws, bolts |
   | `stage_08_present_pose.py` | Appearances, selection sets, the two pose moves |
   | `stage_09_test_pieces.py` | Test pieces (slices of the real bodies) |
   | `stage_10_explode.py` | `explode` parameter (0/1) and one Move per part group, for the guide pictures |
@@ -53,6 +54,9 @@ pictures come from `fusion/render_guide.py`, one shot per call.
 
 ## Verified (2026-10-21)
 
+- **Tilt home (verify_interference MODE flag):** the flag bolt meets the roller at +90°
+  (switch clicks at +97° by design) and clears the bracket and switch body by 2.3 mm even at
+  +100°; it clears the fork by 4.5 mm over −35…+100°.
 - **Lens clearance sweep** (tilt × yaw every 45°, every moving body against the objective
   plus 2 mm):
   - Back side: free to +90° (checked to +100°), at least 10.8 mm from the zone.
@@ -81,14 +85,14 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | Fork | 1 | Base underside | Bearing seat and motor seat print as horizontal holes; check them with the test pieces first. |
 | Cradle | 1 | Floor underside | Arms print upright (about 110 mm). |
 | Yaw Head | 1 | Bell underside (flat) | No supports. **Snap off the thin fin** under the spring housing after printing. |
-| Centring Plate | 1 | Underside | Domes face up. |
-| Puck | 1 per specimen | Underside (V-grooves) | Nose up. |
+| Specimen Holder | 1 | Plate underside | Centring plate + clamp column + nose in one part. Nose up. |
 | Spring Plunger | 1 | Spigot end | Tiny; use a brim. |
 | Pin Pad | 1 | Any flat face | |
 | Tilt Axle | 1 | Flange | Shank vertical, so it comes out round. |
 | Axle Spacer | 1 | Flat | |
 | Carriage Washer | 4 | Flat | |
 | Height Gauge | 1 | Underside | Steps at 17, 18, 19, 20 and 21 mm above the nose tip. |
+| Endstop Bracket | 1 | Back (flat side) | Pad side up. Pilot holes Ø1.5 for the switch's wood screws. |
 
 ## Hardware
 
@@ -97,10 +101,11 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | 28BYJ-48 + ULN2003 | 2 | Tilt (on the −Y upright), yaw (under the cradle floor) |
 | 608 bearing | 1 | +Y upright |
 | KY-024 | 1 | Under the cradle floor; bend its TO-92 flat into the floor pocket, legs into the slot |
-| Magnet Ø5.7 × 1.8 | 1 + 3 + 3 per puck | Hub underside, plate top, puck underside (mind the poles: plate and puck must attract) |
+| Magnet Ø5.7 × 1.8 | 1 | Hub underside (yaw home) |
 | Pen spring (4.6 / 19) | 1 | Spring housing, behind the plunger |
 | M3 × 17.5 + nut | 5 | Base to carriage (4, with printed washers), tilt home flag (1) |
-| M3 × 11.8 + nut | 9 | Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pad screw (1), hub set screw (1) |
+| M3 × 11.8 + nut | 11 | Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pad screw (1), hub set screw (1), endstop bracket (2) |
+| Roller microswitch + 2 wood screws Ø1.9 | 1 | On the endstop bracket, pivot end towards +X (camera), pins down; glue as well |
 | M3 × 27.7 + nut | 1 | Tilt axle (assumes about 25.8 under the head) |
 
 All screws are button heads, turned with a 2 mm hex key; no knobs. Yaw turns each centring
@@ -130,7 +135,8 @@ in `exports/final/`.
 | `tp-axle-socket` | The printed axle's spigot fits; the nut presses into its pocket. |
 | `tp-cradle-floor` | Yaw motor boss, ear bolts, KY-024 bolt and board seat, sensor pocket and lead slot. |
 | `yaw-head` | Fits the yaw shaft; set screw nut, centring nuts, magnet and spring go in; the fin snaps off cleanly. |
-| `centring-plate` + `puck` | The puck clicks onto the domes in all three positions and doesn't rock; the magnets hold. |
+| `specimen-holder` | Slides freely in the ring between the screw tips and the plunger; the pin passes through the nose hole. |
+| `endstop-bracket` | Bolts to the +Y upright; the switch's holes line up with the pilot holes and the wood screws bite. |
 | `tilt-axle` + `axle-spacer` | The axle slips through the 608; the spacer slides over the axle. |
 | `pin-pad`, `spring-plunger` | The pad slides into its pocket and clamps pins 00 to 1; the plunger slides in its bore. |
 
@@ -139,8 +145,7 @@ Fit parameters to adjust if a test fails: `fit_press` (608 seat), `fit_D` (D-bor
 
 ## Open
 
-- **Tilt home endstop bracket:** the two bracket holes in the +Y upright (`brk_X`, `brk_Z1`,
-  `brk_Z2`) and the flag bolt through the +Y arm (`flag_Z`) are modelled; the flag passes the
-  switch position at about +95°. The bracket needs the endstop's measurements: board size,
-  hole spacing and diameter, lever position and travel.
+- **Endstop click angle:** modelled at `home_t` = 97° from the measured click height (P2).
+  Check it on the rig; if the switch clicks early or late, change `home_t` (or shim the
+  switch) and re-export the bracket.
 - **Final print:** `exports/final/` is exported. Print it once the test pieces pass.

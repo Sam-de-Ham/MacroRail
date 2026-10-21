@@ -7,11 +7,11 @@ importlib.reload(scanhelp)
 from scanhelp import *  # noqa
 
 GROUPS = [
-    ('Puck', (0, 0, 92), ['Puck', 'REF Puck Magnet 1', 'REF Puck Magnet 2', 'REF Puck Magnet 3', 'REF Pin', 'REF Insect']),
-    ('Pad', (16, 0, 92), ['Pin Pad']),
-    ('Pad Screw', (34, 0, 92), ['REF Pad Screw']),
-    ('Pad Nut', (0, 16, 92), ['REF Pad Nut']),
-    ('Plate', (0, 0, 62), ['Centring Plate', 'REF Plate Magnet 1', 'REF Plate Magnet 2', 'REF Plate Magnet 3']),
+    ('Pin', (0, 0, 90), ['REF Pin', 'REF Insect']),
+    ('Holder', (0, 0, 62), ['Specimen Holder']),
+    ('Pad', (16, 0, 62), ['Pin Pad']),
+    ('Pad Screw', (34, 0, 62), ['REF Pad Screw']),
+    ('Pad Nut', (0, 16, 62), ['REF Pad Nut']),
     ('Screw X', (30, 0, 32), ['REF Screw X']),
     ('Screw Y', (0, 30, 32), ['REF Screw Y']),
     ('Head Nuts', (0, 0, 44), ['REF Nut X', 'REF Nut Y']),
@@ -28,6 +28,11 @@ GROUPS = [
     ('Bearing', (0, 40, 0), ['REF 608 Bearing']),
     ('Flag Bolt', (0, -18, 0), ['REF Flag Bolt']),
     ('Flag Nut', (0, 14, 0), ['REF Flag Nut']),
+    ('Endstop Bracket', (0, 30, -75), ['Endstop Bracket']),
+    ('Switch', (0, 14, -75), ['REF Switch', 'REF Switch Roller']),
+    ('Wood Screws', (0, -2, -75), ['REF Wood Screw 1', 'REF Wood Screw 2']),
+    ('Bracket Bolts', (0, 50, -75), ['REF Bracket Bolt 1', 'REF Bracket Bolt 2']),
+    ('Bracket Nuts', (0, -5, -75), ['REF Bracket Nut 1', 'REF Bracket Nut 2']),
     ('Fork', (0, 0, -75), ['Fork']),
     ('Carriage Bolts', (0, 0, -45), ['REF Carriage Bolt 1', 'REF Carriage Bolt 2', 'REF Carriage Bolt 3', 'REF Carriage Bolt 4',
                                      'REF Carriage Bolt Head 1', 'REF Carriage Bolt Head 2', 'REF Carriage Bolt Head 3', 'REF Carriage Bolt Head 4']),

@@ -1,7 +1,7 @@
-"""Stage 06: the puck (printed base-down): base disc with three V-grooves and three magnet
-pockets underneath (kinematic seat on the plate's domes), clamp column, 45-deg tapered nose,
-pin hole on the yaw axis, pad pocket + M3 pad screw from +X with its nut slot (open to +Y).
-Plus the printed pad and reference pad screw and nut."""
+"""Stage 06: the top of the specimen holder, joined to the plate from stage 05c: neck disc,
+clamp column, 45-deg tapered nose, pin hole on the yaw axis (through the whole holder), pad
+pocket + M3 pad screw from +X with its nut slot (open to +Y). Plus the printed pad and
+reference pad screw and nut. Specimens change by swapping the pin, so the holder stays on."""
 import sys, importlib, os, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scanhelp
@@ -11,8 +11,6 @@ from scanhelp import *  # noqa
 PARAMS = [
     ('col_Y', '14', 'clamp column size across (no overhang under the nose base)'),
     ('pinHoleD', '1', 'pin hole through nose and puck (pins 00-1 = 0.30-0.40)'),
-    ('puck_V', 'bump_H - bump_R + bump_R * sqrt(2) - puck_gap + 0.12', 'V-groove depth under the puck (+0.12: the filleted dome seats without overlap)'),
-    ('puck_Vlen', '5', 'V-groove length'),
     ('z_pad', 'd_colTop + col_H / 2', 'depth of the pad screw axis'),
     ('pad_wall', '0.3', 'pin rests against the pocket wall this far past the axis'),
     ('pad_L', '4', 'pad length along X'),
@@ -26,30 +24,19 @@ PARAMS = [
 def run(_):
     for n, e, c in PARAMS:
         param(n, e, c)
-    s = sk('z', '-(d_puckBot)', 'PL Puck Bottom', 'PK 01 Puck Base')
+    s = sk('z', '-(d_puckBot)', 'PL Puck Bottom', 'PK 01 Neck')
     s.circle('0', '0', 'puck_D')
-    pk = name_new(ext(s, NEW, 'PK Base', 'puck_T', POS), 'Puck')
+    pk = body('Specimen Holder')
+    ext(s, JOIN, 'PK Neck', 'puck_T', POS, bodies=[pk])
     s = sk('z', '-(d_puckTop)', 'PL Puck Top', 'PK 02 Column')
     s.rect('-(col_X / 2)', 'col_X / 2', '-(col_Y / 2)', 'col_Y / 2')
     ext(s, JOIN, 'PK Column', 'col_H', POS, bodies=[pk])
     s = Sk(root.xZConstructionPlane, 'PK 03 Nose', ('x', 'z'))
     s.poly([('0', '-(d_colTop)'), ('nose_baseD / 2', '-(d_colTop)'), ('nose_tipD / 2', '-(d_noseTip)'), ('0', '-(d_noseTip)')])
     revolve(s, root.zConstructionAxis, JOIN, 'PK Nose', bodies=[pk])
-    s = sk('z', '-(d_puckBot)', 'PL Puck Bottom', 'PK 04 Pin Hole')
+    s = sk('z', '-(d_plateBot)', 'PL Ring Floor Top', 'PK 04 Pin Hole')
     s.circle('0', '0', 'pinHoleD')
-    ext(s, CUT, 'PK Pin Hole', 'd_puckBot - d_noseTip + 1', POS, bodies=[pk])
-    # kinematic V-groove (radial, under the bump at 90 deg), patterned x3
-    s = sk('y', 'seat_r', 'PL Seat Radius', 'PK 05 V-Groove')
-    s.poly([('-(puck_V)', '-(d_puckBot)'), ('puck_V', '-(d_puckBot)'), ('0', '-(d_puckBot - puck_V)')])
-    fv = ext_sym(s, CUT, 'PK V-Groove', 'puck_Vlen', bodies=[pk])
-    s = sk('z', '-(d_puckBot)', 'PL Puck Bottom', 'PK 06 Magnet Pocket')
-    s.circle('seat_r * cos(30 deg)', 'seat_r * sin(30 deg)', 'magPocketD')
-    fm = ext(s, CUT, 'PK Magnet Pocket', 'magPocketT', POS, bodies=[pk])
-    ci = F.circularPatternFeatures.createInput(coll([fv, fm]), root.zConstructionAxis)
-    ci.quantity = VI.createByReal(3)
-    ci.totalAngle = VI.createByString('360 deg')
-    f = F.circularPatternFeatures.add(ci)
-    f.name = 'PK Seat Pattern'
+    ext(s, CUT, 'PK Pin Hole', 'd_plateBot - d_noseTip + 1', POS, bodies=[pk])
     # pad pocket from +X face to just past the pin, screw hole, nut slot open to +Y
     s = sk('z', '-(z_pad + pad_H / 2 + padPocket_clr / 2)', 'PL Pad Pocket Bottom', 'PK 07 Pad Pocket')
     # pocket ends just past the pad; it opens to +Y so the pad slides in from the side
@@ -75,10 +62,4 @@ def run(_):
     s = sk('x', 'padNut_x + 0.2', 'PL Pad Nut', 'REF Sk Pad Nut')
     hexagon(s, '0', '-(z_pad)', 'm3_nutAF', math.pi / 6)
     name_new(ext(s, NEW, 'REF Pad Nut', 'm3_nutT', POS, profiles=s.hex_profiles()), 'REF Pad Nut')
-    s = sk('z', '-(d_puckBot)', 'PL Puck Bottom', 'REF Sk Puck Magnets')
-    s.circle('seat_r * cos(30 deg)', 'seat_r * sin(30 deg)', 'mag_D')
-    s.circle('-(seat_r * cos(30 deg))', 'seat_r * sin(30 deg)', 'mag_D')
-    s.circle('0', '-(seat_r)', 'mag_D')
-    repair(s)
-    name_all(ext(s, NEW, 'REF Puck Magnets', 'mag_T', POS), 'REF Puck Magnet')
     print(report())

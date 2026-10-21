@@ -9,10 +9,10 @@ from scanhelp import *  # noqa
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'exports')
 TEST = ['TP Bearing Seat', 'TP Motor Seat', 'TP Base Holes', 'TP Tilt D-Bore', 'TP Axle Socket',
-        'TP Cradle Floor', 'Yaw Head', 'Centring Plate', 'Puck', 'Pin Pad', 'Spring Plunger',
-        'Tilt Axle', 'Axle Spacer']
-FINAL = ['Fork', 'Cradle', 'Yaw Head', 'Centring Plate', 'Puck', 'Pin Pad', 'Spring Plunger',
-         'Tilt Axle', 'Axle Spacer', 'Carriage Washer 1', 'Height Gauge']
+        'TP Cradle Floor', 'Yaw Head', 'Specimen Holder', 'Pin Pad', 'Spring Plunger',
+        'Tilt Axle', 'Axle Spacer', 'Endstop Bracket']
+FINAL = ['Fork', 'Cradle', 'Yaw Head', 'Specimen Holder', 'Pin Pad', 'Spring Plunger',
+         'Tilt Axle', 'Axle Spacer', 'Carriage Washer 1', 'Height Gauge', 'Endstop Bracket']
 
 
 def fname(name):

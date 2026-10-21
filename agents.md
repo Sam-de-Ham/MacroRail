@@ -17,8 +17,9 @@ Keep it current: update it after every chunk of work, and prune instead of appen
   version. The v1 module is fully modelled in Fusion 360 and verified
   (`hardware/scan-module/README.md`), with an assembly and usage PDF
   (`hardware/scan-module/guide/`). STLs are exported to `exports/test-pieces/` and
-  `exports/final/`. Next: the user prints and checks the test pieces, and measures the printer
-  endstop so its bracket can be modelled (its holes and flag are already in the model).
+  `exports/final/`. The model is complete, including the tilt home switch bracket. The puck
+  was merged into the centring plate (one "specimen holder", no magnets). Next: the user
+  prints and checks the test pieces, then the final parts.
 - **Before the v1.1.0 release:** the user tests the three newest features and the items under
   **Not yet tested on hardware**. Then set the version to 1.1.0 in `pyproject.toml`, date the
   CHANGELOG, tag, and push and make a GitHub release once the user agrees.
@@ -67,14 +68,15 @@ Not a prototype: no placeholders, no band-aids. Clean, modular, and nothing more
   - **v1:** a fork module bolted to the carriage's four free holes (M3; the sample platform
     isn't fitted).
     - Tilt: direct drive by a 28BYJ-48 on one upright and a 608 in the other. The range is
-      −33° to +90° (CAD sweep), limited by the 4× objective's 12 mm working distance. An endstop
-      homes it at about +95° (holes and flag modelled; the bracket waits for measurements).
+      −33° to +90° (CAD sweep), limited by the 4× objective's 12 mm working distance. A roller
+      microswitch on a printed bracket homes it at +97°, away from the lens.
     - Yaw: a second 28BYJ-48 in the cradle floor, with the head straight on its shaft and a
       KY-024 for home.
     - Centring: one plate pushed by two M3 screws, by hand, once per specimen. It puts the
       insect where the axes cross.
-    - A removable puck (three bumps, three magnets) holds the pin in a V-groove clamp with
-      a Z screw.
+    - The specimen holder is one part: the centring plate with the pin clamp (pad screw)
+      and nose on top. The removable magnetic puck was dropped (user, 2026-10-21):
+      specimens change by swapping the pin.
   - **The app's part:** a centring wizard (4 yaw angles, a circle fit, screw turns), then a
     ring of poses per tilt, each pose a focus scan plus a stack. Focus scans (`focus/`) are
     built to be rerun at each angle.

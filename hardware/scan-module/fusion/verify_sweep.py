@@ -6,6 +6,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scanhelp
 importlib.reload(scanhelp)
 from scanhelp import *  # noqa
+
+LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'verify.log')
+
+
+def out(line):
+    """Print and append to verify.log (a timed-out MCP call loses its printed output)."""
+    print(line)
+    with open(LOG, 'a', encoding='utf-8') as f:
+        f.write(line + chr(10))
 import stage_08_present_pose as S8
 importlib.reload(S8)
 
@@ -38,7 +47,7 @@ def run(_):
                     d2 = mind(f, b)
                     if d2 < worst_fix[0]:
                         worst_fix = (d2, b.name, y)
-        print('tilt %4s: lens %.2f mm (%s @ yaw %s) | fork %.2f mm (%s @ yaw %s)' % (
+        out('tilt %4s: lens %.2f mm (%s @ yaw %s) | fork %.2f mm (%s @ yaw %s)' % (
             t, worst_lens[0], worst_lens[1], worst_lens[2], worst_fix[0], worst_fix[1], worst_fix[2]))
     pt.expression = '0 deg'
     py.expression = '0 deg'

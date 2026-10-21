@@ -12,3 +12,4 @@ firmware/.vscode/
 docs/setup-guide/setup-guide.html
 hardware/scan-module/guide/scan-module-guide.html
 CLAUDE.md
+hardware/scan-module/fusion/verify.log
