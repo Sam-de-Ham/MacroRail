@@ -240,6 +240,10 @@ def create_app(machine: Machine) -> FastAPI:
     async def preview_image(stack_id: str) -> FileResponse:
         return _image(machine.review.preview_path(stack_id))
 
+    @app.get("/api/stacks/{stack_id}/depth")
+    async def depth_image(stack_id: str, colour: bool = False) -> FileResponse:
+        return _image(machine.review.depth_path(stack_id, colour))
+
     @app.get("/api/stacks/{stack_id}/zip")
     async def stack_zip(stack_id: str) -> StreamingResponse:
         filename, chunks = machine.review.archive(stack_id)
@@ -269,5 +273,6 @@ def _image(path: Path) -> FileResponse:
     if not path.is_file():
         raise ReviewError("No such image.")
     # Stack images never change once written (a new preview replaces the file, and the UI
-    # asks for it with the stack's revision), so browsers may keep them.
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+    # asks for it by the time it was made), so browsers may keep them.
+    media_type = "image/png" if path.suffix == ".png" else "image/jpeg"
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "max-age=86400"})

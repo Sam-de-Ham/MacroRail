@@ -39,9 +39,20 @@ def test_focus_stack_takes_the_sharp_half_of_each_frame() -> None:
     left_sharp, right_sharp = blurred.copy(), blurred.copy()
     left_sharp.paste(texture.crop((0, 0, 150, 200)), (0, 0))
     right_sharp.paste(texture.crop((150, 0, 300, 200)), (150, 0))
-    result = Image.open(io.BytesIO(focus_stack([jpeg(left_sharp), jpeg(right_sharp)])))
+    stacked = focus_stack([jpeg(left_sharp), jpeg(right_sharp)], [0.0, 0.5])
+    result = Image.open(io.BytesIO(stacked.image))
     for half in ((10, 0, 140, 200), (160, 0, 290, 200)):
         assert detail(result.crop(half)) > 2 * detail(blurred.crop(half))
+    # Depth: white where the first frame was sharp, black where the second was.
+    depth = np.asarray(Image.open(io.BytesIO(stacked.depth)))
+    assert depth.dtype == np.uint16
+    assert depth.shape == (200, 300)
+    assert depth[:, :140].mean() > 0.95 * 65535
+    assert depth[:, 160:].mean() < 0.05 * 65535
+    colour = np.asarray(Image.open(io.BytesIO(stacked.depth_colour)), dtype=np.float32)
+    left, right = colour[:, :140].mean(axis=(0, 1)), colour[:, 160:].mean(axis=(0, 1))
+    assert left[0] > 2 * left[2]  # red at the first shot
+    assert right[2] > 2 * right[0]  # blue at the last
 
 
 async def stack_of(machine: Machine, name: str = "") -> str:
@@ -65,6 +76,8 @@ async def test_stack_downloads_previews_and_builds_a_preview(machine: Machine) -
     assert summary["outcome"] == "done"
     assert summary["frames"] == [1, 2, 3, 4, 5, 6]
     assert summary["preview"]
+    assert summary["depth"]
+    assert summary["depth_mm"] == 0.05  # 20 steps at 400 steps/mm
 
 
 async def test_stack_archive_holds_record_preview_and_frames(machine: Machine) -> None:
@@ -78,7 +91,8 @@ async def test_stack_archive_holds_record_preview_and_frames(machine: Machine) -
     archive = zipfile.ZipFile(io.BytesIO(b"".join(chunks)))
     assert archive.testzip() is None
     frames = [f"{base}/frames/{n:04d}.jpg" for n in range(1, 7)]
-    assert archive.namelist() == [f"{base}/stack.json", f"{base}/preview.jpg", *frames]
+    images = ["preview.jpg", "depth.png", "depth-colour.jpg"]
+    assert archive.namelist() == [f"{base}/stack.json", *(f"{base}/{i}" for i in images), *frames]
     assert archive.read(frames[0]) == machine.review.frame_path(stack_id, 1).read_bytes()
 
 
@@ -88,6 +102,7 @@ async def test_previews_can_be_turned_off(machine: Machine) -> None:
     [summary] = machine.review.stacks()
     assert summary["frames"] == []
     assert not summary["preview"]
+    assert not summary["depth"]
     with pytest.raises(ReviewError, match="no downloaded frames"):
         machine.review.archive(summary["id"])
 

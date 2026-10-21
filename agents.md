@@ -9,10 +9,12 @@ Keep it current: update it after every chunk of work, and prune instead of appen
 
 - **v1.0.0** is released and public: https://github.com/Sam-de-Ham/MacroRail.
 - **v1.1** is built, on GitHub `main`, running on the Pi and **tested on the real rig** by the
-  user (everything on the checklist passed). Two features were added after that test: incoming
-  shots in the live view and the zip download. Those are checked only in the simulator.
-- **Waiting on the user:** which of the **Candidate ideas** to build next. Don't start one unasked.
-- **Before the v1.1.0 release:** the user tests the two newest features and the items under
+  user (everything on the checklist passed). Three features were added after that test:
+  incoming shots in the live view, the zip download, and the depth map with its 3D view
+  (idea 8, committed locally on branch `claude/depth-extraction-stacking-3a2219`, not yet
+  merged or pushed). Those are checked only in the simulator.
+- **Waiting on the user:** which of the other **Candidate ideas** to build next. Don't start one unasked.
+- **Before the v1.1.0 release:** the user tests the three newest features and the items under
   **Not yet tested on hardware**. Then set the version to 1.1.0 in `pyproject.toml`, date the
   CHANGELOG, tag, and push and make a GitHub release once the user agrees.
 
@@ -46,7 +48,8 @@ Not a prototype: no placeholders, no band-aids. Clean, modular, and nothing more
   - auto start/end detection, a step-size helper (popup), a tabbed UI, camera settings;
   - stack names, small JPEG copies, review gallery with a quick preview stack, zip download,
     incoming shots in the live view;
-  - stack-done alerts, installable app (PWA), diagnostics, backlash measurement, CI upkeep.
+  - stack-done alerts, installable app (PWA), diagnostics, backlash measurement, CI upkeep;
+  - a rough depth map per preview stack (false colour, 3D relief, 16-bit PNG): idea 8.
 - **Next major version: 3D scanning** with a rotation stage. It will change the setup
   considerably, so it gets its own major version. Focus scans (`focus/`) are built to be rerun
   at each angle.
@@ -64,8 +67,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular, and nothing more
   6. HTTPS on the Pi (local certificate or Tailscale): true app install, notifications, remote access.
   7. Restart from the UI via a sudoers rule limited to this service. It changes the Pi's
      security settings, so only with the user's approval.
-  8. Depth map from each stack (sharpest-frame index = height), shown as false colour and as a
-     3D relief in the browser. Recommended first: the first step toward 3D scanning.
+  8. Depth map from each stack: **built** (2026-10-21).
   9. Multi-axis scan plans (angle × focus) for the rotation stage.
   10. Export one all-in-focus image per angle, laid out for COLMAP or Meshroom.
 
@@ -125,7 +127,7 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
   - `machine.py`, `api.py`, `config.py`, `settings.py`, `optics.py`, `diagnostics.py`,
     `control.py`, `log.py`, `__main__.py`.
   - `web/`: `index.html`, `css/app.css`, `js/` (one module per tab: `shoot`, `camera`,
-    `review`, `system`; plus `liveview`, `alerts`, `main`, `api`, `dom`, `prefs`, `toast`,
+    `review`, `system`; plus `relief` (WebGL 3D view), `liveview`, `alerts`, `main`, `api`, `dom`, `prefs`, `toast`,
     `format`), `manifest.webmanifest`, `sw.js`, `icon.svg`, `icons/` (from `scripts/make_icons.py`).
 - `tests/`: 110 tests, all against the simulator (`conftest.py` runs the sim at 25× speed).
 - `deploy/`, `scripts/deploy-dev.sh`, `docs/`, `hardware/rail/`, `.github/workflows/ci.yml`.
@@ -251,9 +253,22 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
 - **Previews and review:**
   - The runner downloads each shot's JPEG in the background, shrinks it to 1600 px into
     `stacks/<id>/frames/NNNN.jpg`, and after the stack builds `preview.jpg` (per pixel, the sharpest frame).
+  - **Depth map**, made with the preview: `depth.png` (16-bit grey, white = first shot) and
+    `depth-colour.jpg` (Turbo, red = first shot).
+    - Height = the winning frame's focus height (from the record), averaged over 1% of the
+      image weighted by sharpness. Areas under 5% of the top detail fade to the far end
+      (background), so the subject doesn't stand in a wall.
+    - Which end is nearer the camera depends on the rig and the stack direction, so the 3D
+      view has a Flip button (saved per browser), plus a height slider. True scale would need
+      the magnification in the record (idea 1).
+    - The 3D view (`relief.js`) is plain WebGL 2, no library: a 240-wide grid, the preview as
+      texture, headlamp shading from screen-space normals, drawn only on change.
+    - Research behind it: Zerene saves its DMap depth map only in Prosumer/Pro (not the
+      user's Student edition); Affinity exports none; Helicon Focus Pro exports 3D. For real
+      3D scans the field uses multi-angle stacks plus photogrammetry, not per-view depth maps.
   - During a stack the live-view panel shows the newest frame. Its pause button holds the shown
     frame (not saved, unlike the live-view pause).
-  - `GET /api/stacks/<id>/zip` streams the record, preview and frames, uncompressed and chunk by
+  - `GET /api/stacks/<id>/zip` streams the record, preview, depth maps and frames, uncompressed and chunk by
     chunk (no temp file on the SD card).
 - **Live view:** off during stacks. Each browser can pause it, which closes the stream; the
   choice is saved per browser. Tap to zoom is 3× around the tap point.
@@ -279,7 +294,8 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
 - **Not yet tested on hardware:**
   - Auto range on a real subject.
   - Camera unplug mid-stack.
-  - The two newest features: incoming shots in the live view, and the zip download.
+  - The three newest features: incoming shots in the live view, the zip download, and the
+    depth map / 3D view (seen only on the sim's dome).
 - **On the Pi:** commit `7e27aa5`'s code runs. The later commits only touched CI and these notes.
 - **Known issue:** the machine tests are timing-sensitive. With a sim server running alongside,
   2 timed out; on an idle machine all 110 pass.
