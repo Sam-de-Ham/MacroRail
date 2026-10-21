@@ -9,3 +9,4 @@ firmware/.pio/
 firmware/.vscode/
 *.local.toml
 docs/setup-guide/setup-guide.html
+hardware/scan-module/guide/scan-module-guide.html

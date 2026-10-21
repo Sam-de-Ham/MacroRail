@@ -58,6 +58,16 @@ def run(_):
     s = sk('y', 'arm_in - hubBoss_in + 0.2', 'PL Axle Nut', 'REF Sk Axle Nut')
     hexagon(s, '0', '0', 'm3_nutAF')
     name_new(ext(s, NEW, 'REF Axle Nut', 'm3_nutT', POS, profiles=s.hex_profiles()), 'REF Axle Nut')
+    # reference tilt home flag bolt + nut
+    s = sk('y', 'arm_in', 'PL Arm +Y Inner', 'REF Sk Flag Bolt')
+    s.circle('0', 'flag_Z', 'm3_D')
+    fb = name_new(ext(s, NEW, 'REF Flag Bolt Shank', 'bolt_M', POS), 'REF Flag Bolt')
+    s = sk('y', 'arm_in', 'PL Arm +Y Inner', 'REF Sk Flag Bolt Head')
+    s.circle('0', 'flag_Z', 'm3_headD')
+    ext(s, JOIN, 'REF Flag Bolt Head', 'm3_headH', NEG, bodies=[fb])
+    s = sk('y', 'arm_in + arm_T', 'PL Arm +Y Outer', 'REF Sk Flag Nut')
+    hexagon(s, '0', 'flag_Z', 'm3_nutAF')
+    name_new(ext(s, NEW, 'REF Flag Nut', 'm3_nutT', POS, profiles=s.hex_profiles()), 'REF Flag Nut')
     # carriage washers (printed) + reference bolts and nuts
     zb = '-(axis_H + carr_T)'
     s = sk('z', zb, 'PL Carriage Underside', 'WS 01 Washers')

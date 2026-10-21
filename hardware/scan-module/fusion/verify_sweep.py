@@ -7,6 +7,7 @@ import scanhelp
 importlib.reload(scanhelp)
 from scanhelp import *  # noqa
 import stage_08_present_pose as S8
+importlib.reload(S8)
 
 MM = app.measureManager
 
