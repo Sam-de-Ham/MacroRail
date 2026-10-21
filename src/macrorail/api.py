@@ -240,6 +240,15 @@ def create_app(machine: Machine) -> FastAPI:
     async def preview_image(stack_id: str) -> FileResponse:
         return _image(machine.review.preview_path(stack_id))
 
+    @app.get("/api/stacks/{stack_id}/zip")
+    async def stack_zip(stack_id: str) -> StreamingResponse:
+        filename, chunks = machine.review.archive(stack_id)
+        return StreamingResponse(
+            chunks,  # a plain iterator: written in a worker thread, chunk by chunk
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     @app.post("/api/stacks/{stack_id}/preview", status_code=204, dependencies=controlled)
     async def build_preview(stack_id: str) -> None:
         await machine.build_preview(stack_id)

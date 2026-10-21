@@ -10,7 +10,8 @@
 - Camera settings in the browser (ISO, shutter, aperture, exposure compensation, white
   balance, quality, size, focus mode) and a test shot.
 - Stack names; small JPEG copies of each shot kept on the Pi; a review gallery with a quick
-  all-in-focus preview stack.
+  all-in-focus preview stack, and a zip download of a stack's previews.
+- While a stack runs, the live-view panel shows each shot as it arrives; pause holds one.
 - Installable as an app; a chime, vibration, tab title and (over HTTPS) a notification when a
   stack ends or needs attention.
 - Diagnostics: motor driver status, link round trip, camera, and the Pi's temperature, power,

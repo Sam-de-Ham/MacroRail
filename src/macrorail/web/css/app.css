@@ -221,6 +221,7 @@ p { margin: 0; }
   cursor: pointer;
 }
 .button.grow { flex: 1; }
+a.button { text-decoration: none; }
 .button-row { display: flex; gap: 10px; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -282,7 +283,7 @@ p { margin: 0; }
   color: var(--muted);
   text-align: center;
 }
-.liveview-position, .liveview-hint {
+.liveview-position, .liveview-hint, .liveview-shot {
   position: absolute;
   bottom: 10px;
   padding: 4px 10px;
@@ -291,6 +292,7 @@ p { margin: 0; }
   font-size: 13px;
 }
 .liveview-position { left: 10px; font-family: var(--mono); }
+.liveview-shot { top: 10px; bottom: auto; left: 10px; }
 .liveview-toggle {
   position: absolute;
   top: 10px;

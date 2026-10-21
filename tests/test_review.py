@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import zipfile
 from typing import cast
 
 import numpy as np
@@ -9,6 +10,7 @@ from PIL import Image, ImageFilter
 
 from macrorail.machine import Machine, OperationError
 from macrorail.review.images import focus_stack, shrink
+from macrorail.review.store import ReviewError
 from macrorail.sim.camera import SimCamera
 
 from .conftest import homed, idle, until
@@ -65,12 +67,29 @@ async def test_stack_downloads_previews_and_builds_a_preview(machine: Machine) -
     assert summary["preview"]
 
 
+async def test_stack_archive_holds_record_preview_and_frames(machine: Machine) -> None:
+    stack_id = await stack_of(machine, name="Weevil, dorsal")
+    assert machine.stack is not None
+    assert machine.stack.latest_preview == 6
+    await until(lambda: machine.review.preview_path(stack_id).exists(), timeout=10)
+    filename, chunks = machine.review.archive(stack_id)
+    base = f"MacroRail-{stack_id}-Weevil-dorsal"
+    assert filename == f"{base}.zip"
+    archive = zipfile.ZipFile(io.BytesIO(b"".join(chunks)))
+    assert archive.testzip() is None
+    frames = [f"{base}/frames/{n:04d}.jpg" for n in range(1, 7)]
+    assert archive.namelist() == [f"{base}/stack.json", f"{base}/preview.jpg", *frames]
+    assert archive.read(frames[0]) == machine.review.frame_path(stack_id, 1).read_bytes()
+
+
 async def test_previews_can_be_turned_off(machine: Machine) -> None:
     await machine.update_settings({"camera": {"download_previews": False}})
     await stack_of(machine)
     [summary] = machine.review.stacks()
     assert summary["frames"] == []
     assert not summary["preview"]
+    with pytest.raises(ReviewError, match="no downloaded frames"):
+        machine.review.archive(summary["id"])
 
 
 async def test_running_stack_cannot_be_deleted(machine: Machine) -> None:
