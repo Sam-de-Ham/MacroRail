@@ -163,6 +163,26 @@ actuations, which is good enough to check coverage before the full run.
 - Moving the sample changes magnification slightly during a stack. DISC3D corrects this
   with calibrated scaling, which matters for true-scale models.
 
+## Setup facts from the user (2026-10-21)
+
+- **Optics:** an AmScope 4× objective on a long printed adapter tube (printables model
+  143754). Its protective front cover can come off, but that shouldn't be needed.
+- **Camera:** on a tripod on the floor, so its height and position are free. The rail is on
+  the table. The long tube never gets in the way, so the module sets the lens axis height.
+- **Rail:** the user keeps the focus point near the middle of the rail's travel (over
+  150 mm), so the rail's end blocks never matter.
+- **Specimens:** anything from aphids to grasshoppers, glued on the pin tip or pinned
+  through. The two mounts put the insect at different heights on the pin. The puck has to
+  cover both, so the insect can still be brought onto the tilt axis. The user suggested two
+  height settings, one per mount type.
+- **Lighting:** small LED panels today, plus bright LED modules on a bench supply that could
+  serve for scanning. Plan: **cross-polarisation**, which removes specular glare and helps
+  photogrammetry. Polariser film goes on each light, and an analyser sits *behind* the
+  objective, inside the adapter tube, as in a polarising microscope. In front of the
+  objective there's no room at this working distance. The analyser stays fixed and the
+  light films rotate to find extinction. The lights mount fixed relative to the camera,
+  never on the turntable.
+
 ## Open questions for the user
 
 - Lens and magnification range (these set the working distance, cradle size and tilt
