@@ -168,6 +168,36 @@ actuations, which is good enough to check coverage before the full run.
 - Moving the sample changes magnification slightly during a stack. DISC3D corrects this
   with calibrated scaling, which matters for true-scale models.
 
+## Concept sketches (proposed 2026-10-21, awaiting the user's agreement)
+
+Sketch page with options, concepts, iterations and a lens-checked 3D mock-up:
+https://claude.ai/artifact/JzWYc29WNLCKHEQN3GSxCa (private).
+
+- **User's round-2 inputs:** M3 for everything; motorise the tilt now (bearing on one
+  side, motor on the other); pen springs; insect pins 00, 0 and 1.
+- **Recommended, concept 1:**
+  - Fork: two uprights carry a U-cradle, with a 608 on one side.
+  - Tilt: a worm and gear sector (about 1:30) on the other side, driven by a 28BYJ-48.
+    It's self-locking, so the coils stay off between moves.
+  - Yaw: a coaxial 28BYJ-48 under a turntable on a second 608. The motor never rotates,
+    so yaw is unlimited in v1.
+  - Centring: one plate in a Ø40 ring, pushed by two screws and held by one spring.
+  - Pin: a V-groove clamp on a Z carrier.
+  - Puck: three-bump kinematic base.
+- **Numbers that drove it:**
+  - The cradle pulls about 80 mN·m at 90°, against the 28BYJ-48's pull-in torque of about
+    30 mN·m. Direct drive fails, and spur gears need the coils kept on.
+  - The 4× objective (12 mm working distance, 22 mm sleeve) limits belly-side tilt. A part
+    at depth d below the insect and reach w from the pin needs d − w ≥ 18 mm to reach −45°.
+  - So: 19 mm of pin above a 45° tapered nose, the clamp's screw low on the carrier, and a
+    small centring ring. The mock-up gives a belly-side limit of −36° and a free dorsal
+    side to +90°.
+  - The cradle is 85 mm deep, with the tilt axis 94 mm above the carriage.
+- **Nano pins** (2D pins untouched):
+  - Yaw: ULN2003 on D6, D10, D11 and D12; KY-024 on A0.
+  - Tilt: ULN2003 on D13, A1, A2 and A3; home switch on A4.
+- **Still needed:** a second 608, a tilt home switch, and a 5 V supply for the motors.
+
 ## Setup facts from the user (2026-10-21)
 
 Photos are in `reference-images/`.
