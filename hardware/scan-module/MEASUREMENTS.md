@@ -1,6 +1,6 @@
 # Scan module: measurements
 
-Round 1: 2026-10-21. All values in mm and measured by the user with calipers, unless marked
+Rounds 1 and 2: 2026-10-21. All values in mm and measured by the user with calipers, unless marked
 otherwise. **Never guess a dimension: ask.** Photos are in `reference-images/` at the repo
 root.
 
@@ -47,7 +47,7 @@ design uses 60 × 20.
 | T1 | Tab thickness | 0.7 |
 | O1 | Shaft centre to body centre | 8 |
 | D4 | Shaft diameter / across the flats | 5 / 3 |
-| L4 | Shaft length above the boss / length of the flats | 7.8 / 9.7 (**to confirm**: flats can't be longer than the shaft) |
+| L4 | Shaft length above the boss / length of the flats | 9.7 / 7.8 (swapped on the first sheet; confirmed) |
 | D5 / H4 | Boss diameter / height | 9 / 1.5 |
 | W2 | Blue wire box width | 14.4 (17.2 at its widest part) |
 | P2 | Wire box protrusion past the body | 3 |
@@ -59,8 +59,7 @@ The board runs on 5–12 V and has IN1–IN4 headers and a 5-pin motor socket (p
 
 | Label | Meaning | Value |
 |---|---|---|
-| d5 | Pins insects are glued onto | 0.1 (**to confirm**, see below) |
-| d6 | Insect pins, pinned through | 0.1 (same pins) |
+| d5, d6 | Insect pins, glued-tip and pinned-through (same pins) | Sizes 00, 0 and 1 on hand (nominal 0.30, 0.35, 0.40); the caliper read 0.1. Bigger pins for bigger insects. |
 | L8 | Pin length | 39.4 |
 
 ## Parts on hand
@@ -69,14 +68,14 @@ The board runs on 5–12 V and has IN1–IN4 headers and a 5-pin motor socket (p
 |---|---|
 | Bearings | 1 × 21.8 / 7.9 / 7 (a 608, from a fidget spinner). More can be found if needed. |
 | Magnets | 20 × Ø5.7 × 1.8 |
-| Compression springs | 1 × OD 6.2 / free 7.7 / wire 0.3; 1 × OD 5.8 / free 10 / wire 0.3. Pen springs available. |
+| Compression springs | Pen springs: OD 4.6 / free 19 / wire 0.5 (standard, several). 4 × 3D-printer bed springs: OD 7.8 / free 23.8 / wire 0.8 (stiff). Small ones: OD 6.2 / 7.7 / 0.3 and OD 5.8 / 10 / 0.3. |
 | Hall sensor | KY-024 linear hall board (49E-type sensor on leads, comparator with pot, D0 and A0 outputs, one mounting hole) |
 | Steel balls | None |
 | Polariser film | Plastic sheets that can be cut |
 | Bench supply | 30 V / 10 A |
 | M3 bolts | From the lens-mount project: button head, head Ø5.2 × 1.9; lengths 11.8, 17.5 (under head, confirmed there), 19.4, 27.7 (unclear whether under-head). Counts unknown. |
 | M3 nuts | From the lens-mount project: plain, 5.2 across flats (standard is 5.5) × 2.2. A 5.7 AF × 2.6 deep pocket fit them. |
-| M4 bolts and nuts | **Not in lens-mount: to ask.** The rail's assembly notes list 4 × M4 × 16 + nuts for the sample platform, which isn't fitted. |
+| M4 bolts and nuts | Not used: **M3 for everything** (user, plenty of M3 bolts and nuts). M3 with washers through the carriage's Ø4.5 holes. |
 
 Lighting (COB LEDs, panels, heatsinks): deferred by the user.
 
@@ -102,20 +101,10 @@ Lighting (COB LEDs, panels, heatsinks): deferred by the user.
 
 ## Still to measure / confirm
 
-- [ ] L4: shaft length above the boss, and the length of the flats. 9.7 for the flats
-      is longer than the 7.8 shaft.
-- [ ] Pin diameter: 0.1 is the thickness of a hair, very thin for a 39.4 mm pin (normal
-      insect pins are 0.25–0.7). Is there a size number on the box (000, 00, 0, 1, 2…)?
-      The pin clamp grips 0.1–0.7 either way, so this doesn't block the design.
-- [ ] M4 bolts: are the 4 × M4 × 16 from the sample platform free? Length under the
-      head, head type, nuts.
-- [ ] M3 counts per length. Three ≥ 25 under the head are needed for the X, Y and Z
-      thumbscrews.
-- [ ] A second 608 bearing: two bearings 10–15 apart stop the turntable rocking. One is
-      enough to start; the centring wizard will show any wobble.
-- [ ] Three longer compression springs (pen springs, ≥ 15 free length) for X, Y and Z.
-      The two on hand are too short for ±3 of travel.
-- [ ] KY-024 board size and hole position (later, when the home sensor is designed).
+- [ ] A second 608 bearing (or a pack). Tilt and yaw each need one: see the sketch page.
+- [ ] Tilt home: an endstop microswitch (for example from the old printer), or a second hall board.
+- [ ] KY-024 board size and hole position (when the home sensors are designed).
 - [ ] 2× setup: working distance and field width (optional).
-- [x] Objective front, field of view, carriage holes, 28BYJ-48, ULN2003, magnets, springs
-      on hand, hall sensor type (round 1).
+- [x] L4 shaft (9.7) and flats (7.8); pin sizes; fasteners (M3 throughout); springs (round 2).
+- [x] Objective front, field of view, carriage holes, 28BYJ-48, ULN2003, magnets, hall
+      sensor type (round 1).
