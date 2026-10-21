@@ -60,7 +60,11 @@ private page: https://claude.ai/artifact/Rirv3GTEdBBLdavVmZ82GV
 
 ## Decision: v1
 
-A module that bolts to the sample platform (4 × M4 on the 60 × 20 mm pattern):
+A module that bolts straight onto the carriage. The rig runs without the 80 × 80 sample
+platform. The carriage's four free M4 holes are the ones meant for that platform: a
+60 × 20 mm pattern at the carriage centre, 60 mm along the rail and 20 mm across, 4.5 mm
+diameter (from `03_carriage.stl`). They clear the nut carrier and the bearing blocks
+underneath, so M4 bolts with nuts below fit.
 
 | Part | v1 | Notes |
 |---|---|---|
@@ -68,7 +72,8 @@ A module that bolts to the sample platform (4 × M4 on the 60 × 20 mm pattern):
 | Yaw (about the pin) | **Motor**: 28BYJ-48 + ULN2003 | Drives a turntable on its own bearing (see below). Hall sensor home. ±185° travel with a cable loop, so no slip ring. |
 | Tilt (about the sideways axis) | **By hand** | Index pin in holes at −30°, 0°, 30°, 60°, 90°. Exact angles don't matter: SfM solves the camera poses. Tilting the belly toward the lens swings the cradle into it, so that side stops near −35°. |
 | Centring X/Y | **By hand**: two printed dovetail slides, captive M3 screws, ±3 mm | 0.5 mm per turn; a quarter turn is 0.125 mm, and ±0.2 mm is plenty. Spring preload so they can't rattle. |
-| Height | Pin collet + printed gauge | Puts the insect on the tilt axis. |
+| Height | Coarse: the pin slides in a clamp on the puck, set with a printed gauge. Fine: a third M3 thumbscrew (Z, ±3 mm) | Puts the insect on the tilt axis. One clamp covers both glued-tip and pinned-through specimens, because the coarse setting takes up the different heights on the pin. |
+| Slide preload | Compression springs (pen springs) | Push each slide against its screw tip, so there is no play. |
 | Specimen | Puck on a 3-ball magnetic kinematic base | Swaps in seconds; it goes back in the same place, so the centring is kept. |
 
 Why tilt about the sideways axis: tilt then moves things only in depth and vertically.
@@ -165,27 +170,33 @@ actuations, which is good enough to check coverage before the full run.
 
 ## Setup facts from the user (2026-10-21)
 
-- **Optics:** an AmScope 4× objective on a long printed adapter tube (printables model
-  143754). Its protective front cover can come off, but that shouldn't be needed.
+Photos are in `reference-images/`.
+
+- **Optics:** an AmScope Plan 4/0.10 objective (160 mm tube length, 0.17 mm cover glass),
+  on a long printed adapter tube (printables model 143754). Its spring-loaded protective
+  front sleeve can come off, but that shouldn't be needed. NA 0.10 gives a depth of field
+  of about 65 µm by the step helper's formula, so a step of about 30 µm.
 - **Camera:** on a tripod on the floor, so its height and position are free. The rail is on
   the table. The long tube never gets in the way, so the module sets the lens axis height.
+  The camera looks along the rail from the motor end.
 - **Rail:** the user keeps the focus point near the middle of the rail's travel (over
   150 mm), so the rail's end blocks never matter.
 - **Specimens:** anything from aphids to grasshoppers, glued on the pin tip or pinned
-  through. The two mounts put the insect at different heights on the pin. The puck has to
-  cover both, so the insect can still be brought onto the tilt axis. The user suggested two
-  height settings, one per mount type.
-- **Lighting:** small LED panels today, plus bright LED modules on a bench supply that could
-  serve for scanning. Plan: **cross-polarisation**, which removes specular glare and helps
-  photogrammetry. Polariser film goes on each light, and an analyser sits *behind* the
-  objective, inside the adapter tube, as in a polarising microscope. In front of the
-  objective there's no room at this working distance. The analyser stays fixed and the
-  light films rotate to find extinction. The lights mount fixed relative to the camera,
-  never on the turntable.
+  through. At 4× the frame is about 5.9 × 3.9 mm, which F1 will confirm. Anything longer
+  than about 5 mm needs tiling (phase 4) or a lower-magnification lens for a whole-body
+  scan. The module still has to clear a large specimen as it rotates.
+- **Lighting:** two small LED panels today, plus bright 10 W COB LED modules for a bench
+  supply. The COBs need a heatsink, and current limiting (the supply's constant-current
+  mode, or a driver). Plan: **cross-polarisation**, which removes specular glare and helps
+  photogrammetry.
+  - Linear polariser film goes on each light, and an analyser sits *behind* the objective,
+    inside the adapter tube, as in a polarising microscope. In front of the objective
+    there's no room at this working distance, and the film would sit in the image path.
+  - The analyser stays fixed, and the light films are turned until the glare is gone.
+  - The lights mount fixed relative to the camera, never on the turntable.
 
 ## Open questions for the user
 
-- Lens and magnification range (these set the working distance, cradle size and tilt
-  limits).
-- Typical specimen length; glued to the pin tip or pinned through the thorax?
+- The measurement sheet (round 2): the objective's front geometry and working distance,
+  F1 (real field of view), the 28BYJ-48, pins, the COB LEDs, and parts on hand.
 - Parts from the earlier rotate-and-tilt build that could be reused.
