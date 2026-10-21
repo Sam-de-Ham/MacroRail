@@ -1,0 +1,177 @@
+"""Stage 01: every user parameter. MEAS = measured (hardware/scan-module/MEASUREMENTS.md),
+REF = reference only (not measured, never drives a printed fit), else design values.
+Coordinates: origin = insect (where the yaw and tilt axes cross), X = lens axis towards the
+camera, Y = tilt axis, Z up. d_* are depths below the insect."""
+import sys, importlib, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import scanhelp
+importlib.reload(scanhelp)
+from scanhelp import *  # noqa
+
+P = [
+    # --- objective (MEAS) ---
+    ('obj_WD', '12', 'MEAS A1 working distance, sleeve front to subject'),
+    ('obj_sleeveD', '21.9', 'MEAS D1 sleeve diameter'),
+    ('obj_L1', '18.2', 'MEAS L1 sleeve front to knurled ring'),
+    ('obj_knurlD', '23.4', 'MEAS D2 knurled ring diameter'),
+    ('obj_L2', '30.5', 'MEAS L2 sleeve front to adapter tube'),
+    ('obj_adapterD', '29.8', 'MEAS D3 adapter tube diameter'),
+    ('obj_tubeL', '60', 'REF adapter tube length shown'),
+    ('lens_clr', '2', 'keep-out margin around the objective'),
+    # --- carriage ---
+    ('carr_hx', '60', 'MEAS C1 free holes along rail (59.5 measured, CAD 60)'),
+    ('carr_hy', '20', 'MEAS C2 free holes across rail (20.5 measured, CAD 20)'),
+    ('carr_holeD', '4.5', 'REF carriage hole diameter (03_carriage.stl)'),
+    ('carr_headH', '1.3', 'MEAS C3 bearing-block screw head height'),
+    ('carr_T', '6', 'REF carriage plate thickness (STL)'),
+    ('carr_LX', '110', 'REF carriage length along rail (STL)'),
+    ('carr_LY', '134', 'REF carriage width (STL)'),
+    ('carr_yOff', '5', 'REF carriage centre offset in Y from the hole pattern (STL)'),
+    ('carr_headX1', '31', 'REF bearing-block screw X (STL)'),
+    ('carr_headX2', '49', 'REF bearing-block screw X (STL)'),
+    ('carr_headY1', '28', 'REF bearing-block screw Y (STL)'),
+    ('carr_headY2', '52', 'REF bearing-block screw Y (STL)'),
+    ('carr_headD', '7', 'REF M4 pan head diameter (approx, reference only)'),
+    # --- 28BYJ-48 (MEAS) ---
+    ('byj_D', '28', 'MEAS D3 motor body diameter'),
+    ('byj_H', '19', 'MEAS H3 body height under tabs to back'),
+    ('byj_tabS', '35', 'MEAS S2 tab hole spacing'),
+    ('byj_tabHoleD', '4.2', 'MEAS d1 tab hole diameter'),
+    ('byj_tabT', '0.7', 'MEAS T1 tab thickness'),
+    ('byj_off', '8', 'MEAS O1 shaft offset from body centre'),
+    ('byj_shaftD', '5', 'MEAS D4 shaft diameter'),
+    ('byj_flat', '3', 'MEAS D4 across the flats'),
+    ('byj_shaftL', '9.7', 'MEAS L4 shaft length above boss'),
+    ('byj_flatL', '7.8', 'MEAS L4 flats length'),
+    ('byj_bossD', '9', 'MEAS D5 boss diameter'),
+    ('byj_bossH', '1.5', 'MEAS H4 boss height'),
+    ('byj_boxW', '14.4', 'MEAS W2 wire box width'),
+    ('byj_boxP', '3', 'MEAS P2 wire box protrusion'),
+    ('byj_earR', '3.5', 'REF motor tab ear radius (approx, reference only)'),
+    ('byj_boxH', '16', 'REF wire box height (approx, reference only)'),
+    # --- bearing, magnets, springs, pins ---
+    ('brg_OD', '21.8', 'MEAS 608 outer diameter (nominal 22)'),
+    ('brg_ID', '7.9', 'MEAS 608 bore (nominal 8)'),
+    ('brg_W', '7', 'MEAS 608 width'),
+    ('mag_D', '5.7', 'MEAS magnet diameter'),
+    ('mag_T', '1.8', 'MEAS magnet thickness'),
+    ('magPocketD', 'mag_D + 0.2', 'magnet pocket diameter'),
+    ('magPocketT', 'mag_T + 0.1', 'magnet pocket depth'),
+    ('spr_OD', '4.6', 'MEAS pen spring outer diameter'),
+    ('spr_L', '19', 'MEAS pen spring free length'),
+    ('pin_L', '39.4', 'MEAS insect pin length'),
+    ('pin_D', '0.4', 'REF size 1 pin, nominal (00 = 0.30)'),
+    ('insect_D', '4', 'REF insect stand-in diameter'),
+    # --- M3 hardware (lens-mount project) ---
+    ('m3_D', '3', 'REF M3 nominal'),
+    ('m3_clr', '3.4', 'lens-mount validated M3 clearance hole'),
+    ('m3_nutAF', '5.2', 'MEAS M3 nut across flats'),
+    ('m3_nutT', '2.2', 'MEAS M3 nut thickness'),
+    ('m3_pocketAF', '5.7', 'lens-mount validated nut pocket across flats'),
+    ('m3_pocketT', '2.6', 'lens-mount validated nut pocket depth'),
+    ('m3_headD', '5.2', 'MEAS M3 button head diameter'),
+    ('m3_headH', '1.9', 'MEAS M3 button head height'),
+    ('bolt_S', '11.8', 'MEAS short M3 bolt length'),
+    ('bolt_M', '17.5', 'MEAS M3 bolt length under head'),
+    ('cb_D', '6.2', 'M3 button head counterbore diameter'),
+    ('cb_H', '2.2', 'M3 button head counterbore depth'),
+    # --- KY-024 (MEAS) ---
+    ('ky_L', '34.5', 'MEAS KY-024 board length'),
+    ('ky_W', '15.2', 'MEAS KY-024 board width'),
+    ('ky_T', '13', 'MEAS KY-024 thickness incl. potentiometer'),
+    ('ky_holeY', '8.3', 'MEAS KY-024 hole centre from pin end'),
+    ('ky_pcbT', '1.6', 'REF PCB thickness (standard)'),
+    ('to92_T', '1.6', 'REF TO-92 thickness'),
+    ('to92_W', '4.2', 'REF TO-92 width'),
+    ('to92_H', '4.6', 'REF TO-92 height'),
+    # --- fits ---
+    ('fit_press', '0.25', 'bearing seat diameter allowance (test piece)'),
+    ('fit_D', '0.2', 'D-shaft bore clearance on diameter'),
+    ('fit_slide', '0.4', 'sliding fit, total (lens-mount validated)'),
+    ('gap', '1', 'general running gap between moving and fixed parts'),
+    # --- stack under the insect ---
+    ('pin_exp', '19', 'pin exposed above the nose tip (lens clearance rule d - w >= 18)'),
+    ('nose_L', '10', 'tapered nose length'),
+    ('nose_tipD', '5', 'nose tip diameter'),
+    ('nose_baseD', '14', 'nose base diameter'),
+    ('col_H', '8', 'clamp column height'),
+    ('col_X', '16', 'clamp column size along the pad screw'),
+    ('col_Y', '12', 'clamp column size across'),
+    ('puck_D', '22', 'puck base diameter'),
+    ('puck_T', '6', 'puck base thickness'),
+    ('puck_gap', '0.5', 'gap between puck and centring plate (kinematic seat)'),
+    ('plate_D', '26', 'centring plate diameter'),
+    ('plate_T', '6', 'centring plate thickness (room for the 4 mm rim V that captures the screw ends)'),
+    ('cx_travel', '2.5', 'centring travel each way'),
+    ('rimV', '2', 'plate rim V-groove depth (90 deg, 4 mm wide at the rim)'),
+    ('ring_wall', '5.5', 'centring ring wall (holds the M3 nuts)'),
+    ('ring_floorT', '2', 'centring ring floor'),
+    ('ring_wallH', 'plate_T + 2', 'centring ring wall height above its floor'),
+    ('hub_D', '18', 'yaw hub diameter'),
+    ('hub_H', '7', 'yaw hub height'),
+    ('floor_T', '4', 'cradle floor thickness'),
+    ('d_noseTip', 'pin_exp', 'depth of nose tip'),
+    ('d_colTop', 'd_noseTip + nose_L', 'depth of column top'),
+    ('d_puckTop', 'd_colTop + col_H', 'depth of puck base top'),
+    ('d_puckBot', 'd_puckTop + puck_T', 'depth of puck bottom'),
+    ('d_plateTop', 'd_puckBot + puck_gap', 'depth of plate top'),
+    ('d_plateBot', 'd_plateTop + plate_T', 'depth of plate bottom = ring floor top'),
+    ('d_hubTop', 'd_plateBot + ring_floorT', 'depth of ring underside = hub top'),
+    ('d_hubBot', 'd_hubTop + hub_H', 'depth of hub bottom'),
+    ('d_floorTop', 'd_hubBot + gap', 'depth of cradle floor top'),
+    ('d_floorBot', 'd_floorTop + floor_T', 'depth of floor underside = yaw motor front face'),
+    ('d_motorBot', 'd_floorBot + byj_H', 'depth of yaw motor back'),
+    ('ring_ID', 'plate_D + 2 * cx_travel + 1', 'centring ring inner diameter'),
+    ('ring_OD', 'ring_ID + 2 * ring_wall', 'centring ring outer diameter'),
+    # --- tilt axis / fork ---
+    ('axis_H', '95', 'tilt axis height above carriage top (cradle swing radius + clearance + base)'),
+    ('base_T', '6', 'base plate thickness'),
+    ('base_LX', '72', 'base plate length along rail'),
+    ('base_LY', '120', 'base plate width across rail'),
+    ('arm_in', '33', 'cradle arm inner face |Y| (clears the centring knobs)'),
+    ('arm_T', '6', 'cradle arm thickness'),
+    ('arm_W', '20', 'cradle arm width along X'),
+    ('arm_top', '45', 'cradle arm top above axis (counterweight block)'),
+    ('hubBoss_D', '16', 'tilt hub/axle boss diameter on the arms'),
+    ('hubBoss_in', '4', 'tilt hub boss inward extension'),
+    ('up_T', '6', 'upright thickness'),
+    ('up_W', '32', 'upright width along X'),
+    ('up_in', 'arm_in + arm_T + gap', 'upright inner face |Y|'),
+    ('brg_lip', '2', 'bearing seat lip (inner side)'),
+    ('brg_lipD', '15', 'bearing lip hole (clears inner race)'),
+    ('brg_boss', 'brg_OD + 8', 'bearing housing diameter'),
+    ('tiltHoleD', 'byj_bossD - 2', 'shaft clearance hole through upright / floor'),
+    ('boss_clr', '0.4', 'motor boss recess clearance on diameter'),
+    ('rib_T', '4', 'upright gusset thickness'),
+    ('rib_X', 'up_W / 2 - rib_T / 2', 'gusset position along X'),
+    ('rib_H', '52', 'gusset height above base'),
+    ('pocket_clr', '1', 'clearance around carriage screw heads'),
+    ('cw_holeD', '8.3', 'counterweight hole (8 mm rod offcut)'),
+    ('cw_Z', '38', 'counterweight hole height above axis'),
+    # --- cradle ---
+    ('floor_back', 'byj_off + byj_D / 2 + byj_boxP + 2', 'floor extends behind the yaw motor wire box'),
+    ('floor_front', 'ky_x0 + ky_W + 2', 'floor extends past the KY-024 board'),
+    ('tiltBoreDepth', '(arm_in + arm_T) - (up_in + up_T - byj_bossH - byj_shaftL) + 0.5', 'D-bore depth for the tilt motor shaft'),
+    ('axle_spigotD', '6', 'tilt axle spigot into the +Y arm'),
+    ('axle_spigotL', '3', 'tilt axle spigot length'),
+    ('ky_pocketT', '1.2', 'pocket under the KY-024 for solder joints'),
+    ('ky_border', '1.2', 'KY-024 rests on this border'),
+    # --- KY-024 placement under the floor ---
+    ('ky_x0', '12', 'board edge nearest the yaw axis, X'),
+    ('ky_y0', '4.5', 'board sensor end, Y (board runs towards -Y)'),
+    ('ky_sensR', '11', 'hall sensor (lying flat) and hub magnet centre, radius from the yaw axis'),
+    ('sens_pocket', '1.4', 'floor pocket the flat-lying TO-92 sits in'),
+]
+
+ORDER_FIX = ['ky_x0', 'ky_y0', 'ky_sensR']  # needed before floor_front
+
+
+def run(_):
+    first = [p for p in P if p[0] in ORDER_FIX]
+    for n, e, c in first + [p for p in P if p[0] not in ORDER_FIX]:
+        param(n, e, c)
+    for n, c in [('pose_tilt', 'POSE tilt angle (+ = back of the insect towards the camera)'),
+                 ('pose_yaw', 'POSE yaw angle')]:
+        if not des.userParameters.itemByName(n):
+            des.userParameters.add(n, VI.createByString('0 deg'), 'deg', c)
+    print('parameters', des.userParameters.count)
