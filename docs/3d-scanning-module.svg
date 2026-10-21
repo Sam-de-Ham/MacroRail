@@ -49,8 +49,10 @@
   <!-- cradle bottom -->
   <rect x="323" y="285" width="114" height="16" rx="2" fill="#7fa9b6" stroke="#4f7f8d"/>
   <!-- yaw motor -->
-  <rect x="325" y="233" width="110" height="52" rx="3" fill="#3a4145"/>
-  <text x="380" y="264" font-size="11" fill="#ffffff" text-anchor="middle">yaw motor</text>
+  <rect x="344" y="248" width="73" height="37" rx="3" fill="#3a4145"/>
+  <text x="380" y="271" font-size="10.5" fill="#ffffff" text-anchor="middle">28BYJ-48</text>
+  <rect x="333" y="233" width="94" height="15" rx="2" fill="#9aa4a6" stroke="#5b6a65"/>
+  <text x="380" y="244" font-size="9.5" fill="#1d2a27" text-anchor="middle">turntable bearing</text>
   <rect x="437" y="270" width="10" height="12" fill="#c7781a"/>
   <!-- centring slides -->
   <rect x="341" y="220" width="78" height="13" fill="#e7ecea" stroke="#5b6a65"/>
@@ -125,7 +127,7 @@
     <text x="895" y="212"><tspan font-weight="700">4 Tilt by hand</tspan>: index pin in</text>
     <text x="895" y="230" fill="#5b6a65">holes at −30, 0, 30, 60, 90°.</text>
     <text x="895" y="254"><tspan font-weight="700">5 Cradle</tspan> swings about the tilt axis.</text>
-    <text x="895" y="278"><tspan font-weight="700">6 Yaw motor</tspan>: NEMA 17 + TMC2209,</text>
+    <text x="895" y="278"><tspan font-weight="700">6 Yaw</tspan>: 28BYJ-48 + ULN2003, own bearing,</text>
     <text x="895" y="296" fill="#5b6a65">hall home, ±185° cable loop.</text>
     <text x="895" y="320"><tspan font-weight="700">7 Centring slides</tspan> X and Y,</text>
     <text x="895" y="338" fill="#5b6a65">captive M3 thumbscrews, ±3 mm.</text>
@@ -200,13 +202,13 @@
   <!-- ===== versions ===== -->
   <rect x="40" y="722" width="550" height="92" rx="6" fill="#f6f9f8" stroke="#c9d4d0"/>
   <text x="56" y="746" font-size="13.5" font-weight="700" fill="#1d2a27">v1, build now</text>
-  <text x="56" y="768" font-size="12.5" fill="#1d2a27">Motors: rail (existing) + yaw. Yaw driver on the same UART bus (address 1).</text>
+  <text x="56" y="768" font-size="12.5" fill="#1d2a27">Motors: rail (existing) + yaw (28BYJ-48 on a ULN2003, coils off between moves).</text>
   <text x="56" y="786" font-size="12.5" fill="#1d2a27">By hand: X/Y centring screws, tilt index pin. Fits the current Nano.</text>
-  <text x="56" y="804" font-size="12.5" fill="#5b6a65">Nano pins: yaw STEP D6, DIR D10, EN D11, home A0.</text>
+  <text x="56" y="804" font-size="12.5" fill="#5b6a65">Nano pins: yaw IN1–IN4 on D6, D10, D11, D12; home A0. 2D mode unchanged.</text>
   <rect x="610" y="722" width="550" height="92" rx="6" fill="#f6f9f8" stroke="#c9d4d0" stroke-dasharray="5 4"/>
   <text x="626" y="746" font-size="13.5" font-weight="700" fill="#1d2a27">v2, later</text>
   <text x="626" y="768" font-size="12.5" fill="#1d2a27">2 × 28BYJ-48 + ULN2003 turn the same captive screws; tilt gets a motor.</text>
-  <text x="626" y="786" font-size="12.5" fill="#1d2a27">The wizard then centres with no hands. Needs ~11 more pins:</text>
+  <text x="626" y="786" font-size="12.5" fill="#1d2a27">The wizard then centres with no hands. Needs 11 more pins:</text>
   <text x="626" y="804" font-size="12.5" fill="#5b6a65">move to an Arduino Mega 2560 (same firmware toolchain, hardware UARTs).</text>
   </g>
 </svg>

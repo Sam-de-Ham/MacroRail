@@ -11,11 +11,11 @@ Keep it current: update it after every chunk of work, and prune instead of appen
 - **v1.1** is built, on GitHub `main`, running on the Pi and **tested on the real rig** by the
   user (everything on the checklist passed). Three features were added after that test:
   incoming shots in the live view, the zip download, and the depth map with its 3D view
-  (idea 8, committed locally on branch `claude/depth-extraction-stacking-3a2219`, not yet
-  merged or pushed). Those are checked only in the simulator.
+  (idea 8, on local `main` as `73f2b65`, not pushed). Those are checked only in the simulator.
 - **Waiting on the user:** which of the other **Candidate ideas** to build next. Don't start one unasked.
-- **3D scanning:** the design direction is chosen (`docs/3d-scanning.md`). The next step is
-  sizing the module, which needs the user's lens, magnification range and specimen size.
+- **3D scanning:** all work happens on branch `3d-scanning`; `main` stays the working 2D
+  version. The design direction is chosen (`docs/3d-scanning.md`). Next: the user's
+  measurements, then sizing and modelling the module together.
 - **Before the v1.1.0 release:** the user tests the three newest features and the items under
   **Not yet tested on hardware**. Then set the version to 1.1.0 in `pyproject.toml`, date the
   CHANGELOG, tag, and push and make a GitHub release once the user agrees.
@@ -55,15 +55,21 @@ Not a prototype: no placeholders, no band-aids. Clean, modular, and nothing more
   - a rough depth map per preview stack (false colour, 3D relief, 16-bit PNG): idea 8.
 - **Next major version: 3D scanning.** Design direction chosen with the user (2026-10-21),
   not built yet. Full write-up and diagram: `docs/3d-scanning.md`.
-  - **v1:** a module on the sample platform. Yaw is motorised (NEMA 17 + TMC2209 on the same
-    UART bus). Tilt is set by hand with an index pin (−30…90°). The insect is centred by hand
+  - **2D stays exactly as it is (user rule).** The app gets a 2D/3D mode switch. In 2D mode,
+    UI, behaviour, defaults and the rail firmware's behaviour stay identical to today. Any
+    change that shows in 2D is proposed to the user first, and made only once agreed. The
+    rule and its consequences are in `docs/3d-scanning.md`.
+  - **v1:** a module on the sample platform. Yaw is motorised: a 28BYJ-48 on a ULN2003
+    board, on a turntable with its own bearing. Tilt is set by hand with an index pin (−30…90°). The insect is centred by hand
     on two M3-screw cross-slides, so its centre sits where the axes cross; it is centred
     once per specimen. A specimen puck sits on a magnetic kinematic base.
   - **The app's part:** a centring wizard (4 yaw angles, a circle fit, screw turns), then a
     ring of poses per tilt, each pose a focus scan plus a stack. Focus scans (`focus/`) are
     built to be rerun at each angle.
-  - **v2:** 28BYJ-48 motors on the same screws, plus a tilt motor. That needs more pins
+  - **v2:** two more 28BYJ-48s on the same screws, plus a tilt motor. That needs more pins
     than the Nano has, so it means moving to an Arduino Mega 2560.
+  - **How we work on it (user):** together, step by step. Plan, measure, model in CAD, print,
+    program, calibrate.
 - **Deferred:** 3D printer as the motion source (Marlin, a new `Axis`), relay shutter trigger
   (D9 reserved, a new `Camera`), one-click flashing, PCB.
 - **Not wanted for now (user):** focus peaking, sharpness meter, lens profiles, grid overlay,
