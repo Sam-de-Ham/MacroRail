@@ -56,6 +56,11 @@ port="$(sed -n 's/^port *= *\([0-9]\+\).*/\1/p' "$config" | tail -n 1)"
 url="http://$host:${port:-8000}"
 
 if (( autostart )); then
+  # A copy started by hand would hold the port, the controller and the camera.
+  if pkill -f "^$repo/\.venv/bin/python"; then
+    step "Stopped MacroRail that was started by hand"
+    sleep 2
+  fi
   sudo systemctl enable macrorail >/dev/null
   sudo systemctl restart macrorail
   step "MacroRail is running at $url and starts on boot"
