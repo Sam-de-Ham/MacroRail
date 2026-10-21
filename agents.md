@@ -133,6 +133,10 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Previews/review:** the runner downloads each shot's JPEG in the background (needs the camera
   set to PC+Camera, PC Save Img: JPEG Only), shrinks it to 1600 px into
   `stacks/<id>/frames/`, and builds `preview.jpg` (per-pixel sharpest frame) after the stack.
+  - During a stack the live-view panel shows the newest frame (`stack.latest_preview`); its
+    pause button holds the shown frame (not saved, unlike the live-view pause).
+  - `GET /api/stacks/<id>/zip` streams record + preview + frames, stored uncompressed, built
+    chunk by chunk (no temp file on the Pi's SD card).
 - **App/alerts:** manifest + a service worker without caching (a stale UI could mismatch the
   server). Notifications and install need HTTPS or localhost; chime/vibration/title work on
   HTTP after the page was touched once.
@@ -150,8 +154,13 @@ Not a prototype: no placeholders, no band-aids. Clean, modular and nothing more 
 - **Released:** v1.0.0 on 2026-10-19, public at https://github.com/Sam-de-Ham/MacroRail (tag, GitHub release, CI green).
   - `gh` here defaults to the work account (TT-SaWe), so push with the Sam-de-Ham token per command.
   - `CLAUDE.md` is kept local (gitignored).
-- **Software (2026-10-19):** v1.1 features built and committed locally (not pushed).
-  - 109 tests against the simulator; ruff, mypy (strict) and the firmware build are green.
+- **Software (2026-10-21):** v1.1 tested on hardware by the user: everything on the checklist
+  passed (backlash measured 14 µm ±7 µm, take-up set to 0.1 mm). Not yet tested: auto range on
+  a real subject, camera unplug mid-stack. Pushed to GitHub as a backup (4bf090e).
+  - Added after that (local): zip download of previews; incoming shots shown in the live view.
+  - 110 tests against the simulator; ruff, mypy (strict) and the firmware build are green.
+  - The machine tests are timing-sensitive: with a sim server running alongside, 2 timed out.
+    They pass on an idle machine.
   - Every tab was checked in the simulator at desktop and phone sizes; auto range and backlash
     give the simulated values (backlash exact for 0.04–0.15 mm at 2×, 4× and 10×).
 - **Pi:**

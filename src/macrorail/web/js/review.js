@@ -149,6 +149,11 @@ function renderViewer(ctx) {
   if (document.activeElement !== slider) slider.value = String(frame);
   setText("frame-label", stack.frames.length ? `Shot ${stack.frames[frame]} of ${stack.shots}` : "");
 
+  const download = $("download-stack");
+  download.hidden = !stack.frames.length;
+  download.href = `/api/stacks/${stack.id}/zip`;
+  download.title = `The ${stack.frames.length} previews, the preview stack and the record, as a zip`;
+
   const button = $("build-preview");
   button.disabled = !mine || stack.frames.length < 2 || s.review.building !== null;
   button.textContent = building ? "Making preview stack…" : stack.preview ? "Remake preview stack" : "Make preview stack";

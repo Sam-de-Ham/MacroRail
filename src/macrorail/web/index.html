@@ -35,6 +35,7 @@
       <figure class="liveview" id="liveview">
         <img id="liveview-image" alt="Live view from the camera">
         <figcaption class="liveview-message" id="liveview-message">Live view unavailable</figcaption>
+        <div class="liveview-shot" id="liveview-shot" hidden></div>
         <div class="liveview-position" id="liveview-position">–</div>
         <div class="liveview-hint" id="liveview-hint">Tap to zoom</div>
         <button class="liveview-toggle" data-action="toggle-liveview" id="liveview-toggle"
@@ -218,6 +219,7 @@
           </div>
           <div class="button-row">
             <button class="button grow" data-action="build-preview" id="build-preview">Make preview stack</button>
+            <a class="button" id="download-stack" download>Download</a>
             <button class="button danger" data-action="delete-stack" id="delete-stack">Delete</button>
           </div>
         </article>

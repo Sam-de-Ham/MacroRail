@@ -4,6 +4,8 @@
     stacks/<YYYYmmdd-HHMMSS>/frames/0001.jpg  small copy of each shot, when the camera sends JPEGs
     stacks/<YYYYmmdd-HHMMSS>/preview.jpg      quick focus-stacked preview
 
+`archive` streams a stack's folder as a zip, for downloading it to the viewing device.
+
 The full-resolution files stay on the camera's card.
 """
 
@@ -14,7 +16,8 @@ import json
 import logging
 import re
 import shutil
-from collections.abc import Callable
+import zipfile
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -117,6 +120,22 @@ class ReviewStore:
             )
         return summaries
 
+    def archive(self, stack_id: str) -> tuple[str, Iterator[bytes]]:
+        """A zip of the stack's record, preview and frames: its file name, and its bytes in
+        chunks as it is written. JPEGs are stored as they are, since they don't compress."""
+        folder = self._folder(stack_id)
+        files = [folder / RECORD, folder / PREVIEW, *sorted((folder / "frames").glob("*.jpg"))]
+        files = [f for f in files if f.is_file()]
+        if not any(f.parent.name == "frames" for f in files):
+            raise ReviewError("This stack has no downloaded frames.")
+        try:
+            name = json.loads((folder / RECORD).read_text(encoding="utf-8")).get("name", "")
+        except (OSError, ValueError):
+            name = ""
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")[:40]
+        base = f"MacroRail-{stack_id}" + (f"-{slug}" if slug else "")
+        return f"{base}.zip", _zip_chunks(base, folder, files)
+
     def frame_path(self, stack_id: str, index: int) -> Path:
         return self._folder(stack_id) / "frames" / f"{index:04d}.jpg"
 
@@ -132,3 +151,34 @@ class ReviewStore:
     def _changed(self) -> None:
         self.revision += 1
         self._on_change()
+
+
+class _Chunks:
+    """A write-only file that hands out what was written since the last `take`. zipfile
+    writes to it as to an unseekable stream (sizes go after each file's data)."""
+
+    def __init__(self) -> None:
+        self._parts: list[bytes] = []
+
+    def write(self, data: bytes) -> int:
+        self._parts.append(bytes(data))
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def take(self) -> bytes:
+        data, self._parts = b"".join(self._parts), []
+        return data
+
+
+def _zip_chunks(base: str, folder: Path, files: list[Path]) -> Iterator[bytes]:
+    sink = _Chunks()
+    with zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED) as archive:
+        for path in files:
+            archive.write(path, f"{base}/{path.relative_to(folder).as_posix()}")
+            yield sink.take()
+    yield sink.take()

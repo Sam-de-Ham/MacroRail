@@ -23,7 +23,8 @@ stepper driver, and controls the camera over USB with gphoto2, including live vi
   - A step-size helper works out the step from the lens's magnification and aperture.
   - The range is always fully covered, and the rail returns to the start when the stack ends.
 - **Check the result straight away**
-  - Small copies of each shot are saved on the Pi and combined into a quick preview stack.
+  - Small copies of each shot appear in the live-view panel as they are taken, are saved on
+    the Pi, and are combined into a quick preview stack. A stack's copies download as a zip.
   - Camera settings (ISO, shutter, aperture, quality…) are set from the browser.
 - **Calibrated and observable**
   - Measures the lead screw's backlash optically and suggests the take-up to use.

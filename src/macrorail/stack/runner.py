@@ -81,6 +81,7 @@ class StackRun:
         self._preview_task: asyncio.Task[None] | None = None  # kept so it isn't collected
         self._download_problem_logged = False
         self.previews = 0  # small JPEG copies downloaded so far
+        self.latest_preview: int | None = None  # shot number of the newest one
         self.phase: Phase = "preparing"
         self.shots: list[Shot] = []
         self.error: str | None = None
@@ -138,6 +139,7 @@ class StackRun:
             "id": self.id,
             "name": self.name,
             "previews": self.previews,
+            "latest_preview": self.latest_preview,
             "phase": self.phase,
             "pausing": self._pause_requested and self.phase == "running",
             "stopping": self._stop_requested and self.active,
@@ -211,6 +213,7 @@ class StackRun:
             self._download_problem(f"Could not download a preview ({exc}). Stacking continues.")
             return
         self.previews += 1
+        self.latest_preview = max(number, self.latest_preview or 0)
         self._on_change()
 
     def _download_problem(self, message: str) -> None:

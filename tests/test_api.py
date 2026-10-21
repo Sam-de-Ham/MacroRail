@@ -105,6 +105,7 @@ def test_review_endpoints_reject_unknown_and_crafted_ids(client: TestClient) -> 
     assert client.get("/api/stacks").json() == []
     for stack_id in ("20260101-120000", "..", "..%2F..%2Fsettings.json"):
         assert client.get(f"/api/stacks/{stack_id}/preview").status_code == 404
+        assert client.get(f"/api/stacks/{stack_id}/zip").status_code == 404
 
 
 def test_camera_settings_endpoint(client: TestClient) -> None:
