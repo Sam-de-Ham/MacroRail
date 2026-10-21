@@ -1,0 +1,42 @@
+"""Stage 04b: cradle floor details: yaw motor seat and bolts, KY-024 seat, hall sensor lead slot."""
+import sys, importlib, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import scanhelp
+importlib.reload(scanhelp)
+from scanhelp import *  # noqa
+
+
+def run(_):
+    cr = body('Cradle')
+    s = sk('z', '-(d_floorBot)', 'PL Floor Underside', 'CR 10 Yaw Boss Recess')
+    s.circle('0', '0', 'byj_bossD + boss_clr')
+    ext(s, CUT, 'CR Yaw Boss Recess', 'byj_bossH + 0.2', POS, bodies=[cr])
+    s = sk('z', '-(d_floorBot)', 'PL Floor Underside', 'CR 11 Yaw Shaft Hole')
+    s.circle('0', '0', 'tiltHoleD')
+    ext(s, CUT, 'CR Yaw Shaft Hole', 'floor_T', POS, bodies=[cr])
+    s = sk('z', '-(d_floorBot)', 'PL Floor Underside', 'CR 12 Yaw Motor Bolt Holes')
+    s.circle('-(byj_off)', 'byj_tabS / 2', 'm3_clr')
+    s.circle('-(byj_off)', '-(byj_tabS / 2)', 'm3_clr')
+    repair(s)
+    ext(s, CUT, 'CR Yaw Motor Bolt Holes', 'floor_T', POS, bodies=[cr])
+    s = sk('z', '-(d_floorTop)', 'PL Floor Top', 'CR 13 Yaw Motor Bolt Counterbores')
+    s.circle('-(byj_off)', 'byj_tabS / 2', 'cb_D')
+    s.circle('-(byj_off)', '-(byj_tabS / 2)', 'cb_D')
+    repair(s)
+    ext(s, CUT, 'CR Yaw Motor Bolt Counterbores', 'cb_H', NEG, bodies=[cr])
+    s = sk('z', '-(d_floorBot)', 'PL Floor Underside', 'CR 14 KY Solder Pocket')
+    s.rect('ky_x0 + ky_border', 'ky_x0 + ky_W - ky_border', '-(ky_L - ky_y0 - ky_border)', 'ky_y0 - ky_border')
+    ext(s, CUT, 'CR KY Solder Pocket', 'ky_pocketT', POS, bodies=[cr])
+    s = sk('z', '-(d_floorBot)', 'PL Floor Underside', 'CR 15 KY Bolt Hole')
+    s.circle('ky_x0 + ky_W / 2', '-(ky_L - ky_y0 - ky_holeY)', 'm3_clr')
+    ext(s, CUT, 'CR KY Bolt Hole', 'floor_T', POS, bodies=[cr])
+    s = sk('z', '-(d_floorTop)', 'PL Floor Top', 'CR 16 KY Bolt Counterbore')
+    s.circle('ky_x0 + ky_W / 2', '-(ky_L - ky_y0 - ky_holeY)', 'cb_D')
+    ext(s, CUT, 'CR KY Bolt Counterbore', 'cb_H', NEG, bodies=[cr])
+    s = sk('z', '-(d_floorTop)', 'PL Floor Top', 'CR 17 Hall Sensor Pocket')
+    s.rect('ky_sensR - to92_H / 2 - 0.3', 'ky_sensR + to92_H / 2 + 0.3', '-(to92_W / 2 + 0.3)', 'to92_W / 2 + 0.3')
+    ext(s, CUT, 'CR Hall Sensor Pocket', 'sens_pocket', NEG, bodies=[cr])
+    s = sk('z', '-(d_floorBot)', 'PL Floor Underside', 'CR 18 Hall Lead Slot')
+    s.rect('ky_sensR + to92_H / 2 + 0.3', 'ky_x0 + 10', '-(to92_W / 2 + 0.3)', 'ky_y0 + 2.5')
+    ext(s, CUT, 'CR Hall Lead Slot', 'floor_T', POS, bodies=[cr])
+    print(report())
