@@ -418,6 +418,16 @@ select.field { appearance: none; padding-right: 32px; background-image: linear-g
 .stack-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .viewer-image { display: grid; place-items: center; min-height: 160px; border-radius: var(--radius-small); background: #050607; overflow: hidden; }
 .viewer-image img { width: 100%; height: auto; display: block; }
+.relief { display: block; width: 100%; touch-action: none; cursor: grab; }
+.relief:active { cursor: grabbing; }
+.depth-legend { display: grid; gap: 4px; }
+/* Turbo, as in the depth image: red at the first shot, blue at the last. */
+.depth-scale { height: 10px; border-radius: 5px; background: linear-gradient(to right, #b82008, #ff741b, #f2cb2c, #96fa50, #3cf197, #28b3e9, #4958dd); }
+.depth-labels { display: flex; justify-content: space-between; gap: 8px; }
+.relief-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.relief-height { display: flex; align-items: center; gap: 8px; flex: 1 1 160px; }
+.relief-height input { flex: 1; accent-color: var(--accent); }
+#relief-flip[aria-pressed="true"] { background: var(--surface-3); font-weight: 600; }
 .frame-scrubber { display: grid; gap: 4px; }
 .frame-scrubber input { width: 100%; accent-color: var(--accent); }
 

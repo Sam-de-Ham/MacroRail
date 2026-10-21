@@ -3,6 +3,8 @@
     stacks/<YYYYmmdd-HHMMSS>/stack.json       the record (name, plan, every shot)
     stacks/<YYYYmmdd-HHMMSS>/frames/0001.jpg  small copy of each shot, when the camera sends JPEGs
     stacks/<YYYYmmdd-HHMMSS>/preview.jpg      quick focus-stacked preview
+    stacks/<YYYYmmdd-HHMMSS>/depth.png        its depth map, 16-bit grey (white = first shot)
+    stacks/<YYYYmmdd-HHMMSS>/depth-colour.jpg the same in false colour
 
 `archive` streams a stack's folder as a zip, for downloading it to the viewing device.
 
@@ -30,6 +32,8 @@ log = logging.getLogger(__name__)
 STACK_ID = re.compile(r"^\d{8}-\d{6}(-\d+)?$")
 RECORD = "stack.json"
 PREVIEW = "preview.jpg"
+DEPTH = "depth.png"
+DEPTH_COLOUR = "depth-colour.jpg"
 
 
 class ReviewError(Exception):
@@ -73,17 +77,24 @@ class ReviewStore:
         self._changed()
 
     async def build_preview(self, stack_id: str) -> None:
-        """Focus-stack the stack's frames into preview.jpg."""
+        """Focus-stack the stack's frames into the preview and its depth map."""
         if self.building is not None:
             raise ReviewError("A preview is already being made.")
-        frames = sorted((self._folder(stack_id) / "frames").glob("*.jpg"))
+        folder = self._folder(stack_id)
+        frames = sorted((folder / "frames").glob("*.jpg"))
         if len(frames) < 2:
             raise ReviewError("This stack has no downloaded frames to combine.")
+        numbers = [int(f.stem) for f in frames]
+        heights = _focus_heights(_read_record(folder), numbers) or [float(n) for n in numbers]
         self.building = stack_id
         self._changed()
         try:
-            preview = await asyncio.to_thread(lambda: focus_stack([f.read_bytes() for f in frames]))
-            (self._folder(stack_id) / PREVIEW).write_bytes(preview)
+            stacked = await asyncio.to_thread(
+                lambda: focus_stack([f.read_bytes() for f in frames], heights)
+            )
+            (folder / DEPTH).write_bytes(stacked.depth)
+            (folder / DEPTH_COLOUR).write_bytes(stacked.depth_colour)
+            (folder / PREVIEW).write_bytes(stacked.image)  # last: its presence means all are there
         finally:
             self.building = None
             self._changed()
@@ -102,10 +113,10 @@ class ReviewStore:
         for folder in sorted(self.root.iterdir(), reverse=True):
             if not (folder.is_dir() and STACK_ID.match(folder.name)):
                 continue
-            try:
-                record = json.loads((folder / RECORD).read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                record = {}  # still running, or unreadable
+            record = _read_record(folder)
+            frames = sorted(int(f.stem) for f in (folder / "frames").glob("*.jpg"))
+            heights = _focus_heights(record, frames) if frames else None
+            preview = folder / PREVIEW
             summaries.append(
                 {
                     "id": folder.name,
@@ -114,8 +125,12 @@ class ReviewStore:
                     "outcome": record.get("outcome"),
                     "shots": len(record.get("shots", [])),
                     "planned": record.get("plan", {}).get("count"),
-                    "frames": sorted(int(f.stem) for f in (folder / "frames").glob("*.jpg")),
-                    "preview": (folder / PREVIEW).exists(),
+                    "frames": frames,
+                    "preview": preview.exists(),
+                    # when the preview stack was made: tells viewers when to fetch it again
+                    "made_at": preview.stat().st_mtime if preview.exists() else None,
+                    "depth": (folder / DEPTH).exists(),
+                    "depth_mm": round(max(heights), 4) if heights else None,
                 }
             )
         return summaries
@@ -124,14 +139,17 @@ class ReviewStore:
         """A zip of the stack's record, preview and frames: its file name, and its bytes in
         chunks as it is written. JPEGs are stored as they are, since they don't compress."""
         folder = self._folder(stack_id)
-        files = [folder / RECORD, folder / PREVIEW, *sorted((folder / "frames").glob("*.jpg"))]
+        files = [
+            folder / RECORD,
+            folder / PREVIEW,
+            folder / DEPTH,
+            folder / DEPTH_COLOUR,
+            *sorted((folder / "frames").glob("*.jpg")),
+        ]
         files = [f for f in files if f.is_file()]
         if not any(f.parent.name == "frames" for f in files):
             raise ReviewError("This stack has no downloaded frames.")
-        try:
-            name = json.loads((folder / RECORD).read_text(encoding="utf-8")).get("name", "")
-        except (OSError, ValueError):
-            name = ""
+        name = _read_record(folder).get("name", "")
         slug = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")[:40]
         base = f"MacroRail-{stack_id}" + (f"-{slug}" if slug else "")
         return f"{base}.zip", _zip_chunks(base, folder, files)
@@ -142,6 +160,9 @@ class ReviewStore:
     def preview_path(self, stack_id: str) -> Path:
         return self._folder(stack_id) / PREVIEW
 
+    def depth_path(self, stack_id: str, colour: bool) -> Path:
+        return self._folder(stack_id) / (DEPTH_COLOUR if colour else DEPTH)
+
     def _folder(self, stack_id: str) -> Path:
         folder = self.root / stack_id
         if not STACK_ID.match(stack_id) or not folder.is_dir():
@@ -151,6 +172,25 @@ class ReviewStore:
     def _changed(self) -> None:
         self.revision += 1
         self._on_change()
+
+
+def _read_record(folder: Path) -> dict[str, Any]:
+    try:
+        record: dict[str, Any] = json.loads((folder / RECORD).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}  # still running, or unreadable
+    return record
+
+
+def _focus_heights(record: dict[str, Any], numbers: list[int]) -> list[float] | None:
+    """Each frame's focus distance from the first frame's in mm, from the shots in the
+    record. None when the record doesn't say."""
+    positions = {shot["index"] + 1: shot["position"] for shot in record.get("shots", [])}
+    steps_per_mm = record.get("steps_per_mm")
+    if not steps_per_mm or not all(n in positions for n in numbers):
+        return None
+    first = positions[numbers[0]]
+    return [abs(positions[n] - first) / steps_per_mm for n in numbers]
 
 
 class _Chunks:

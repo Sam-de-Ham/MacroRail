@@ -210,9 +210,28 @@
           <p class="muted small-text" id="viewer-meta"></p>
           <div class="segmented compact" role="radiogroup" aria-label="Show" id="viewer-mode">
             <button data-action="viewer-mode" data-mode="preview" role="radio">Preview stack</button>
+            <button data-action="viewer-mode" data-mode="depth" role="radio">Depth</button>
+            <button data-action="viewer-mode" data-mode="relief" role="radio">3D</button>
             <button data-action="viewer-mode" data-mode="frames" role="radio">Frames</button>
           </div>
-          <div class="viewer-image"><img id="viewer-image" alt=""><p class="muted" id="viewer-empty"></p></div>
+          <div class="viewer-image">
+            <img id="viewer-image" alt="">
+            <canvas class="relief" id="relief" hidden></canvas>
+            <p class="muted" id="viewer-empty"></p>
+          </div>
+          <div class="depth-legend" id="depth-legend">
+            <div class="depth-scale" aria-hidden="true"></div>
+            <div class="depth-labels muted small-text"><span>First shot</span><span id="depth-span"></span><span>Last shot</span></div>
+            <a class="small-text" id="depth-download" download>Download the 16-bit grey depth map (for Blender)</a>
+          </div>
+          <div class="relief-controls" id="relief-controls">
+            <label class="relief-height">
+              <span class="muted small-text">Height</span>
+              <input type="range" min="0.02" max="1" step="0.01" id="relief-height" aria-label="Relief height">
+            </label>
+            <button class="button" data-action="relief-flip" id="relief-flip" aria-pressed="false">Flip</button>
+            <span class="muted small-text">Drag to turn, pinch or scroll to zoom, double-click to reset.</span>
+          </div>
           <div class="frame-scrubber" id="frame-scrubber">
             <input type="range" min="0" value="0" id="frame-slider" aria-label="Frame">
             <span class="muted small-text" id="frame-label"></span>

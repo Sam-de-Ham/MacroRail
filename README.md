@@ -25,6 +25,8 @@ stepper driver, and controls the camera over USB with gphoto2, including live vi
 - **Check the result straight away**
   - Small copies of each shot appear in the live-view panel as they are taken, are saved on
     the Pi, and are combined into a quick preview stack. A stack's copies download as a zip.
+  - A rough depth map comes with each preview stack: in false colour, as a 3D relief to turn
+    around in the browser, and as a 16-bit grey PNG for Blender.
   - Camera settings (ISO, shutter, aperture, quality…) are set from the browser.
 - **Calibrated and observable**
   - Measures the lead screw's backlash optically and suggests the take-up to use.

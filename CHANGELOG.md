@@ -11,6 +11,8 @@
   balance, quality, size, focus mode) and a test shot.
 - Stack names; small JPEG copies of each shot kept on the Pi; a review gallery with a quick
   all-in-focus preview stack, and a zip download of a stack's previews.
+- A rough depth map with each preview stack: false colour, a 3D relief with the stack laid
+  over it (drag to turn, pinch to zoom), and a 16-bit grey PNG for Blender.
 - While a stack runs, the live-view panel shows each shot as it arrives; pause holds one.
 - Installable as an app; a chime, vibration, tab title and (over HTTPS) a notification when a
   stack ends or needs attention.
