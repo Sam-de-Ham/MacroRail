@@ -15,6 +15,7 @@ from scanhelp import *  # noqa
 
 PARAMS = [
     ('tp_dy', '250', 'test pieces laid out at Y = -tp_dy'),
+    ('tp_baseT', '2.5', 'base hole test piece: bottom slice (holds the hole pattern and screw-head pockets)'),
 ]
 
 
@@ -45,7 +46,7 @@ def run(_):
                          'up_T + 2'))
     made.append(slice_of('Fork', 'TP Base Holes', 'z', '-(axis_H + 1)', 'PL TP Base',
                          ('-(base_LX / 2 + 1)', 'base_LX / 2 + 1', '-(carr_headY1 + 6)', 'carr_headY1 + 6'),
-                         'base_T + 2'))
+                         'tp_baseT + 1'))
     hubs = slice_of('Cradle', 'TP Tilt Hubs', 'z', '-(hubBoss_D / 2 + 2)', 'PL TP Hubs',
                     ('-(hubBoss_D / 2 + 2)', 'hubBoss_D / 2 + 2', '-(arm_in + arm_T + 1)', 'arm_in + arm_T + 1'),
                     'hubBoss_D + 4')

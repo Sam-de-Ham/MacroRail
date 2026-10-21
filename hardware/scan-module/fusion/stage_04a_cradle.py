@@ -37,4 +37,9 @@ def run(_):
     s = Sk(root.xZConstructionPlane, 'CR 09 Counterweight Hole', ('x', 'z'))
     s.circle('0', 'cw_Z', 'cw_holeD')
     ext_sym(s, CUT, 'CR Counterweight Hole', '2 * (arm_in + arm_T) + 4', bodies=[cr])
+    # tilt home flag: an M3 x 17.5 bolt through the +Y arm (head inside, nut outside); its end
+    # passes the endstop lever just past +90 deg
+    s = sk('y', 'arm_in', 'PL Arm +Y Inner', 'CR 10 Flag Bolt Hole')
+    s.circle('0', 'flag_Z', 'm3_clr')
+    ext(s, CUT, 'CR Flag Bolt Hole', 'arm_T', POS, bodies=[cr])
     print(report())

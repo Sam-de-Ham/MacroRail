@@ -68,7 +68,7 @@ base plate ── 4 × M3 ── rail carriage (focus axis, unchanged)
 | **Yaw axis** | The **yaw 28BYJ-48** screwed under the cradle floor. The head mounts **straight on its shaft** through a D-hub, with no bearing (user's choice). | The yaw only carries the head (about 25 g). Shaft play causes a small, repeatable wobble that stays well inside the frame; the centring wizard shows how big it is. A 608 turntable can be added later if it matters. |
 | **Yaw home** | KY-024 linear hall board on the cradle floor, one Ø5.7 magnet in the head's underside. Homing reads the analog output and takes the field peak, the magnet's centre. | The peak repeats better than the board's on/off threshold. |
 | **Yaw range** | Unlimited in v1. | Nothing electrical turns with the head. |
-| **Centring (X/Y)** | One printed plate (Ø26 × 6) in a printed Ø43 ring on the yaw hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; a pen spring behind a printed plunger at 225° pushes back. The plate's rim has a 4 mm-wide V that holds the screw ends, so the plate can't lift. The screws get printed knobs. ±2.5 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
+| **Centring (X/Y)** | One printed plate (Ø26 × 6) in a printed Ø43 ring on the yaw hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; a pen spring behind a printed plunger at 225° pushes back. The plate's rim has a 4 mm-wide V that holds the screw ends, so the plate can't lift. Plain button-head screws turned with a 2 mm hex key (no knobs). ±2.5 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
 | **Puck** | The removable specimen holder. Underneath: three printed bumps that seat in three V-grooves on the centring plate, held by three Ø5.7 × 1.8 magnets. On top: the Z carrier, clamp and nose. | Explained under "Why a puck". |
 | **Pin clamp** | A V-groove channel running through a 45° tapered nose (Ø5 tip) and the clamp body, about 18 long. A printed pad on an M3 screw presses the pin; the screw sits at the bottom of the carrier. | Pins 00 to 1 (0.30–0.40) all sit on the same line. The tapered nose and low screw keep everything near the insect out of the lens's way. |
 | **Height (Z)** | Slide the pin against the printed stepped gauge (17 to 21 mm above the nose tip), then clamp it with the pad screw. The wizard measures any height error, and you re-set the pin with the gauge. A fine Z screw was dropped in CAD: there was no room for it inside the lens clearance cone. | Puts the insect on the tilt axis, for glued-tip and pinned-through specimens alike. Pins stay full length (39.4), no cutting needed. |
@@ -147,7 +147,7 @@ then a Ø29.8 adapter.
    click the puck on (you, about 1 min).
 2. **Centre** with the wizard. The app turns the insect to 4 yaw angles, finds it in the
    live view (sharp tiles) and with a focus scan, fits a circle, and says how far to turn
-   each knob. Repeat until under about 0.1 mm (you and the app, about 2 min). It also
+   each screw, then turns the head so that screw faces you. Repeat until under about 0.1 mm (you and the app, about 2 min). It also
    checks height at two tilts; you re-set the pin with the gauge if needed.
 3. **Scan, automatically:** rings of poses at several tilts (for example −30°, 0°, 30°,
    60°, then a top view), yaw in 10° steps. At each pose: focus scan, then stack.
@@ -171,7 +171,11 @@ print guide, the hardware list and the test-piece checklist.
 
 Changes from the agreed concept, with reasons:
 - **Fork as one body:** coaxial bearing and motor seats with no assembly error.
-- **Wider cradle:** arms at ±33 (planned ±30), so the centring knobs clear them.
+- **Wider cradle:** arms at ±33 (planned ±30), so the centring screws clear them.
+- **No knobs:** the centring and pad screws are turned with a 2 mm hex key; yaw brings each
+  screw round to the user.
+- **Wider uprights:** 44.2 mm (motor tab spacing + counterbore + 3), so the tilt motor's ear
+  bolts land inside the upright.
 - **Thicker plate:** 6 mm with a 4 mm rim V. A flat M3 end can't enter a narrow V, so the
   wider V captures the screws and the plate can't lift.
 - **Bell hub:** the head prints hub-down with no supports. A snap-off fin carries the
@@ -181,8 +185,15 @@ Changes from the agreed concept, with reasons:
 - **Fine Z screw dropped:** a stepped height gauge replaces it.
 - **Tilt axis at 95** (planned 87), and a belly limit of −33° (planned −36°).
 
-Next: print the test pieces and check them; measure the printer endstop; add the tilt home
-endstop mount and flag; export the final parts.
+- **Tilt home interface:** two M3 holes for an endstop bracket on the +Y upright (nut pockets
+  inside) and an M3 × 17.5 flag bolt through the +Y arm. The flag reaches the switch at about
+  +95°, homing away from the lens. The bracket itself waits for the endstop's measurements.
+
+Assembly and use: [`hardware/scan-module/guide/MacroRail-scan-module-guide.pdf`](../hardware/scan-module/guide/MacroRail-scan-module-guide.pdf).
+STLs: `hardware/scan-module/exports/test-pieces/` and `exports/final/`.
+
+Next: print the test pieces and check them; measure the printer endstop and model its
+bracket; then print the final parts.
 
 Print fits from the lens-mount project (Prusa i3 MK3, validated in PLA): M3 clearance 3.4;
 M3 nut pocket 5.7 across flats × 2.6 deep; friction bore +0.6 on diameter; sliding fit 0.4
@@ -190,8 +201,8 @@ total clearance. No threads in plastic; counterbores, not countersinks.
 
 ## Later
 
-- **v2, hands-off centring:** 28BYJ-48s on the X/Y screws (so design the knobs to be
-  replaceable by a coupler and bracket). That needs 8 more pins, so it means moving to an
+- **v2, hands-off centring:** 28BYJ-48s on the X/Y screws (a hex-bit coupler on
+  the button heads, plus a bracket). That needs 8 more pins, so it means moving to an
   **Arduino Mega 2560**: the same AVR toolchain, and hardware UARTs, which also remove the
   half-duplex SoftwareSerial workaround. Not the Pi's GPIO: motion stays in the firmware.
 - A 608 turntable under the yaw head, if the shaft wobble turns out to matter.
@@ -237,6 +248,6 @@ total clearance. No threads in plastic; counterbores, not countersinks.
 ## Open items
 
 - Torque near 90°: check on the first printed cradle; add counterweight if steps skip.
-- Tilt home endstop: measure the printer endstop (board, holes, lever), then model its mount
-  on the fork and the flag on the cradle before printing the final fork and cradle.
+- Tilt home endstop bracket: measure the printer endstop (board size, hole spacing and
+  diameter, lever position and travel). The holes and the flag are already in the model.
 - Optional: screenshots of the user's old rotate-and-tilt build, for reference.

@@ -22,7 +22,18 @@ def run(_):
     else:
         mm = app.measureManager
         cr = body('Cradle')
-        heads = ['Yaw Head', 'Knob X', 'Knob Y', 'Spring Plunger', 'Centring Plate', 'Puck', 'REF Pad Screw', 'REF Screw X', 'REF Screw Y']
+        # the flag bolt must clear the fork over the whole tilt range
+        pt = des.userParameters.itemByName('pose_tilt')
+        fl = (1e9, None)
+        for t in range(-35, 101, 5):
+            pt.expression = '%d deg' % t
+            for n in ('REF Flag Bolt', 'REF Flag Nut'):
+                d = mm.measureMinimumDistance(body('Fork'), body(n)).value * 10
+                if d < fl[0]:
+                    fl = (d, '%s @ tilt %d' % (n, t))
+        pt.expression = '0 deg'
+        print('flag vs fork min %.2f mm (%s)' % fl)
+        heads = ['Yaw Head', 'Spring Plunger', 'Centring Plate', 'Puck', 'REF Pad Screw', 'REF Screw X', 'REF Screw Y']
         py = des.userParameters.itemByName('pose_yaw')
         worst = (1e9, None, None)
         for y in range(0, 360, 15):

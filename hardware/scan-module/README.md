@@ -5,13 +5,19 @@ The 3D-scanning module for the MacroRail, modelled in Fusion 360 (document
 are in [`docs/3d-scanning.md`](../../docs/3d-scanning.md); measurements are in
 [`MEASUREMENTS.md`](MEASUREMENTS.md).
 
-![Assembly](renders/01-assembly-iso.png)
+![Assembly](guide/img/assembled.png)
+
+**Assembly and use:** [`guide/MacroRail-scan-module-guide.pdf`](guide/MacroRail-scan-module-guide.pdf)
+(7 pages: parts, test pieces, assembly, homing, mounting a specimen, centring).
+Rebuild it with `python guide/build_guide.py`, then print `guide/scan-module-guide.html` to
+PDF (Edge: `msedge --headless=new --no-pdf-header-footer --print-to-pdf=<pdf> <html>`). The
+pictures come from `fusion/render_guide.py`, one shot per call.
 
 ## How the model is built
 
 - **Scripts are the source.** Every feature comes from the stage scripts in [`fusion/`](fusion/),
   run in order through the Fusion MCP. The whole model has been rebuilt from an empty timeline
-  with them, with an identical result: 51 bodies, every feature healthy, every sketch fully
+  with them, with an identical result: 57 bodies, every feature healthy, every sketch fully
   constrained. To rebuild, run each stage as a script that does
   `runpy.run_path(<stage file>)['run'](context)`:
 
@@ -19,14 +25,16 @@ are in [`docs/3d-scanning.md`](../../docs/3d-scanning.md); measurements are in
   |---|---|
   | `stage_01_params.py` | All user parameters (MEAS = measured, REF = reference only) |
   | `stage_02_reference.py` | Carriage, objective + lens keep-out, insect, pin, 608, both motors, KY-024, hall sensor |
-  | `stage_03_fork.py` | Fork (base + uprights + ribs, 608 seat, tilt motor seat) |
-  | `stage_04a_cradle.py`, `stage_04b_cradle_floor.py` | Cradle (arms, tilt hubs, counterweight holes, floor seats) |
-  | `stage_05a_head.py` … `stage_05d_knobs_hardware.py` | Yaw head (bell hub, ring), spring housing, plunger, snap-off fin, centring plate, knobs, head hardware |
+  | `stage_03_fork.py` | Fork (base + uprights + ribs, 608 seat, tilt motor seat, endstop bracket holes) |
+  | `stage_04a_cradle.py`, `stage_04b_cradle_floor.py` | Cradle (arms, tilt hubs, counterweight holes, flag bolt hole, floor seats) |
+  | `stage_05a_head.py` … `stage_05d_head_hardware.py` | Yaw head (bell hub, ring), spring housing, plunger, snap-off fin, centring plate, head hardware |
   | `stage_06_puck.py` | Puck (kinematic seat, clamp column, nose), pin pad, pad screw |
   | `stage_07a_axle_washers.py`, `stage_07b_gauge.py` | Tilt axle, spacer, carriage washers and bolts, height gauge |
   | `stage_08_present_pose.py` | Appearances, selection sets, the two pose moves |
   | `stage_09_test_pieces.py` | Test pieces (slices of the real bodies) |
+  | `stage_10_explode.py` | `explode` parameter (0/1) and one Move per part group, for the guide pictures |
   | `verify_*.py` | Clearance sweep, interference, sections |
+  | `render_guide.py`, `export_stl.py` | Guide pictures (`guide/img/`), print files (`exports/`) |
 
 - **Parameters first:** 190+ user parameters. Change a parameter, not a feature: everything is
   driven by expressions (for example `d_floorTop = d_hubBot + gap`).
@@ -35,12 +43,13 @@ are in [`docs/3d-scanning.md`](../../docs/3d-scanning.md); measurements are in
   below the insect.
 - **Bodies, not components.** Names: printed parts plainly (`Fork`, `Cradle`, `Yaw Head`, …),
   reference geometry `REF …`, test pieces `TP …`. Features and sketches have part prefixes
-  (`FK`, `CR`, `HD`, `SP`, `PT`, `KN`, `PK`, `PD`, `AX`, `AS`, `WS`, `GG`, `TP`).
+  (`FK`, `CR`, `HD`, `SP`, `PT`, `PK`, `PD`, `AX`, `AS`, `WS`, `GG`, `TP`).
 - **Selection sets:** `1 Printed Parts`, `2 Hardware`, `3 Reference`, `4 Lens Keep-out`,
   `5 Test Pieces`.
 - **Poses:** `pose_tilt` (+ means the back of the insect turns towards the camera) and
-  `pose_yaw` drive two Move features at the very end of the timeline. Keep both at 0 for
-  export. Add new features *before* `POSE Yaw`.
+  `pose_yaw` drive two Move features near the end of the timeline, and `explode` drives the
+  EXPLODE moves after them. Keep all three at 0 for export (`export_stl.py` does). Add new
+  features *before* `POSE Yaw`.
 
 ## Verified (2026-10-21)
 
@@ -74,7 +83,6 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | Yaw Head | 1 | Bell underside (flat) | No supports. **Snap off the thin fin** under the spring housing after printing. |
 | Centring Plate | 1 | Underside | Domes face up. |
 | Puck | 1 per specimen | Underside (V-grooves) | Nose up. |
-| Knob | 3 | Flat end | Press onto the button heads of the two centring screws (and the pad screw, optional). |
 | Spring Plunger | 1 | Spigot end | Tiny; use a brim. |
 | Pin Pad | 1 | Any flat face | |
 | Tilt Axle | 1 | Flange | Shank vertical, so it comes out round. |
@@ -91,18 +99,27 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | KY-024 | 1 | Under the cradle floor; bend its TO-92 flat into the floor pocket, legs into the slot |
 | Magnet Ø5.7 × 1.8 | 1 + 3 + 3 per puck | Hub underside, plate top, puck underside (mind the poles: plate and puck must attract) |
 | Pen spring (4.6 / 19) | 1 | Spring housing, behind the plunger |
-| M3 × 17.5 + nut + printed washer | 4 | Base to carriage |
+| M3 × 17.5 + nut | 5 | Base to carriage (4, with printed washers), tilt home flag (1) |
 | M3 × 11.8 + nut | 9 | Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pad screw (1), hub set screw (1) |
 | M3 × 27.7 + nut | 1 | Tilt axle (assumes about 25.8 under the head) |
+
+All screws are button heads, turned with a 2 mm hex key; no knobs. Yaw turns each centring
+screw round to the user.
+
+Bolt stack under the carriage: base 6 + carriage 6 + washer 1.5 + nut 2.2 = 15.7, so the 17.5
+bolt shows 1.8 mm past a full nut. The nuts (X ±30, Y ±10) clear the lead nut carrier, the
+bearing blocks and the lead screw.
 
 Check the KY-024 bolt: it sticks out about 6 mm below the board's nut, near the potentiometer.
 
 ## Test pieces (print these first)
 
 STLs are in [`exports/test-pieces/`](exports/test-pieces/). The six `tp-*` slices cover the
-big parts. The small parts are printed whole and serve as their own tests.
+big parts (`tp-base-holes` is only the bottom 2.5 mm of the base, with the screw-head
+pockets). The small parts are printed whole and serve as their own tests; the same files are
+in `exports/final/`.
 
-![Test pieces](renders/04-test-pieces.png)
+![Test pieces](guide/img/test_pieces.png)
 
 | Test piece | Check |
 |---|---|
@@ -115,14 +132,15 @@ big parts. The small parts are printed whole and serve as their own tests.
 | `yaw-head` | Fits the yaw shaft; set screw nut, centring nuts, magnet and spring go in; the fin snaps off cleanly. |
 | `centring-plate` + `puck` | The puck clicks onto the domes in all three positions and doesn't rock; the magnets hold. |
 | `tilt-axle` + `axle-spacer` | The axle slips through the 608; the spacer slides over the axle. |
-| `pin-pad`, `knob`, `spring-plunger` | The pad slides into its pocket and clamps pins 00 to 1; the knob presses onto a button head; the plunger slides in its bore. |
+| `pin-pad`, `spring-plunger` | The pad slides into its pocket and clamps pins 00 to 1; the plunger slides in its bore. |
 
 Fit parameters to adjust if a test fails: `fit_press` (608 seat), `fit_D` (D-bores),
 `fit_slide`, `boss_clr`, `m3_pocketAF`, `magPocketD`, `pinHoleD`.
 
 ## Open
 
-- **Tilt home endstop:** mount and flag not modelled yet, because the user's printer
-  endstops haven't been measured. This has to be added before the final fork and cradle are
-  printed.
-- **Final export:** `exports/final/` follows after the test pieces pass and the endstop is added.
+- **Tilt home endstop bracket:** the two bracket holes in the +Y upright (`brk_X`, `brk_Z1`,
+  `brk_Z2`) and the flag bolt through the +Y arm (`flag_Z`) are modelled; the flag passes the
+  switch position at about +95°. The bracket needs the endstop's measurements: board size,
+  hole spacing and diameter, lever position and travel.
+- **Final print:** `exports/final/` is exported. Print it once the test pieces pass.

@@ -253,6 +253,24 @@ def hexagon(s, ca, cb, af_expr, rot=0.0):
     else:
         s.fix_coord(centre, s.axes[0], ca)
         s.fix_coord(centre, s.axes[1], cb)
+        # a dimension Fusion rejected (shared coordinate with an earlier shape): tie instead
+        if not centre.isFullyConstrained:
+            g = centre.geometry
+            for p in s.s.sketchPoints:
+                if p.entityToken == centre.entityToken or not p.isFullyConstrained:
+                    continue
+                h = p.geometry
+                try:
+                    if abs(g.x - h.x) < 1e-6:
+                        s.c.addVerticalPoints(centre, p)
+                    elif abs(g.y - h.y) < 1e-6:
+                        s.c.addHorizontalPoints(centre, p)
+                    else:
+                        continue
+                except RuntimeError:
+                    continue
+                if centre.isFullyConstrained:
+                    break
     return lines
 
 
@@ -299,6 +317,8 @@ def look(target_mm, eye_dir, dist_mm, extent_mm=None, hide=()):
     vp.camera = cam
     for b in root.bRepBodies:
         b.isLightBulbOn = b.name not in hide
+    if extent_mm is None:
+        vp.fit()
     vp.refresh()
 
 
