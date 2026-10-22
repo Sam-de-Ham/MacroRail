@@ -85,7 +85,7 @@ def motors():
     t = copy_body(m, 'REF Tilt Motor')
     move_rot([t], root.zConstructionAxis, '-90 deg', 'REF Tilt Motor Turn 1')
     move_rot([t], root.xConstructionAxis, '-90 deg', 'REF Tilt Motor Turn 2')
-    move_xyz([t], '0 mm', 'd_floorBot - up_in - up_T', '0 mm', 'REF Tilt Motor Place')
+    move_xyz([t], '0 mm', 'd_floorBot - up_in - upM_T', '0 mm', 'REF Tilt Motor Place')
 
 
 def ky024():

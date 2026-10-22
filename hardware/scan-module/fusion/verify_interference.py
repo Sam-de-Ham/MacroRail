@@ -58,7 +58,7 @@ def run(_):
     else:
         mm = app.measureManager
         cr = body('Cradle')
-        heads = ['Yaw Head', 'Spring Plunger', 'Specimen Holder', 'REF Pad Screw', 'REF Screw X', 'REF Screw Y']
+        heads = ['Yaw Head', 'Specimen Holder', 'REF Clamp Screw', 'REF Screw X', 'REF Screw Y']
         py = des.userParameters.itemByName('pose_yaw')
         worst = (1e9, None, None)
         for y in range(0, 360, 15):

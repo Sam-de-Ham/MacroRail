@@ -1,6 +1,6 @@
 """Stage 09: test pieces = parametric slices of the real printed bodies (they follow every later
 change), laid out beside the module. Inserted before the pose moves. The small parts (yaw head,
-plate, puck, knobs, axle, spacer, plunger, pad, washers, gauge) are printed whole as their own
+specimen holder, axle, spacer, endstop bracket, washers, gauge) are printed whole as their own
 tests; these slices cover the big parts' risky interfaces:
   TP Bearing Seat  - 608 press fit and lip in the +Y upright
   TP Motor Seat    - tilt motor boss recess, shaft hole, ear bolt holes (-Y upright)
@@ -41,9 +41,9 @@ def run(_):
     made.append(slice_of('Fork', 'TP Bearing Seat', 'y', 'up_in - 1', 'PL TP Bearing',
                          ('-(brg_boss / 2 + 1)', 'brg_boss / 2 + 1', '-(brg_boss / 2 + 1)', 'brg_boss / 2 + 1'),
                          'brg_lip + brg_W + 2'))
-    made.append(slice_of('Fork', 'TP Motor Seat', 'y', '-(up_in + up_T + 1)', 'PL TP Motor',
+    made.append(slice_of('Fork', 'TP Motor Seat', 'y', '-(up_in + upM_T + 1)', 'PL TP Motor',
                          ('-(byj_tabS / 2 + 5)', 'byj_tabS / 2 + 5', '-(byj_off + 8)', 'byj_off + 8'),
-                         'up_T + 2'))
+                         'upM_T + 2'))
     made.append(slice_of('Fork', 'TP Base Holes', 'z', '-(axis_H + 1)', 'PL TP Base',
                          ('-(base_LX / 2 + 1)', 'base_LX / 2 + 1', '-(carr_headY1 + 6)', 'carr_headY1 + 6'),
                          'tp_baseT + 1'))

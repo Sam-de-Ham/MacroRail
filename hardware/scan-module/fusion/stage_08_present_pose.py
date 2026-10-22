@@ -7,13 +7,11 @@ import scanhelp
 importlib.reload(scanhelp)
 from scanhelp import *  # noqa
 
-YAW = ['Yaw Head', 'Specimen Holder', 'Spring Plunger', 'REF Spring', 'REF Screw X',
-       'REF Screw Y', 'REF Nut X', 'REF Nut Y', 'REF Hub Magnet', 'Pin Pad', 'REF Pad Screw',
-       'REF Pad Nut', 'REF Insect', 'REF Pin']
+YAW = ['Yaw Head', 'Specimen Holder', 'REF Spring', 'REF Screw X', 'REF Screw Y', 'REF Nut X',
+       'REF Nut Y', 'REF Hub Magnet', 'REF Clamp Screw', 'REF Clamp Nut', 'REF Insect', 'REF Pin']
 TILT_ONLY = ['Cradle', 'REF Yaw Motor', 'REF KY-024 PCB', 'REF KY-024 Components', 'REF Hall Sensor',
              'Tilt Axle', 'Axle Spacer', 'REF Axle Bolt', 'REF Axle Nut', 'REF Flag Bolt', 'REF Flag Nut']
-PRINTED = ['Fork', 'Cradle', 'Yaw Head', 'Specimen Holder', 'Spring Plunger',
-           'Pin Pad', 'Tilt Axle', 'Axle Spacer', 'Carriage Washer 1', 'Carriage Washer 2',
+PRINTED = ['Fork', 'Cradle', 'Yaw Head', 'Specimen Holder', 'Tilt Axle', 'Axle Spacer', 'Carriage Washer 1', 'Carriage Washer 2',
            'Carriage Washer 3', 'Carriage Washer 4', 'Height Gauge', 'Endstop Bracket']
 
 
