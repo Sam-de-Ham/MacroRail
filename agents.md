@@ -18,8 +18,9 @@ Keep it current: update it after every chunk of work, and prune instead of appen
   (`hardware/scan-module/README.md`), with an assembly and usage PDF
   (`hardware/scan-module/guide/`). STLs are exported to `exports/test-pieces/` and
   `exports/final/`. The model is complete, including the tilt home switch bracket. The puck
-  was merged into the centring plate (one "specimen holder", no magnets). Next: the user
-  prints and checks the test pieces, then the final parts.
+  was merged into the centring plate (one "specimen holder", no magnets). Test round 1 is
+  done; its fixes (thin motor upright, tilt bore fit, straight pin clamp, no plunger, small
+  fits) are in. Next: the user reprints the changed test pieces, then prints the final parts.
 - **Before the v1.1.0 release:** the user tests the three newest features and the items under
   **Not yet tested on hardware**. Then set the version to 1.1.0 in `pyproject.toml`, date the
   CHANGELOG, tag, and push and make a GitHub release once the user agrees.
@@ -74,7 +75,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular, and nothing more
       KY-024 for home.
     - Centring: one plate pushed by two M3 screws, by hand, once per specimen. It puts the
       insect where the axes cross.
-    - The specimen holder is one part: the centring plate with the pin clamp (pad screw)
+    - The specimen holder is one part: the centring plate with the pin clamp (one M3 screw)
       and nose on top. The removable magnetic puck was dropped (user, 2026-10-21):
       specimens change by swapping the pin.
   - **The app's part:** a centring wizard (4 yaw angles, a circle fit, screw turns), then a

@@ -23,7 +23,7 @@ def run(_):
     s.circle('0', '0', 'hubBoss_D')
     ext(s, JOIN, 'CR Hub Boss -Y', 'hubBoss_in', POS, bodies=[cr])
     s = sk('y', '-(arm_in + arm_T)', 'PL Arm -Y Outer', 'CR 05 Tilt D-Bore')
-    pr = dd_bore(s, '0', '0', 'byj_shaftD + fit_D', 'byj_flat + fit_D', 'x')
+    pr = dd_bore(s, '0', '0', 'byj_shaftD + fit_Dt', 'byj_flat + fit_Dt', 'x')
     ext(s, CUT, 'CR Tilt D-Bore', 'tiltBoreDepth', POS, bodies=[cr], profiles=pr)
     s = sk('y', 'arm_in + arm_T', 'PL Arm +Y Outer', 'CR 06 Axle Socket')
     s.circle('0', '0', 'axle_spigotD + fit_slide / 2')

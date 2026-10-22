@@ -8,7 +8,8 @@ are in [`docs/3d-scanning.md`](../../docs/3d-scanning.md); measurements are in
 ![Assembly](guide/img/assembled.png)
 
 **Assembly and use:** [`guide/MacroRail-scan-module-guide.pdf`](guide/MacroRail-scan-module-guide.pdf)
-(7 pages: parts, test pieces, assembly, homing, mounting a specimen, centring).
+(8 pages: parts and tools, test pieces round 2, step-by-step assembly in groups with the
+reason behind each step, homing, mounting a specimen, centring).
 Rebuild it with `python guide/build_guide.py`, then print `guide/scan-module-guide.html` to
 PDF (Edge: `msedge --headless=new --no-pdf-header-footer --print-to-pdf=<pdf> <html>`). The
 pictures come from `fusion/render_guide.py`, one shot per call.
@@ -17,7 +18,7 @@ pictures come from `fusion/render_guide.py`, one shot per call.
 
 - **Scripts are the source.** Every feature comes from the stage scripts in [`fusion/`](fusion/),
   run in order through the Fusion MCP. The whole model has been rebuilt from an empty timeline
-  with them, with an identical result: 59 bodies, every feature healthy, every sketch fully
+  with them, with an identical result: 57 bodies, every feature healthy, every sketch fully
   constrained. To rebuild, run each stage as a script that does
   `runpy.run_path(<stage file>)['run'](context)`:
 
@@ -27,8 +28,8 @@ pictures come from `fusion/render_guide.py`, one shot per call.
   | `stage_02_reference.py` | Carriage, objective + lens keep-out, insect, pin, 608, both motors, KY-024, hall sensor |
   | `stage_03_fork.py` | Fork (base + uprights + ribs, 608 seat, tilt motor seat, endstop bracket holes) |
   | `stage_04a_cradle.py`, `stage_04b_cradle_floor.py` | Cradle (arms, tilt hubs, counterweight holes, flag bolt hole, floor seats) |
-  | `stage_05a_head.py` … `stage_05d_head_hardware.py` | Yaw head (bell hub, ring), spring housing, plunger, snap-off fin, base of the specimen holder (centring plate), head hardware |
-  | `stage_06_puck.py` | Top of the specimen holder (neck, clamp column, nose), pin pad, pad screw |
+  | `stage_05a_head.py` … `stage_05d_head_hardware.py` | Yaw head (bell hub, ring), spring housing (spring straight on the holder rim), snap-off fin, base of the specimen holder (centring plate), head hardware |
+  | `stage_06_puck.py` | Top of the specimen holder (neck, clamp column, nose), straight pin clamp: screw hole and captive nut slot |
   | `stage_07a_axle_washers.py`, `stage_07b_gauge.py` | Tilt axle, spacer, carriage washers and bolts, height gauge |
   | `stage_07c_endstop.py` | Endstop bracket (pilot holes for the switch), reference switch, roller, screws, bolts |
   | `stage_08_present_pose.py` | Appearances, selection sets, the two pose moves |
@@ -86,8 +87,6 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | Cradle | 1 | Floor underside | Arms print upright (about 110 mm). |
 | Yaw Head | 1 | Bell underside (flat) | No supports. **Snap off the thin fin** under the spring housing after printing. |
 | Specimen Holder | 1 | Plate underside | Centring plate + clamp column + nose in one part. Nose up. |
-| Spring Plunger | 1 | Spigot end | Tiny; use a brim. |
-| Pin Pad | 1 | Any flat face | |
 | Tilt Axle | 1 | Flange | Shank vertical, so it comes out round. |
 | Axle Spacer | 1 | Flat | |
 | Carriage Washer | 4 | Flat | |
@@ -102,9 +101,9 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | 608 bearing | 1 | +Y upright |
 | KY-024 | 1 | Under the cradle floor; bend its TO-92 flat into the floor pocket, legs into the slot |
 | Magnet Ø5.7 × 1.8 | 1 | Hub underside (yaw home) |
-| Pen spring (4.6 / 19) | 1 | Spring housing, behind the plunger |
+| Pen spring (4.6 / 19) | 1 | Spring housing; pushes straight on the holder's rim |
 | M3 × 17.5 + nut | 5 | Base to carriage (4, with printed washers), tilt home flag (1) |
-| M3 × 11.8 + nut | 11 | Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pad screw (1), hub set screw (1), endstop bracket (2) |
+| M3 × 11.8 + nut | 11 | Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pin clamp screw (1), hub set screw (1), endstop bracket (2) |
 | Roller microswitch + 2 wood screws Ø1.9 | 1 | On the endstop bracket, pivot end towards +X (camera), pins down; glue as well |
 | M3 × 27.7 + nut | 1 | Tilt axle (assumes about 25.8 under the head) |
 
@@ -129,19 +128,31 @@ in `exports/final/`.
 | Test piece | Check |
 |---|---|
 | `tp-bearing-seat` | The 608 presses in by hand or vice and doesn't fall out; the lip stops it. |
-| `tp-motor-seat` | The tilt motor's boss drops into the recess; both ear bolts line up; the counterbored heads sit flush. |
+| `tp-motor-seat` | The tilt motor's boss drops into the recess; both ear bolts line up; the counterbored heads sit flush. (4 mm upright since round 2.) |
 | `tp-base-holes` | Lay it on the real carriage: the four bolts line up, and it sits flat over the screw heads. |
-| `tp-tilt-d-bore` | Slides onto the motor shaft without play and without force. |
+| `tp-tilt-d-bore` | Goes onto the motor shaft (on `tp-motor-seat`) firmly by hand, covers the flats, no play. |
 | `tp-axle-socket` | The printed axle's spigot fits; the nut presses into its pocket. |
 | `tp-cradle-floor` | Yaw motor boss, ear bolts, KY-024 bolt and board seat, sensor pocket and lead slot. |
 | `yaw-head` | Fits the yaw shaft; set screw nut, centring nuts, magnet and spring go in; the fin snaps off cleanly. |
-| `specimen-holder` | Slides freely in the ring between the screw tips and the plunger; the pin passes through the nose hole. |
+| `specimen-holder` | Slides freely in the ring between the screw tips and the spring; the pin slides through the nose; the clamp nut can't turn in its slot. |
 | `endstop-bracket` | Bolts to the +Y upright; the switch's holes line up with the pilot holes and the wood screws bite. |
 | `tilt-axle` + `axle-spacer` | The axle slips through the 608; the spacer slides over the axle. |
-| `pin-pad`, `spring-plunger` | The pad slides into its pocket and clamps pins 00 to 1; the plunger slides in its bore. |
 
-Fit parameters to adjust if a test fails: `fit_press` (608 seat), `fit_D` (D-bores),
-`fit_slide`, `boss_clr`, `m3_pocketAF`, `magPocketD`, `pinHoleD`.
+Fit parameters to adjust if a test fails: `fit_press` (608 seat), `fit_D` (yaw D-bore),
+`fit_Dt` (tilt D-bore), `fit_slide`, `boss_clr`, `m3_pocketAF`, `clampNut_H`, `magPocketD`,
+`pinHoleD`, `ws_pilotD`.
+
+**Round 1 results (2026-10-22) and what changed:**
+- Tilt D-bore went on only halfway and was far too loose. The shaft barely reached past the
+  6 mm upright, so the motor-side upright is now 4 mm (`upM_T`): 6.2 mm of the flats engage.
+  The bore prints on its side, so it got its own fit `fit_Dt` = 0.05 (was 0.2).
+- 608 seat a little tight: `fit_press` 0.25 → 0.35. Magnet pocket too small: +0.2 → +0.4.
+  Pin hole tight: 1.0 → 1.2.
+- Pin clamp: the pad was dropped. One M3 screw on a straight line through a captive nut;
+  the old 6.2 mm slot let the nut spin, the new one is 5.5 mm with the flats up and down.
+- Plunger dropped: the spring pushes straight on the holder's rim; its bore was shortened
+  so it keeps about 1.5 mm of squeeze at full travel.
+- Everything else passed.
 
 ## Open
 

@@ -50,7 +50,7 @@ centring is done by hand once per specimen.
 ```
 camera ──▶ lens axis ──▶ insect (on both axes)
                           │ pin, 19 mm exposed
-                          ├ specimen holder: nose + pin clamp (pad screw)
+                          ├ specimen holder: nose + pin clamp (one M3 screw)
                           │   on the centring plate, one part; ring + X/Y screws
                           ├ yaw 28BYJ-48 (head straight on its shaft)
                           └ cradle floor
@@ -68,10 +68,10 @@ base plate ── 4 × M3 ── rail carriage (focus axis, unchanged)
 | **Yaw axis** | The **yaw 28BYJ-48** screwed under the cradle floor. The head mounts **straight on its shaft** through a D-hub, with no bearing (user's choice). | The yaw only carries the head (about 25 g). Shaft play causes a small, repeatable wobble that stays well inside the frame; the centring wizard shows how big it is. A 608 turntable can be added later if it matters. |
 | **Yaw home** | KY-024 linear hall board on the cradle floor, one Ø5.7 magnet in the head's underside. Homing reads the analog output and takes the field peak, the magnet's centre. | The peak repeats better than the board's on/off threshold. |
 | **Yaw range** | Unlimited in v1. | Nothing electrical turns with the head. |
-| **Centring (X/Y)** | One printed plate (Ø26 × 6) in a printed Ø43 ring on the yaw hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; a pen spring behind a printed plunger at 225° pushes back. The plate's rim has a 4 mm-wide V that holds the screw ends, so the plate can't lift. Plain button-head screws turned with a 2 mm hex key (no knobs). ±2.5 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
-| **Specimen holder** | One printed part: the centring plate with the clamp column, pad screw and nose on top. It stays in the head; specimens change by swapping the pin. | Explained under "Why no puck". |
+| **Centring (X/Y)** | One printed plate (Ø26 × 6) in a printed Ø43 ring on the yaw hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; a pen spring at 225° pushes straight on the rim. The plate's rim has a 4 mm-wide V that holds the screw ends, so the plate can't lift. Plain button-head screws turned with a 2 mm hex key (no knobs). ±2.5 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
+| **Specimen holder** | One printed part: the centring plate with the clamp column and nose on top; one M3 screw through a captive nut pinches the pin. It stays in the head; specimens change by swapping the pin. | Explained under "Why no puck". |
 | **Pin clamp** | A V-groove channel running through a 45° tapered nose (Ø5 tip) and the clamp body, about 18 long. A printed pad on an M3 screw presses the pin; the screw sits at the bottom of the carrier. | Pins 00 to 1 (0.30–0.40) all sit on the same line. The tapered nose and low screw keep everything near the insect out of the lens's way. |
-| **Height (Z)** | Slide the pin against the printed stepped gauge (17 to 21 mm above the nose tip), then clamp it with the pad screw. The wizard measures any height error, and you re-set the pin with the gauge. A fine Z screw was dropped in CAD: there was no room for it inside the lens clearance cone. | Puts the insect on the tilt axis, for glued-tip and pinned-through specimens alike. Pins stay full length (39.4), no cutting needed. |
+| **Height (Z)** | Slide the pin against the printed stepped gauge (17 to 21 mm above the nose tip), then clamp it with the clamp screw. The wizard measures any height error, and you re-set the pin with the gauge. A fine Z screw was dropped in CAD: there was no room for it inside the lens clearance cone. | Puts the insect on the tilt axis, for glued-tip and pinned-through specimens alike. Pins stay full length (39.4), no cutting needed. |
 | **Accessories** | Height gauge; a calibration puck with a straight needle (for measuring where the axes appear in the image). | Calibration happens once per machine; it's stored in `config.toml`. |
 | **Electronics** | 2 × ULN2003 from the user's 5 V supply, ground shared with the Nano. Pins below. | The Nano's USB 5 V shouldn't carry two motors (about 240 mA each while moving). |
 | **Lighting** | Deferred. Felt background, 2–3 lights and a bounce, as the user does now. | No dome needed. |
@@ -139,7 +139,7 @@ then a Ø29.8 adapter.
 ### One scan
 
 1. **Mount** the pinned insect in the holder's nose, set the pin height with the gauge,
-   and tighten the pad screw (you, about 1 min).
+   and tighten the clamp screw (you, about 1 min).
 2. **Centre** with the wizard. The app turns the insect to 4 yaw angles, finds it in the
    live view (sharp tiles) and with a focus scan, fits a circle, and says how far to turn
    each screw, then turns the head so that screw faces you. Repeat until under about 0.1 mm (you and the app, about 2 min). It also
@@ -167,10 +167,15 @@ print guide, the hardware list and the test-piece checklist.
 Changes from the agreed concept, with reasons:
 - **Fork as one body:** coaxial bearing and motor seats with no assembly error.
 - **Wider cradle:** arms at ±33 (planned ±30), so the centring screws clear them.
-- **No knobs:** the centring and pad screws are turned with a 2 mm hex key; yaw brings each
+- **No knobs:** the centring and clamp screws are turned with a 2 mm hex key; yaw brings each
   screw round to the user.
 - **Wider uprights:** 44.2 mm (motor tab spacing + counterbore + 3), so the tilt motor's ear
   bolts land inside the upright.
+- **Thin motor-side upright (after test round 1):** 4 mm instead of 6, so the short
+  28BYJ-48 shaft reaches 6.2 mm into the cradle hub. The tilt motor goes on after the cradle
+  is in, its shaft pushed in from outside.
+- **Simpler head (after test round 1):** no pin pad and no spring plunger. One M3 screw on a
+  straight line clamps the pin; the spring pushes straight on the holder's rim.
 - **Thicker plate:** 6 mm with a 4 mm rim V. A flat M3 end can't enter a narrow V, so the
   wider V captures the screws and the plate can't lift.
 - **Bell hub:** the head prints hub-down with no supports. A snap-off fin carries the
