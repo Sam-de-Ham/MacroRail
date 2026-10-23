@@ -96,7 +96,7 @@ TESTS = [
 FITS = [
     ("608 too tight or loose", "<code>fit_press</code> (now 0.35)"),
     ("Tilt D-bore (cradle)", "<code>fit_Dt</code> (now 0.05)"),
-    ("Yaw D-bore (head)", "<code>fit_D</code> (0.2, passed)"),
+    ("Yaw D-bore (head)", "<code>fit_D</code> (now 0.1; 0.2 held only with the set screw)"),
     ("Nut pockets", "<code>m3_pocketAF</code> (5.7, passed)"),
     ("Pin clamp nut turns", "<code>clampNut_H</code> (now 5.5)"),
     ("Magnet pocket", "<code>magPocketD</code> (now magnet + 0.4)"),
@@ -237,7 +237,8 @@ def page_join():
     "against the outside of the +Y arm, centred, and push the axle in from outside: through the bearing, "
     "the spacer and into the arm's socket. Bolt it with the M3 &times; 27.7 from the flange side into the "
     "nut, until nothing wobbles. <i>This clamps the axle, spacer and bearing inner race to the cradle; "
-    "the bearing does the turning.</i>",
+    "the bearing does the turning. It also fixes the cradle sideways, so it can't slide off the motor "
+    "shaft: that is why the tilt hub needs no set screw, unlike the yaw head.</i>",
     "<b>Flag.</b> M3 &times; 17.5 through the small hole near the top of the +Y arm, head inside, nut "
     "outside. This bolt's end presses the home switch.",
 ])}

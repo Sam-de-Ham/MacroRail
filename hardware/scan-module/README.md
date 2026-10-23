@@ -152,6 +152,7 @@ Fit parameters to adjust if a test fails: `fit_press` (608 seat), `fit_D` (yaw D
   the old 6.2 mm slot let the nut spin, the new one is 5.5 mm with the flats up and down.
 - Plunger dropped: the spring pushes straight on the holder's rim; its bore was shortened
   so it keeps about 1.5 mm of squeeze at full travel.
+- Yaw D-bore held only once the set screw was tight: `fit_D` 0.2 → 0.1 (2026-10-23).
 - Everything else passed.
 
 ## Open
