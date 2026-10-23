@@ -86,7 +86,7 @@ P = [
     ('to92_H', '4.6', 'REF TO-92 height'),
     # --- fits ---
     ('fit_press', '0.35', 'bearing seat diameter allowance (0.25 was a little tight, test print)'),
-    ('fit_D', '0.2', 'D-shaft bore clearance on diameter (yaw head: bore printed vertical)'),
+    ('fit_D', '0.1', 'yaw head D-bore clearance (bore printed vertical; 0.2 held only with the set screw, test print)'),
     ('fit_Dt', '0.05', 'tilt D-bore clearance (bore printed horizontal; 0.2 was far too loose, test print)'),
     ('fit_slide', '0.4', 'sliding fit, total (lens-mount validated)'),
     ('gap', '1', 'general running gap between moving and fixed parts'),
