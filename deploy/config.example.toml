@@ -3,8 +3,10 @@
 # Day-to-day settings (speeds, currents, step size, ...) are changed in the web UI instead.
 
 [rail]
-# Stable path of the Nano's USB serial port: `ls /dev/serial/by-id/`
-port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
+# The Nano's serial port. "auto" finds it by what it reports, which also works with the scan
+# module's Nano plugged in (both are CH340 clones, so their /dev/serial/by-id names collide).
+# Or pin it to a USB socket: `ls /dev/serial/by-path/`
+port = "auto"
 # Microsteps per mm of travel: 200 steps × 16 microsteps ÷ 8 mm lead (Tr8×8 screw).
 steps_per_mm = 400
 # Soft limits, in mm from the home switch. The rail parks at min_mm after homing.
@@ -17,6 +19,16 @@ homing_probe_speed_mm_s = 0.2
 homing_clearance_mm = 0.5
 homing_release_max_mm = 5.0
 homing_accel_mm_s2 = 10.0
+
+[module]
+# The 3D scan module's own Nano (docs/protocol-module.md). "auto" as for the rail.
+port = "auto"
+# Safe tilt range from the CAD lens-clearance sweep, in degrees (0 = level, + = back towards
+# the camera). Until the tilt switch's angle is calibrated, tilt stops at the uncalibrated
+# minimum instead.
+tilt_min_deg = -33.0
+tilt_max_deg = 90.0
+tilt_min_uncalibrated_deg = -20.0
 
 [camera]
 capture_timeout_s = 10.0

@@ -59,7 +59,7 @@ class FocusScanner:
         self._approach = approach
         self._check_stop = check_stop
         self._on_change = on_change
-        self.task: str | None = None  # "range" or "backlash" while a scan runs
+        self.task: str | None = None  # what the running scan is for ("range", "backlash", ...)
         self.done = 0
         self.total = 0
         self.range: RangeResult | None = None
@@ -114,6 +114,19 @@ class FocusScanner:
                 suggested_takeup=math.ceil(2 * backlash) + max(1, dof),
             )
             return self.backlash
+        finally:
+            self._end()
+
+    async def sweep(
+        self, task: str, center: int, span: int, step: int, motion: Motion
+    ) -> list[Sample]:
+        """Frames every `step` steps across `span` centred on `center`, for measurements that
+        do their own analysis (the 3D workspace's calibration and centring). `task` names it
+        in the progress shown to the user."""
+        positions = self._positions(center - span // 2, center + span // 2, step)
+        self._begin(task, len(positions))
+        try:
+            return await self._sweep(positions, motion)
         finally:
             self._end()
 

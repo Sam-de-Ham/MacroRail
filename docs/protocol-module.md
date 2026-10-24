@@ -23,7 +23,9 @@ The module has its own Nano so the rail firmware never changes (see
   the exact number is measured (see `HOME YAW`), because the gearbox ratio isn't an integer.
 - **TILT:** positive moves go **away from the switch**, which turns the insect's belly towards the
   lens (the tilt *angle* decreases). The switch is at the dorsal end, past +90°.
-- **YAW:** positive is the direction `HOME YAW` turns. Yaw is unlimited.
+- **YAW:** positive turns the head **counter-clockwise seen from above**, and it is the
+  direction `HOME YAW` turns. Yaw is unlimited. At yaw 0 the magnet is over the hall sensor,
+  centring screw X points at the camera and screw Y at the bearing side (+Y).
 - Each axis has a direction constant in `firmware-module/src/config.h` (`TILT_INVERT`,
   `YAW_INVERT`) for the motor wiring.
 
@@ -38,6 +40,10 @@ line that can't be parsed. The axis is a word argument: `YAW` or `TILT`.
   `ERR` with the reason it ended early.
 - **One motion at a time, across both axes.** While one runs, only `INFO`, `STATUS`, `HALL` and
   `STOP` are accepted; everything else gets `ERR BUSY`.
+- **Order of checks:** the line (`SYNTAX`, `TOOLONG`), the command (`UNKNOWN`), the axis word,
+  the number of arguments and every argument's range (`ARG`), then `BUSY`, then the state
+  checks (`NOT_HOMED`, `LIMIT`, `PRESSED`). So a malformed request gets `ARG` even while busy.
+- Numbers are decimal integers that fit the firmware's 32-bit `long`; anything else is `ERR ARG`.
 - The module has no driver UART, so there is no half-duplex rule; the host still uses the same
   `Link` discipline.
 
@@ -49,31 +55,70 @@ line that can't be parsed. The axis is a word argument: `YAW` or `TILT`.
 | `STATUS` | immediate | `yaw= tilt= yhomed= thomed= moving=<none\|yaw\|tilt> switch= hall=` | Positions in half-steps, flags `0`/`1`, `hall` the raw ADC reading (0–1023). Polled every 0.5 s; it also keeps the link watchdog alive. |
 | `HALL` | immediate | `hall=` | One raw ADC reading of the hall sensor. |
 | `LIMITS TILT <min> <max>` | immediate | | Soft limits for tilt, enforced once tilt is homed. Yaw has none. |
-| `HOME TILT <fast> <slow> <clearance> <max> <release_max> <accel>` | motion | `pos=0 release=` | The rail's homing sequence: seek the switch (negative direction) at `fast` for up to `max`; back off until the switch has released, then `clearance` further; touch it again at `slow`. That contact is `0`. `release` is the switch's hysteresis. |
+| `HOME TILT <fast> <slow> <clearance> <max> <release_max> <accel>` | motion | `pos=0 release=` | The rail's homing sequence: seek the switch (negative direction) at `fast` for up to `max`; back off until the switch has released, then `clearance` further; touch it again at `slow` (the probe). That contact is `0`. `release` is the switch's hysteresis. If the switch is pressed at the start, it backs off first and then seeks as usual, so the probe always has the seek's trip point to compare with (below). |
 | `HOME YAW <speed> <accel> <max> <takeup>` | motion | `pos=0 from= dev= width=` | Turn in the positive direction for up to `max` half-steps, sampling the hall sensor. Find the magnet's field peak (below). Turn back to `takeup` before the peak and approach it in the positive direction; that point is `0`. `from` is the peak's position in the frame before this command (two homings one turn apart measure the half-steps per turn). `dev` is the peak's deviation from the baseline in ADC counts, `width` the width of the peak at half height in half-steps. |
 | `MOVE <axis> <target> <speed> <accel>` | motion | `pos=` | Absolute. The axis must be homed; a tilt target must be within the limits. |
-| `JOG <axis> <delta> <speed> <accel>` | motion | `pos=` | Relative. Allowed before homing; once tilt is homed, the target must be within its limits. |
-| `STOP` | immediate | | Decelerate whatever is moving. Its pending motion replies `ERR STOPPED pos=`. |
+| `JOG <axis> <delta> <speed> <accel>` | motion | `pos=` | Relative. Allowed before homing, but an unhomed tilt jog may be at most 170 half-steps (about 15°) either way, else `ERR LIMIT` (the host caps it at 10°). Once tilt is homed, the target must be within its limits. |
+| `STOP` | immediate | | Decelerate whatever is moving, never past the motion's own target (so never past the tilt limits); a motion that hasn't stepped yet stops where it is. Its pending motion replies `ERR STOPPED pos=`. |
 
-`speed` is 1–1000 half-steps/s and `accel` 1–4000 half-steps/s²; anything else is `ERR ARG`.
+Argument ranges (anything else is `ERR ARG`):
+
+- `speed`, `fast`, `slow`: 1–1000 half-steps/s; `accel`: 1–4000 half-steps/s².
+- Absolute positions (`MOVE` target, `LIMITS` min and max): −1,000,000 to 1,000,000, and
+  `min` ≤ `max`.
+- Distances: `JOG` delta at most 20,000 either way (about 5 turns); `HOME TILT` `clearance`,
+  `max` and `release_max` 1–20,000 with `release_max` > `clearance`; `HOME YAW` `takeup`
+  1–20,000.
+- `HOME YAW` `max`: 16–5376 (below).
+
+**Tilt homing, the probe's contact:** like other motions (and unlike the seek, which takes the
+very first blip), the probe counts only a contact that is still closed a few µs later. It must
+also lie where the seek tripped the switch: at most `clearance`/2 half-steps before that point
+(the probe comes from the positive side). An earlier contact is noise or a switch that moved;
+homing there would put 0 in the wrong place, so homing ends with `ERR SWITCH_EARLY pos=` and
+tilt stays unhomed.
 
 ### Finding the magnet (HOME YAW)
 
 The KY-024's linear hall sensor reads about 512 with no field and moves up or down (by pole)
-as the magnet passes. While turning at constant speed the firmware stores the mean reading of
-every 8 half-steps (one byte each, ADC/4), up to `max` half-steps. Then:
+as the magnet passes. While turning, the firmware reads the sensor at every position of the
+sweep, from its start (before the first step) to its end at `max`, and stores the rounded mean
+of every 8 positions (one byte each, ADC/4): sample i covers offsets 8i … 8i+7. A last, partial
+sample is dropped. Then:
 
 1. **Baseline:** the most common stored value (a 64-bucket histogram), i.e. the reading away
    from the magnet.
 2. **Deviation** of each sample from the baseline; the largest is the peak.
-3. If the largest deviation is below 40 ADC counts: `ERR NO_MAGNET`.
+3. If the largest deviation is below 40 ADC counts, or there are fewer than 2 samples:
+   `ERR NO_MAGNET`.
 4. The **peak region** is the contiguous run of samples around the largest deviation whose
    deviation is at least half of it. If the sweep covered more than a turn and that run touches
-   either end of the sweep, the next-highest peak whose run lies fully inside is used instead.
+   either end of the sweep, the next-highest peak whose run lies fully inside is used instead:
+   the peaks are tried highest first, skipping every one whose run touches an end.
 5. The **peak position** is the deviation-weighted centroid of that run. This repeats far better
    than the moment the board's comparator would switch.
 
-The host sends `max` of about 1.3 turns.
+Details, as the firmware implements them:
+
+- `max` must be 16–5376 half-steps (at least 2, at most 672 one-byte bins of 8) and `takeup`
+  1–20,000; otherwise `ERR ARG`. The host sends about 1.25 turns.
+- Deviations are absolute, so either pole of the magnet works.
+- Every `ERR` that ends a motion carries `pos=` (the axis's position where it stopped).
+- The baseline is the 64-bucket mode, then the rounded mean of the bins in that bucket ×4
+  (integer ADC counts). `dev` is in ADC counts at a resolution of 4; `width` is the run's
+  bins × 8.
+- One reading per position, whatever the speed, so the ramps don't skew the bins. The
+  centroid uses each bin's centre, 8i + 3.5, and is rounded to the nearest half-step.
+- The rule for a run touching an end applies only when `max` is over one nominal turn (4076);
+  the other peak must also reach 40 counts and lie fully inside. Otherwise the run found is
+  used.
+
+**Positions:** the firmware never resets its step counters, because in half-step mode the coil
+pattern follows the counter. Each axis keeps an origin instead, and homing moves the origin;
+what the host sees is identical (0 after homing). With the coils off a rotor may settle by up
+to half a motor step (about 0.09° at the output). Before a motor whose coils were off takes
+its first step, the firmware energises the coil pattern of its held position and waits 10 ms,
+which pulls the rotor back, so the count stays right and the first step is a normal one.
 
 ## Events
 
@@ -90,11 +135,13 @@ The host sends `max` of about 1.3 turns.
 | `SYNTAX`, `TOOLONG`, `UNKNOWN`, `ARG` | As in the rail protocol (`ARG` also for an unknown axis). |
 | `BUSY` | A motion command is in flight. |
 | `NOT_HOMED` | Absolute move of an axis that isn't homed. |
-| `LIMIT` | A tilt target outside the soft limits. |
+| `LIMIT` | A tilt target outside the soft limits, or an unhomed tilt jog over 170 half-steps. |
 | `STOPPED` | The motion ended early on `STOP`. |
-| `ENDSTOP` | The tilt switch closed during a tilt move or jog: stopped at once, tilt homed cleared. A tilt move toward the pressed switch is refused with this code without moving. |
+| `ENDSTOP` | The tilt switch closed during a tilt move or jog: stopped at once, tilt homed cleared. Also when that happens while the move is already stopping on `STOP` or the watchdog, so a lost homing is never hidden. Carries `pos=`. |
+| `PRESSED` | A tilt move or jog toward the switch while it is pressed: refused without moving, homed kept. Carries `pos=`. |
 | `NO_SWITCH` | Tilt homing travelled `max` without finding the switch. |
 | `SWITCH_STUCK` | The switch was still pressed after backing off `release_max`. |
+| `SWITCH_EARLY` | Tilt homing's probe met the switch more than `clearance`/2 before where the seek tripped it (noise on the switch line, or the switch moved). Tilt stays unhomed. Carries `pos=`. |
 | `NO_MAGNET` | Yaw homing found no field peak. |
 | `LINK` | The watchdog stopped motion: no line from the host for 2 s. |
 
@@ -102,14 +149,21 @@ The host sends `max` of about 1.3 turns.
 
 - **The tilt switch is always armed**, in every motion of either axis, through a pin-change
   interrupt: its first contact stops a tilt motion before the next step. As on the rail, a tilt
-  move that starts on the pressed switch and moves away ignores it only until it has released;
-  outside homing, a contact counts only if it is still closed a few µs later.
-- An endstop hit clears tilt's homed flag. Tilt soft limits apply once homed.
+  move that starts on the pressed switch and moves away ignores it only until it has released
+  (its release bounce included); outside the homing seek, a contact counts only if it is still
+  closed a few µs later.
+- While tilt moves toward the switch, the switch's level stops it too, not only a closing edge:
+  a contact made just before the motion started still counts. Whether the switch is pressed
+  when a motion starts is read from the debounced level or the raw input, whichever says
+  pressed.
+- An endstop hit clears tilt's homed flag. Tilt soft limits apply once homed; before that,
+  tilt jogs are limited to 170 half-steps (about 15°).
 - **Coils off when idle:** 300 ms after a motion ends, both motors' coils are switched off. The
   gearboxes hold the load, and no heat reaches the insect. A motion energises its motor again.
 - While a motion is in flight, the firmware stops it (with deceleration) if no line arrives for
   2 s.
-- Homed flags are only lost on reset, `ENDSTOP` (tilt) or a failed `HOME`.
+- Homed flags are only lost on reset, `ENDSTOP` (tilt) or a `HOME` of that axis (cleared when
+  it starts, set when it succeeds).
 
 ## Pins (module Nano)
 

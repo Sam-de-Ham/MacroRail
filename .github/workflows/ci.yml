@@ -23,3 +23,4 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.0  # no floating v10 tag is published
       - run: uv tool install platformio
       - run: pio run -d firmware
+      - run: pio run -d firmware-module

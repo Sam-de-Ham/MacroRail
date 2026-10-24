@@ -18,7 +18,12 @@
   <div class="chrome">
     <header class="topbar">
       <div class="brand"><img src="icon.svg" alt="" width="22" height="22"><span>MacroRail</span></div>
+      <div class="segmented compact workspace-switch" role="radiogroup" aria-label="Workspace" id="workspace-switch">
+        <button data-action="workspace" data-workspace="2d" role="radio" title="Focus stacking">2D</button>
+        <button data-action="workspace" data-workspace="3d" role="radio" title="3D scanning">3D</button>
+      </div>
       <div class="pills">
+        <span class="pill" id="module-pill" data-only="3d"><i></i><span>Module</span></span>
         <span class="pill" id="rail-pill"><i></i><span>Rail</span></span>
         <span class="pill" id="camera-pill"><i></i><span>Camera</span></span>
       </div>
@@ -49,15 +54,16 @@
 
     <section class="column-controls">
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button role="tab" data-tab="shoot">Shoot</button>
+        <button role="tab" data-tab="shoot" data-only="2d">Shoot</button>
+        <button role="tab" data-tab="rig" data-only="3d">Rig</button>
         <button role="tab" data-tab="camera">Camera</button>
-        <button role="tab" data-tab="review">Review</button>
+        <button role="tab" data-tab="review" data-only="2d">Review</button>
         <button role="tab" data-tab="system">System</button>
       </nav>
 
       <!-- Shoot ------------------------------------------------------------------------- -->
       <div class="tab-panel" data-panel="shoot">
-        <article class="card">
+        <article class="card" id="position-card">
           <header class="card-header">
             <h2>Position</h2>
             <span class="badge" id="homed-badge">Not homed</span>
@@ -175,6 +181,61 @@
       </div>
 
       <!-- Camera ------------------------------------------------------------------------ -->
+      <!-- Rig (3D): the rail's position card moves in here, then the scan module ----- -->
+      <div class="tab-panel" data-panel="rig" hidden>
+        <div id="position-slot-3d"></div>
+        <article class="card">
+          <header class="card-header">
+            <h2>Tilt and yaw</h2>
+            <span class="badge" id="module-badge">Offline</span>
+          </header>
+          <p class="muted small-text" id="module-problem" hidden></p>
+          <div class="pose-gauges">
+            <figure class="gauge">
+              <svg id="tilt-gauge" viewBox="0 0 120 120" role="img" aria-label="Tilt, seen from the side with the camera on the right"></svg>
+              <figcaption><span class="gauge-value" id="tilt-value">–</span><span class="muted">Tilt</span></figcaption>
+            </figure>
+            <figure class="gauge">
+              <svg id="yaw-gauge" viewBox="0 0 120 120" role="img" aria-label="Yaw, seen from above with the camera on the right"></svg>
+              <figcaption><span class="gauge-value" id="yaw-value">–</span><span class="muted">Yaw</span></figcaption>
+            </figure>
+          </div>
+          <div class="button-row">
+            <button class="button grow" data-action="module-home" data-axes="tilt,yaw" id="module-home">Home</button>
+            <button class="button small" data-action="module-home" data-axes="tilt" id="module-home-tilt">Tilt only</button>
+            <button class="button small" data-action="module-home" data-axes="yaw" id="module-home-yaw">Yaw only</button>
+          </div>
+          <div class="segmented" id="rotary-steps" role="radiogroup" aria-label="Turn step"></div>
+          <div class="rotary-jog">
+            <span class="rotary-label">Tilt</span>
+            <button class="button small" data-action="module-jog" data-axis="tilt" data-direction="-1" title="Turn the belly towards the lens">− Belly</button>
+            <button class="button small" data-action="module-jog" data-axis="tilt" data-direction="1" title="Turn the back towards the lens">Back +</button>
+            <span class="rotary-label">Yaw</span>
+            <button class="button small" data-action="module-jog" data-axis="yaw" data-direction="-1" title="Clockwise, seen from above">− Clockwise</button>
+            <button class="button small" data-action="module-jog" data-axis="yaw" data-direction="1" title="Counter-clockwise, seen from above">Counter +</button>
+          </div>
+          <div class="pose-goto">
+            <label class="field-group inline"><span>Tilt</span><span class="field-with-unit"><input class="field" type="number" step="1" id="pose-tilt" aria-label="Tilt angle"><span class="unit">°</span></span></label>
+            <label class="field-group inline"><span>Yaw</span><span class="field-with-unit"><input class="field" type="number" step="1" id="pose-yaw" aria-label="Yaw angle"><span class="unit">°</span></span></label>
+            <button class="button" data-action="pose-go" id="pose-go">Go</button>
+          </div>
+          <p class="muted small-text" id="tilt-range-note"></p>
+        </article>
+
+        <article class="card">
+          <h2>Quick poses</h2>
+          <div class="quick-poses">
+            <button class="button" data-action="pose" data-tilt="0">Level</button>
+            <button class="button" data-action="pose" data-tilt="90">Top view</button>
+            <button class="button" data-action="pose" data-tilt="min">Belly view</button>
+            <button class="button" data-action="pose" data-yaw="180">Screw X to you</button>
+            <button class="button" data-action="pose" data-yaw="90">Screw Y to you</button>
+            <button class="button" data-action="pose" data-yaw="0">Yaw zero</button>
+          </div>
+          <p class="muted small-text">"To you" means pointing away from the lens, where the hex key reaches it.</p>
+        </article>
+      </div>
+
       <div class="tab-panel" data-panel="camera" hidden>
         <article class="card">
           <header class="card-header">
@@ -270,6 +331,29 @@
           <div class="scan-result" id="backlash-result" hidden>
             <p id="backlash-text"></p>
             <button class="button primary" data-action="apply-backlash" id="apply-backlash"></button>
+          </div>
+        </article>
+
+        <article class="card" data-only="3d">
+          <header class="card-header">
+            <h2>Scan module</h2>
+            <span class="badge" id="module-system-badge">Offline</span>
+          </header>
+          <div class="diagnostics" id="module-diagnostics"></div>
+          <div class="hall-row">
+            <span>Hall sensor</span>
+            <div class="meter" aria-hidden="true"><div class="meter-mark"></div><div class="meter-fill" id="hall-fill"></div></div>
+            <span class="hall-value" id="hall-value">–</span>
+          </div>
+          <p class="muted small-text">With no magnet near, the sensor reads about 512. Turn the head slowly by hand: near the magnet the reading moves well away from that.</p>
+          <h3>Calibration</h3>
+          <div class="calibration-step">
+            <p class="muted small-text"><strong>Yaw turn.</strong> Homes yaw, turns three times and homes again, to measure exactly how many steps make a turn. Nothing needs to be on the holder. About a minute.</p>
+            <button class="button" data-action="calibrate-yaw" id="calibrate-yaw">Measure yaw turn</button>
+          </div>
+          <div class="calibration-step">
+            <p class="muted small-text"><strong>Tilt level.</strong> Clamp a straight pin upright in the holder, home the rail and the module, and focus on the middle of the pin. The module then tilts it 10° each way and compares where its top and bottom come into focus. Until this is done, tilt stops at −20° on the belly side.</p>
+            <button class="button" data-action="calibrate-tilt" id="calibrate-tilt">Level tilt</button>
           </div>
         </article>
 

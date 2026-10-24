@@ -12,7 +12,7 @@ import contextlib
 import logging
 import math
 import time
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import asdict
 from typing import Any, Literal
 
@@ -27,18 +27,29 @@ from .focus.scan import FocusScanner
 from .focus.scan import Motion as ScanMotion
 from .log import ActivityLog
 from .motion.base import Axis, AxisError, MotionInterrupted
+from .motion.module import Geometry, Rotary, ScanModule
 from .optics import Optics
 from .review.store import ReviewError, ReviewStore
-from .settings import Settings, SettingsStore
+from .scan import calibrate
+from .scan.measure import row_focus
+from .scan.pose import Poser
+from .settings import ModuleSettings, ModuleStore, Settings, SettingsStore
 from .stack.plan import PlanError, StackPlan, estimate_seconds, plan_count, plan_range
 from .stack.runner import StackRun
 
 log = logging.getLogger(__name__)
 
-Activity = Literal["idle", "homing", "moving", "previewing", "stacking", "capturing", "scanning"]
+Activity = Literal[
+    "idle", "homing", "moving", "previewing", "stacking", "capturing", "scanning", "rotating"
+]
 Point = Literal["start", "end"]
 
 MAX_JOG_MM = 5.0
+MAX_ROTARY_JOG_DEG = 45.0
+MAX_UNHOMED_TILT_JOG_DEG = 10.0  # before homing the module can't tell where the lens is
+NEEDLE_SPAN_MM = 2.0  # focus sweep around the needle when levelling tilt
+NEEDLE_TOP_ROWS = (0, 1)  # tile rows (of 6) that see the needle's top and bottom
+NEEDLE_BOTTOM_ROWS = (4, 5)
 SIM_BACKLASH_MM = 0.04  # a realistic lead-screw backlash for the simulator
 DEFAULT_CAPTURE_S = 1.5
 IDLE_CHECK_S = 1.0
@@ -56,6 +67,8 @@ class Machine:
         camera: Camera,
         store: SettingsStore,
         activity_log: ActivityLog,
+        module: Callable[[Callable[[], Geometry]], ScanModule],
+        module_store: ModuleStore,
     ) -> None:
         self.config = config
         self.axis = axis
@@ -63,6 +76,8 @@ class Machine:
         self.log = activity_log
         self._store = store
         self.settings = store.load()
+        self._module_store = module_store
+        self.module_settings = module_store.load()  # the scan module's calibration
         self.activity: Activity = "idle"
         self.stack: StackRun | None = None
         self.control = ControlLease(self.changed)
@@ -74,6 +89,8 @@ class Machine:
         self.diagnostics = Diagnostics(
             axis, camera, config.data_dir, self._driver_idle, self.changed
         )
+        self.module = module(self._module_geometry)
+        self.poser = Poser(self.module, config.module, self._check_stop, activity_log)
         self._listeners: list[Callable[[], None]] = []
         self._task: asyncio.Task[None] | None = None
         self._stop_requested = False
@@ -88,6 +105,7 @@ class Machine:
         await self.axis.set_current(motion.run_current_ma, motion.run_current_ma)
         async with asyncio.TaskGroup() as group:
             group.create_task(self.axis.run())
+            group.create_task(self.module.run())
             group.create_task(self.camera.run())
             group.create_task(self.live_view.run())
             group.create_task(self._idle_current_loop())
@@ -116,6 +134,7 @@ class Machine:
                 "min": self.axis.min_position,
                 "max": self.axis.max_position,
             },
+            "module": self._module_snapshot(),
             "camera": asdict(camera),
             "live_view": {
                 "available": camera.connected and camera.live_view,
@@ -248,8 +267,60 @@ class Machine:
             await self.stack.stop()
         elif self.busy:
             self._stop_requested = True
-            with contextlib.suppress(AxisError):
-                await self.axis.stop()
+            # Both at once: the module's stop mustn't wait on a slow rail link.
+            await asyncio.gather(_quietly(self.axis.stop()), _quietly(self.module.stop()))
+
+    # -- the scan module ----------------------------------------------------------------------
+
+    def home_module(self, axes: tuple[Rotary, ...]) -> None:
+        self._require_module()
+        if not axes:
+            raise OperationError("Choose tilt, yaw or both.")
+        self._start("rotating", self.poser.home(axes))
+
+    def jog_module(self, axis: Rotary, delta_deg: float) -> None:
+        self._require_module()
+        homed = self.module.state.tilt_homed if axis == "tilt" else self.module.state.yaw_homed
+        limit = MAX_ROTARY_JOG_DEG if homed or axis == "yaw" else MAX_UNHOMED_TILT_JOG_DEG
+        if not 0 < abs(delta_deg) <= limit:
+            raise OperationError(f"{axis.capitalize()} jogs are limited to {limit:g} degrees.")
+        if axis == "tilt" and homed:
+            low, high = self.poser.tilt_range()
+            if not low - 1e-6 <= self.module.tilt_deg() + delta_deg <= high + 1e-6:
+                raise OperationError(f"Tilt goes from {low:g} to {high:g} degrees.")
+        self._start("rotating", self.poser.jog(axis, delta_deg))
+
+    def pose(self, tilt: float | None, yaw: float | None) -> None:
+        """Go to a pose. Each angle given needs its axis homed; tilt must be in range."""
+        self._require_module()
+        state = self.module.state
+        if tilt is None and yaw is None:
+            raise OperationError("Give a tilt, a yaw or both.")
+        if tilt is not None:
+            if not state.tilt_homed:
+                raise OperationError("Home tilt first.")
+            low, high = self.poser.tilt_range()
+            if not low <= tilt <= high:
+                raise OperationError(f"Tilt goes from {low:g} to {high:g} degrees.")
+        if yaw is not None and not state.yaw_homed:
+            raise OperationError("Home yaw first.")
+        self._start("rotating", self.poser.go(tilt, yaw))
+
+    def calibrate_yaw(self) -> None:
+        """Measure the half-steps per yaw turn (needs nothing on the holder)."""
+        self._require_module()
+        self._start("rotating", self._calibrate_yaw())
+
+    def calibrate_tilt(self) -> None:
+        """Measure where the tilt switch trips against level, from a straight needle on the
+        holder, in focus at the current rail position."""
+        self._require_module()
+        self._require_homed()
+        self._require_live_view()
+        state = self.module.state
+        if not (state.tilt_homed and state.yaw_homed):
+            raise OperationError("Home the scan module first.")
+        self._start("scanning", self._calibrate_tilt())
 
     async def set_camera_setting(self, key: str, value: str) -> None:
         self._require_camera()
@@ -461,6 +532,57 @@ class Machine:
             f"{result.suggested_takeup * um / 1000:.2f} mm."
         )
 
+    async def _calibrate_yaw(self) -> None:
+        self.log.info(
+            f"Measuring a yaw turn: homing, turning {calibrate.YAW_TURNS} turns, homing again…"
+        )
+        previous = self.module_settings
+        found = await self.poser.measure_turn(calibrate.YAW_TURNS)
+        turn = calibrate.half_steps_per_turn(
+            found, calibrate.YAW_TURNS, previous.half_steps_per_turn
+        )
+        await self._save_module(
+            previous.model_copy(update={"half_steps_per_turn": turn, "yaw_calibrated": True})
+        )
+        # The second homing set yaw 0 on the magnet again, so poses need nothing redone.
+        self.log.info(
+            f"Yaw calibrated: {turn:.2f} half-steps per turn "
+            f"(was {previous.half_steps_per_turn:.2f})."
+        )
+
+    async def _calibrate_tilt(self) -> None:
+        await self._prepare_motion()
+        self.log.info("Levelling tilt from the needle: four focus sweeps…")
+        probe = calibrate.TILT_PROBE_DEG
+        dof = self._dof_steps()
+        span = self._steps(NEEDLE_SPAN_MM)
+        center = self.axis.state.position
+        rises: dict[float, list[float]] = {probe: [], -probe: []}
+        for tilt in (probe, -probe):
+            for yaw in (0.0, 180.0):
+                await self.poser.go(tilt, yaw)
+                samples = await self.scanner.sweep(
+                    "tilt level", center, span, dof, self._scan_motion()
+                )
+                top = row_focus(samples, NEEDLE_TOP_ROWS)
+                bottom = row_focus(samples, NEEDLE_BOTTOM_ROWS)
+                rises[tilt].append(top - bottom)
+                center = round((top + bottom) / 2)  # follow the needle if it is off the axis
+        up, down = (sum(r) / len(r) for r in (rises[probe], rises[-probe]))
+        error = calibrate.tilt_error_deg(up, down, probe, least=2 * dof)
+        previous = self.module_settings
+        switch = previous.tilt_switch_deg + error
+        await self._save_module(
+            previous.model_copy(
+                update={"tilt_switch_deg": round(switch, 2), "tilt_calibrated": True}
+            )
+        )
+        await self.poser.go(0.0, None)
+        self.log.info(
+            f"Tilt calibrated: the switch trips at {switch:.2f}° (was "
+            f"{previous.tilt_switch_deg:.2f}°). Tilt is now level."
+        )
+
     async def _run_stack(self, run: StackRun) -> None:
         await self._prepare_motion()
         await run.run()  # a stop during preparation is seen by the run itself
@@ -514,6 +636,46 @@ class Machine:
 
     # -- guards -------------------------------------------------------------------------------
 
+    def _require_module(self) -> None:
+        state = self.module.state
+        if not state.connected:
+            raise OperationError(state.problem or "The scan module is not connected.")
+
+    def _module_geometry(self) -> Geometry:
+        c, calibration = self.config.module, self.module_settings
+        low = c.tilt_min_deg
+        if not calibration.tilt_calibrated:
+            low = max(low, c.tilt_min_uncalibrated_deg)
+        return Geometry(
+            half_steps_per_turn=calibration.half_steps_per_turn,
+            tilt_switch_deg=calibration.tilt_switch_deg,
+            tilt_min_deg=low,
+            tilt_max_deg=c.tilt_max_deg,
+            takeup_deg=c.takeup_deg,
+            switch_clearance_deg=c.tilt_homing_clearance_deg,
+        )
+
+    async def _save_module(self, calibration: ModuleSettings) -> None:
+        """Store a new calibration and send the controller its new tilt limits. Only called
+        by the calibrations, at their end, while the module is idle."""
+        self.module_settings = calibration
+        self._module_store.save(calibration)
+        self.changed()
+        await self.module.apply_limits()
+
+    def _module_snapshot(self) -> dict[str, Any]:
+        state = self.module.state
+        geometry = self.module.geometry
+        return {
+            **asdict(state),
+            "tilt_deg": round(geometry.tilt_deg(state.tilt_steps), 2),
+            "yaw_deg": round(geometry.yaw_deg(state.yaw_steps) % 360.0, 2),
+            "tilt_min_deg": geometry.tilt_min_deg,
+            "tilt_max_deg": geometry.tilt_max_deg,
+            "calibration": self.module_settings.model_dump(),
+            "link": self.module.diagnostics(),
+        }
+
     def _require_rail(self) -> None:
         state = self.axis.state
         if not state.connected:
@@ -556,6 +718,11 @@ class Machine:
         self.changed()
 
 
+async def _quietly(stop: Awaitable[None]) -> None:
+    with contextlib.suppress(AxisError):
+        await stop
+
+
 def build_machine(config: Config, *, sim: bool = False, sim_speedup: float = 1.0) -> Machine:
     """Wire up the real hardware, or the simulator for `--sim`, tests and screenshots."""
     from .motion.rail import RailAxis
@@ -568,22 +735,47 @@ def build_machine(config: Config, *, sim: bool = False, sim_speedup: float = 1.0
         machine.changed()
 
     camera: Camera
+    module: Callable[[Callable[[], Geometry]], ScanModule]
     if sim:
         from .sim.camera import SimCamera
         from .sim.firmware import SimRail
+        from .sim.module import SimModule
+        from .sim.specimen import SimSpecimen
 
         sim_rail = SimRail(
             steps_per_mm=config.rail.steps_per_mm, backlash_mm=SIM_BACKLASH_MM, speedup=sim_speedup
         )
         axis = RailAxis(config.rail, sim_rail.open, activity_log, changed)
+        sim_module = SimModule(speedup=sim_speedup)
+        specimen = SimSpecimen()
+
+        def specimen_view() -> tuple[SimSpecimen, float, float] | None:
+            # A homed module stands for the 3D rig: the camera then sees the insect on it.
+            if sim_module.tilt.homed and sim_module.yaw.homed:
+                return specimen, sim_module.tilt_deg, sim_module.yaw_deg
+            return None
+
         # The camera sees the carriage, which trails the motor by the backlash after a reversal.
-        camera = SimCamera(lambda: sim_rail.physical_mm, speedup=sim_speedup)
+        camera = SimCamera(
+            lambda: sim_rail.physical_mm, speedup=sim_speedup, specimen=specimen_view
+        )
+
+        def module(geometry: Callable[[], Geometry]) -> ScanModule:
+            return ScanModule(config.module, sim_module.open, geometry, activity_log, changed)
     else:
         from .camera.gphoto import GPhotoCamera
-        from .motion.link import SerialTransport
+        from .motion.ports import PortFinder, opener
 
-        port = config.rail.port
-        axis = RailAxis(config.rail, lambda: SerialTransport(port), activity_log, changed)
+        finder = PortFinder()
+        axis = RailAxis(
+            config.rail, opener(finder, "rail", config.rail.port), activity_log, changed
+        )
         camera = GPhotoCamera(config.camera, activity_log, changed)
-    machine = Machine(config, axis, camera, store, activity_log)
+
+        def module(geometry: Callable[[], Geometry]) -> ScanModule:
+            port = opener(finder, "module", config.module.port)
+            return ScanModule(config.module, port, geometry, activity_log, changed)
+
+    module_store = ModuleStore(config.data_dir / "module.json")
+    machine = Machine(config, axis, camera, store, activity_log, module, module_store)
     return machine

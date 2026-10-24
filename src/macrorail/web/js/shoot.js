@@ -25,6 +25,7 @@ const ACTIVITY_TEXT = {
   stacking: "Stacking",
   capturing: "Taking a test shot…",
   scanning: "Scanning…",
+  rotating: "Moving the scan module…",
 };
 // Common objectives for the step helper: [label, magnification, NA].
 const LENSES = [

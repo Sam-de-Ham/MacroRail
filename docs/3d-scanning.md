@@ -4,8 +4,9 @@ The next major version: a full 3D scan of a pinned insect, driven by the existin
 rail. The v1 module design below was agreed with the user on 2026-10-21.
 
 **Status (2026-10-24):** the hardware is done. It is modelled, test-printed twice, printed
-and assembled, and it went together exactly as designed. **None of the software exists
-yet:** no wiring, firmware, host code or UI. That is the next step; see "Software" below.
+and assembled, and it went together exactly as designed. Software milestones 1–2 (module
+firmware, host driver, Rig tab, calibration) are built and tested in the simulator; the module
+isn't wired on the rig yet. See "Software" below.
 
 - Measurements and derived numbers: [`hardware/scan-module/MEASUREMENTS.md`](../hardware/scan-module/MEASUREMENTS.md)
 - Photos: [`reference-images/`](../reference-images/)
@@ -131,13 +132,13 @@ then a Ø29.8 adapter.
 - **Across the rail:** cradle arms at ±33 to ±39. Uprights from ±40: 6 thick on the
   bearing side (+Y), 4 on the motor side (−Y). About 126 wide including the tilt motor.
 
-### Nano pins (planned; 2D pins untouched)
+### Electronics: a second Nano (user, 2026-10-24)
 
-- **Used today:** D2 home, D3 STEP, D4 DIR, D5 EN, D7/D8 driver UART, D9 reserved (relay).
-- **Yaw:** ULN2003 IN1–IN4 on D6, D10, D11 and D12; KY-024 analog output on A0.
-- **Tilt:** ULN2003 IN1–IN4 on D13, A1, A2 and A3. D13 drives the on-board LED too, which
-  is harmless. The endstop goes on A4.
-- **Left:** A5, plus A6 and A7 (analog only).
+The module has its own Arduino Nano on its own USB cable, so the rail's Nano, firmware and
+wiring don't change at all. Its pins: yaw ULN2003 IN1–IN4 on D2–D5, tilt on D6–D9, the tilt
+switch on D10, the KY-024's analog output on A0. Wiring guide:
+[`module-guide/MacroRail-module-wiring-guide.pdf`](module-guide/MacroRail-module-wiring-guide.pdf);
+protocol: [`protocol-module.md`](protocol-module.md).
 
 ### One scan
 
@@ -226,58 +227,10 @@ total clearance. No threads in plastic; counterbores, not countersinks.
   (1024 × 680). It takes under an hour with no shutter wear, which is good for checking
   coverage first.
 
-## Software (next: nothing written yet)
+## Software
 
-Everything below obeys the ground rule at the top: 2D stays exactly as it is. Build against
-the simulator first, as for the rail; the user tests on the rig.
-
-### Order of work
-
-1. **Wiring** (document it in `docs/wiring.md`, a new "Scan module" section):
-   - Two ULN2003 boards powered from the separate 5 V supply, ground shared with the Nano.
-   - IN1–IN4 to the pins in "Nano pins" above.
-   - The tilt switch like the rail's: C → GND, NO → A4, `INPUT_PULLUP`, active low.
-   - KY-024: VCC 5 V, GND, its analog output to A0 (the digital output and the pot aren't used).
-   - Cables need slack for the full tilt range; the yaw motor and the KY-024 ride on the cradle.
-2. **Firmware** (purely additive):
-   - Two unipolar channels, half-step sequence, with a speed ramp.
-   - Commands name the axis. Rail commands keep their meaning and timing. A protocol bump
-     needs the host updated in the same change, and the rail's stepping must stay exactly as
-     smooth as today.
-   - Motion replies when it finishes, as now.
-   - Coils off when idle: the gearbox holds the load, and no heat reaches the insect.
-   - Homing:
-     - Tilt: slowly *away* from the lens until the switch closes (always armed, like the
-       rail's).
-     - Yaw: always turning the same way, find the peak of the A0 signal (the magnet's
-       centre), then approach it from one side.
-3. **Simulator:** the two rotary axes, the switch and a simulated hall signal in `sim/`, so
-   the host and UI can be built and tested without the module.
-4. **Host:**
-   - `motion/`: a rotary `Axis` for yaw and for tilt; tilt limits −33° to +90° enforced here.
-   - `Machine`: home, move and stop for the new axes; one operation at a time, as now.
-   - `scan/` (new): the scan plan (rings × yaw, tilt limits), the centring fit, and a runner
-     doing rotate → focus scan → stack per pose. `focus/` already reruns per angle.
-5. **UI:** the 2D/3D mode switch. 3D mode adds homing and jogging for both axes, the
-   centring wizard and the scan setup; 2D mode is untouched.
-6. **Review:** a folder per pose, a pose table, export for COLMAP or Meshroom.
-
-### Facts the code needs
-
-- **Directions:** +tilt turns the back of the insect towards the camera. +X is towards the
-  camera, +Y towards the bearing side.
-- **Tilt zero:** the switch clicks at about +97° (`home_t` in the CAD). Calibrate the real
-  offset to level once and store it in `config.toml`.
-- **28BYJ-48 steps per turn:** commonly quoted as 32 steps × a 63.68:1 gearbox ≈ 2038 full
-  steps (≈ 4076 half steps). That is not an integer, so don't trust it blind: measure it
-  from two hall peaks one turn apart, and re-home yaw at the start of every scan.
-- **Gearbox backlash:** approach every pose from the same direction. Tilt backlash doesn't
-  move the insect, because it sits on the tilt axis.
-- **Torque:** fine for yaw. Tilt lifting is borderline near +90°, so start slow and
-  watch for lost steps (see "Torque").
-- **Centring maths:** under "One scan" above.
-- **Magnification:** moving the sample changes it slightly during a stack. DISC3D corrects
-  this with calibrated scaling, which matters for true-scale models.
+The agreed plan, milestones and decisions: [`3d-software-plan.md`](3d-software-plan.md). The
+module controller's protocol: [`protocol-module.md`](protocol-module.md).
 
 ## Setup facts (user, 2026-10-21)
 

@@ -524,12 +524,58 @@ select.field { appearance: none; padding-right: 32px; background-image: linear-g
 .sheet::backdrop { background: rgb(0 0 0 / 0.6); }
 .sheet-body { padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
 
+/* Workspaces (2D focus stacking, 3D scanning) ---------------------------------------- */
+
+body:not([data-workspace="3d"]) [data-only="3d"],
+body[data-workspace="3d"] [data-only="2d"] { display: none !important; }
+
+.workspace-switch { flex: none; }
+.workspace-switch button { min-width: 40px; font-weight: 600; }
+
+/* Rig: the scan module ------------------------------------------------------------------ */
+
+.pose-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.gauge { margin: 0; display: grid; justify-items: center; gap: 2px; }
+.gauge svg { width: 100%; max-width: 150px; height: auto; }
+.gauge figcaption { display: grid; justify-items: center; font-size: 13px; }
+.gauge-value { font: 600 22px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.gauge-ring { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; }
+.gauge-range { fill: rgb(242 163 58 / 0.16); stroke: rgb(242 163 58 / 0.45); stroke-width: 1; }
+.gauge-lens { fill: var(--surface-3); stroke: var(--muted); stroke-width: 1; }
+.gauge-needle { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.gauge-tip { fill: var(--accent); }
+.gauge-hub { fill: var(--text); }
+.gauge-screw { fill: var(--accent); }
+.gauge-spring { fill: var(--muted); }
+.gauge-label { fill: var(--text); font: 600 10px var(--font); text-anchor: middle; dominant-baseline: central; }
+
+.rotary-jog { display: grid; grid-template-columns: 44px 1fr 1fr; gap: 8px; align-items: center; }
+.rotary-label { color: var(--muted); font-size: 14px; }
+
+.pose-goto { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pose-goto .field-group.inline { grid-template-columns: auto 96px; }
+
+.quick-poses { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+
+.hall-row { display: grid; grid-template-columns: auto 1fr 44px; gap: 10px; align-items: center; font-size: 14px; }
+.hall-value { font: 600 14px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.meter { position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.meter-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.meter-mark { position: absolute; left: 20%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+.calibration-step { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; }
+.calibration-step p { margin: 0; }
+
 @media (min-width: 640px) {
   .sheet { margin: auto; border-radius: 18px; }
 }
 
 @media (max-width: 480px) {
   .brand span { display: none; }
+  /* The switch shows only the other workspace, so 2D keeps its pills' room. */
+  .workspace-switch button[aria-checked="true"] { display: none; }
+  /* In 3D the module pill matters most; the rail and camera keep their status dots. */
+  body[data-workspace="3d"] #rail-pill span,
+  body[data-workspace="3d"] #camera-pill span { display: none; }
   #jog-steps { grid-template-columns: repeat(3, 1fr); }
   .point-row { grid-template-columns: 44px 1fr auto auto; }
 }

@@ -25,8 +25,17 @@ class Event:
     data: dict[str, str] = field(default_factory=dict)
 
 
-def format_request(request_id: int, command: str, *args: int) -> str:
-    return " ".join([str(request_id), command, *(str(int(a)) for a in args)])
+def format_request(request_id: int, command: str, *args: int | str) -> str:
+    """Integers, or words such as the scan module's axis names (`YAW`, `TILT`)."""
+    return " ".join([str(request_id), command, *(_token(a) for a in args)])
+
+
+def _token(arg: int | str) -> str:
+    if isinstance(arg, str):
+        if not arg.isalnum():
+            raise ValueError(f"not a protocol word: {arg!r}")
+        return arg
+    return str(int(arg))
 
 
 def parse_line(line: str) -> Reply | Event:

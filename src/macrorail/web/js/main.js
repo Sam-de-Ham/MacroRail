@@ -2,34 +2,43 @@
 //
 // Each tab lives in its own module exporting `actions` (click handlers by data-action) and
 // `render(ctx)`. Everything shown is derived from the latest state; nothing is polled.
+//
+// Two workspaces share the page: 2D (focus stacking, today's app) and 3D (scanning with the
+// scan module). Elements marked data-only="2d" or "3d" show in that workspace only; the rail's
+// Position card is moved into whichever workspace is showing, so it exists once.
 
 import { connectUpdates, patch, post } from "./api.js";
 import * as alerts from "./alerts.js";
 import * as camera from "./camera.js";
-import { $, setField, setText } from "./dom.js";
+import { $, setChecked, setField, setText } from "./dom.js";
 import * as fmt from "./format.js";
 import * as liveview from "./liveview.js";
 import { readPref, writePref } from "./prefs.js";
 import * as review from "./review.js";
+import * as rig from "./rig.js";
 import * as shoot from "./shoot.js";
 import * as system from "./system.js";
 import { showToast } from "./toast.js";
 
-const PANELS = [liveview, shoot, camera, review, system, alerts];
-const TABS = ["shoot", "camera", "review", "system"];
+const PANELS = [liveview, shoot, rig, camera, review, system, alerts];
+const TABS = { "2d": ["shoot", "camera", "review", "system"], "3d": ["rig", "camera", "system"] };
+const TAB_PREF = { "2d": "tab", "3d": "tab-3d" };
 const LOG_LIMIT = 200;
 
 const app = {
   state: null,
   connected: false,
-  tab: TABS.includes(readPref("tab", "shoot")) ? readPref("tab", "shoot") : "shoot",
+  workspace: readPref("workspace", "2d") === "3d" ? "3d" : "2d",
+  tab: null,
   render,
 };
+app.tab = savedTab(app.workspace);
 let receivedHistory = false;
 
 const actions = {
   "take-control": () => post("control/take"),
   stop: () => post("stop"),
+  workspace: (button) => showWorkspace(button.dataset.workspace),
   ...Object.assign({}, ...PANELS.map((panel) => panel.actions || {})),
 };
 const fieldHandlers = shoot.fields;
@@ -40,7 +49,7 @@ document.addEventListener("click", async (event) => {
   const tab = event.target.closest("[role=tab]");
   if (tab) {
     app.tab = tab.dataset.tab;
-    writePref("tab", app.tab);
+    writePref(TAB_PREF[app.workspace], app.tab);
     render();
     return;
   }
@@ -87,6 +96,31 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.target.blur();
 });
 
+// -- workspaces ---------------------------------------------------------------------------------
+
+function savedTab(workspace) {
+  const tab = readPref(TAB_PREF[workspace], TABS[workspace][0]);
+  return TABS[workspace].includes(tab) ? tab : TABS[workspace][0];
+}
+
+function showWorkspace(workspace) {
+  if (!(workspace in TABS) || workspace === app.workspace) return;
+  app.workspace = workspace;
+  writePref("workspace", workspace);
+  app.tab = savedTab(workspace);
+  placeWorkspace();
+  render();
+}
+
+/** Show the workspace's elements and move the rail's Position card into it. */
+function placeWorkspace() {
+  document.body.dataset.workspace = app.workspace;
+  setChecked($("workspace-switch"), "data-workspace", app.workspace);
+  const card = $("position-card");
+  if (app.workspace === "3d") $("position-slot-3d").append(card);
+  else document.querySelector("[data-panel=shoot]").prepend(card);
+}
+
 // -- rendering ----------------------------------------------------------------------------------
 
 function render(force = false) {
@@ -107,6 +141,7 @@ function render(force = false) {
     canPosition: canMove && rail.homed,
     force,
     tab: app.tab,
+    workspace: app.workspace,
     render,
   };
 
@@ -117,6 +152,10 @@ function render(force = false) {
   else if (rail.homed) setPill("rail-pill", "ok", "Homed");
   else setPill("rail-pill", "warn", "Not homed");
   setPill("camera-pill", s.camera.connected ? "ok" : "bad", s.camera.connected ? s.camera.model : "No camera");
+  const m = s.module;
+  if (!m.connected) setPill("module-pill", "bad", "Module offline");
+  else if (m.tilt_homed && m.yaw_homed) setPill("module-pill", "ok", "Module homed");
+  else setPill("module-pill", "warn", "Module not homed");
   $("stop").hidden = !app.connected || !busy;
 
   renderStatus(s);
@@ -202,6 +241,7 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
+placeWorkspace();
 renderTabs();
 connectUpdates({
   onState(next) {
