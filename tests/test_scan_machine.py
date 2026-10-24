@@ -133,3 +133,11 @@ async def test_stop_while_homing_yaw_ends_the_scan(machine: Machine) -> None:
     assert run.phase == "stopped"
     assert not run.active
     machine.delete_scan(run.id)  # not stuck "running"
+
+
+async def test_a_damaged_record_is_refused(machine: Machine) -> None:
+    folder = machine.scans.folder("20261024-120000")
+    folder.mkdir(parents=True)
+    (folder / "scan.json").write_text('{"poses": [], "plan": {"step": null}, "results": []}')
+    with pytest.raises(OperationError, match="can't be read"):
+        machine.continue_scan("20261024-120000")

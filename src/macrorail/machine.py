@@ -460,23 +460,23 @@ class Machine:
                 for i, r in record.get("results", {}).items()
                 if r.get("outcome") == "done"
             }
-        except (KeyError, TypeError, ValueError):
+            plan.setdefault("step", self.settings.stack.step)
+            plan.setdefault("stack_settle_s", self.settings.stack.settle_s)
+            plan.setdefault("span_mm", self.settings.scan.span_mm)
+            run = ScanRun(
+                scan_id,
+                self.scans.folder(scan_id),
+                poses,
+                plan,
+                self._scan_steps(scan_id, plan, rehome=True),
+                self.log,
+                self.changed,
+                done=done,
+            )
+            run.started_at = float(record.get("started_at", run.started_at))
+        except (AttributeError, KeyError, TypeError, ValueError):
             raise OperationError("That scan's record can't be read.") from None
         self._require_preflight([p for p in poses if p.index not in done])
-        plan.setdefault("step", self.settings.stack.step)
-        plan.setdefault("stack_settle_s", self.settings.stack.settle_s)
-        plan.setdefault("span_mm", self.settings.scan.span_mm)
-        run = ScanRun(
-            scan_id,
-            self.scans.folder(scan_id),
-            poses,
-            plan,
-            self._scan_steps(scan_id, plan, rehome=True),
-            self.log,
-            self.changed,
-            done=done,
-        )
-        run.started_at = record.get("started_at", run.started_at)
         self._begin_scan(run)
 
     def pause_scan(self) -> None:
@@ -532,6 +532,7 @@ class Machine:
             if rehome:
                 # Yaw only ever turns forwards during a scan; homing first starts its count
                 # from zero again, so it never runs out of range over many scans.
+                self._check_stop()
                 self.log.info("Homing yaw before the scan…")
                 await self.module.home_yaw()
 

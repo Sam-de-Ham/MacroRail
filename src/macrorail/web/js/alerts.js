@@ -25,7 +25,7 @@ const canNotify = "Notification" in window && window.isSecureContext;
 let sound = readPref("alert-sound", true);
 let seenId = null;
 let seenPhase = null;
-let seenScan = null; // [id, phase, error] of the 3D scan last seen
+let seenScan = null; // [id, phase] of the 3D scan last seen
 let audio = null;
 
 $("alert-sound").checked = sound;
@@ -76,15 +76,14 @@ export function render({ s }) {
 /** Alerts for the 3D scan; returns whether one is running (its poses' stacks stay quiet). */
 function renderScan(run) {
   if (!run) return false;
-  const now = [run.id, run.phase, run.error];
+  const now = [run.id, run.phase];
   const before = seenScan;
   seenScan = now;
   const active = SCAN_ACTIVE.has(run.phase);
   if (!before || before[0] !== run.id) return active; // not news on page load
   if (before[1] !== run.phase && SCAN_ACTIVE.has(before[1]) && SCAN_MESSAGES[run.phase]) {
-    alert(...SCAN_MESSAGES[run.phase], run.phase === "done");
-  } else if (run.error && run.error !== before[2] && run.phase === "paused") {
-    alert("Scan paused", run.error, false); // e.g. the specimen wasn't found
+    const [title, body] = SCAN_MESSAGES[run.phase];
+    alert(title, run.error || body, run.phase === "done"); // e.g. the specimen wasn't found
   }
   return active;
 }
