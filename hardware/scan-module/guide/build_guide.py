@@ -272,8 +272,8 @@ Homing away from the lens means a missed switch can never drive the insect into 
 click angle is the <code>home_t</code> parameter; the bracket follows it.</p>
 <h3>Yaw: magnet and hall sensor</h3>
 <p>The magnet under the head passes 0.8 mm over the hall sensor once per turn. Homing turns the head
-until the KY-024 switches; that is yaw zero. Set the board's potentiometer so its LED lights only when
-the magnet is right above the sensor.</p>
+and finds where the sensor's analog signal peaks: the magnet's centre, which is yaw zero. That repeats
+better than the board's on/off output, so its LED and potentiometer aren't used.</p>
 <h3>The holes at the top of the arms</h3>
 <p>The &Oslash;8.3 holes 38 mm above the axis are for an optional counterweight. The cradle hangs below
 the axis, so at 90&deg; it pulls with about 40 mN&middot;m. The motor's gearbox should hold that; if it
