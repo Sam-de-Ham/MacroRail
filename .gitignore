@@ -10,6 +10,7 @@ firmware/.vscode/
 *.local.toml
 .claude/
 docs/setup-guide/setup-guide.html
+docs/module-guide/module-guide.html
 hardware/scan-module/guide/scan-module-guide.html
 CLAUDE.md
 hardware/scan-module/fusion/verify.log

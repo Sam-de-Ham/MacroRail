@@ -64,3 +64,8 @@ class Axis(Protocol):
 
     async def stop(self) -> None:
         """Decelerate to a stop. The running motion raises MotionInterrupted."""
+
+
+def motion_time(distance: float, speed: float, accel: float) -> float:
+    """A generous upper bound for how long a move may take before the link is presumed dead."""
+    return 3.0 + 1.5 * (distance / speed + speed / accel)

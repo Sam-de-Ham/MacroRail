@@ -1,6 +1,8 @@
 """User-tunable settings, edited from the UI and persisted between runs.
 
-Positions and step sizes are stored in axis steps, so they round-trip exactly.
+Positions and step sizes are stored in axis steps, so they round-trip exactly. The 3D scan
+module's calibration lives in a file of its own, so the 2D settings file stays readable by a
+version of the app without the 3D workspace.
 """
 
 from __future__ import annotations
@@ -65,6 +67,21 @@ class CameraSettings(_Model):
     download_previews: bool = True  # fetch each shot's JPEG (if the camera sends one) for review
 
 
+# A 28BYJ-48 makes 64 half-steps per motor turn through a ~63.684:1 gearbox, so an output turn
+# isn't a whole number of half-steps. The yaw calibration measures the real value.
+NOMINAL_HALF_STEPS_PER_TURN = 4075.7728
+
+
+class ModuleSettings(_Model):
+    """The 3D scan module's calibration, measured once per machine (System tab). Changed only
+    by the calibrations themselves, never by a settings edit."""
+
+    half_steps_per_turn: float = Field(NOMINAL_HALF_STEPS_PER_TURN, ge=3800.0, le=4400.0)
+    yaw_calibrated: bool = False  # half_steps_per_turn measured from two magnet peaks
+    tilt_switch_deg: float = Field(97.0, ge=90.0, le=110.0)  # where the tilt switch trips
+    tilt_calibrated: bool = False  # tilt_switch_deg measured against level, not from the CAD
+
+
 class Settings(_Model):
     motion: MotionSettings = MotionSettings()
     stack: StackSettings = StackSettings()
@@ -82,21 +99,34 @@ class Settings(_Model):
         return Settings.model_validate(data)
 
 
-class SettingsStore:
-    def __init__(self, path: Path) -> None:
-        self.path = path
+class Store[M: BaseModel]:
+    """One model in one JSON file, written atomically. An unreadable file reads as defaults."""
 
-    def load(self) -> Settings:
+    def __init__(self, path: Path, model: type[M]) -> None:
+        self.path = path
+        self._model = model
+
+    def load(self) -> M:
         if not self.path.exists():
-            return Settings()
+            return self._model()
         try:
-            return Settings.model_validate_json(self.path.read_text(encoding="utf-8"))
+            return self._model.model_validate_json(self.path.read_text(encoding="utf-8"))
         except (ValidationError, OSError) as exc:
             log.warning("ignoring unreadable settings file %s: %s", self.path, exc)
-            return Settings()
+            return self._model()
 
-    def save(self, settings: Settings) -> None:
+    def save(self, value: M) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(settings.model_dump_json(indent=2), encoding="utf-8")
+        tmp.write_text(value.model_dump_json(indent=2), encoding="utf-8")
         os.replace(tmp, self.path)
+
+
+class SettingsStore(Store[Settings]):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, Settings)
+
+
+class ModuleStore(Store[ModuleSettings]):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, ModuleSettings)

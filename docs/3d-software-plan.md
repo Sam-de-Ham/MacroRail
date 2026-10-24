@@ -63,8 +63,8 @@ Written up in `docs/wiring.md` with a picture, as for the rail.
   watchdog, one motion at a time, `STOP` from anywhere. Documented in
   `docs/protocol-module.md`. Commands name the axis: `MOVE TILT …`, `HOME YAW …`.
 - **Stepping:** AccelStepper in half-step mode (already a dependency, proven on the rail),
-  with a speed ramp. Targets land on full steps (every second half-step), so switching the
-  coils off can't let the rotor settle half a step away.
+  with a speed ramp. With the coils off a rotor may settle by half a motor step (0.09° at
+  the output); the next move's energised coils pull it back, so the count stays right.
 - **Coils off when idle**, after a short settle. The gearbox holds the cradle (60–120 mN·m
   friction vs ~40 needed); no heat near the insect, no 480 mA idle draw.
 - **Tilt homing:** the rail's proven sequence: seek slowly *away from the lens*, back off until
@@ -103,11 +103,23 @@ is ~2.3 GB, so a scan keeps each pose's preview and depth map plus every 10th fr
 
 ## 4. Calibration (once per machine; System tab, 3D workspace)
 
-- **Yaw steps per turn:** automatic, from two hall peaks.
-- **Tilt level:** the switch clicks at about +97°; the exact offset to level is found once.
-  With a straight needle in the holder, the app focus-scans the needle's top and bottom
-  tiles: at level both come into focus at the same rail position. It searches tilt for that
-  and stores the offset. No eyeballing.
+Both are built (`scan/calibrate.py`, `Machine.calibrate_yaw/tilt`). The results live in their
+own file, `module.json` next to `settings.json`, so the 2D settings file stays readable by a
+2D-only version of the app (its settings model forbids unknown sections). Only the
+calibrations write it; there is no settings edit for it.
+
+- **Yaw steps per turn:** home yaw, turn three turns (by the current value), home again. The
+  second homing reports where it found the magnet in the old frame (`from=`), which is three
+  true turns. Refused if it is more than 2 % from nominal (the head slipping on its shaft).
+- **Tilt level:** a straight pin stands upright in the holder, in focus at the current rail
+  position. At +10° and −10° the app focus-sweeps it (2 mm, one DOF per frame) and reads the
+  rail position where its top and bottom tile rows are sharpest. The rise (top − bottom) is
+  k·sin(true tilt), so with true = commanded + e:
+  tan e = tan 10° · (rise₊ + rise₋) / (rise₊ − rise₋), whatever k (pin length, rail
+  direction) is. A pin leaning in the head frame adds equal and opposite rises at yaws 180°
+  apart, so each tilt is measured at yaw 0° and 180° and averaged. `tilt_switch_deg` += e,
+  and tilt opens to its full range (−33°). The result includes the constant gearbox
+  backlash offset between homing and pose arrivals, which is what poses need.
 - **Image scale:** from the optics settings the app already has (magnification and pixel
   size). The rail gives the depth direction in exact mm, as a cross-check.
 

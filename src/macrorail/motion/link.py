@@ -48,7 +48,10 @@ class SerialTransport:
     def __init__(self, port: str, baudrate: int = 115200) -> None:
         import serial
 
-        self._serial = serial.Serial(port, baudrate, timeout=0.1, write_timeout=1.0)
+        self.port = port
+        # Exclusive (flock on Linux): a port another controller's link holds can't be opened
+        # a second time, so a port search can never read another link's replies.
+        self._serial = serial.Serial(port, baudrate, timeout=0.1, write_timeout=1.0, exclusive=True)
         self._buffer = bytearray()
 
     def read_line(self) -> str | None:
@@ -67,7 +70,9 @@ class SerialTransport:
 
 
 class Link:
-    def __init__(self, transport: Transport, on_event: Callable[[Event], None]) -> None:
+    def __init__(
+        self, transport: Transport, on_event: Callable[[Event], None], name: str = "rail"
+    ) -> None:
         self._transport = transport
         self._on_event = on_event
         self._loop = asyncio.get_running_loop()
@@ -78,7 +83,7 @@ class Link:
         self._closed = asyncio.Event()
         self._close_reason = LinkError("link closed")
         self._stopping = threading.Event()
-        self._reader = threading.Thread(target=self._read_loop, name="rail-link", daemon=True)
+        self._reader = threading.Thread(target=self._read_loop, name=f"{name}-link", daemon=True)
         self._reader.start()
 
     @classmethod
@@ -87,16 +92,22 @@ class Link:
         open_transport: Callable[[], Transport],
         on_event: Callable[[Event], None],
         ready_timeout: float = 5.0,
+        name: str = "rail",
     ) -> tuple[Link, Event]:
         """Open the transport and wait for the controller's READY event."""
         transport = await asyncio.to_thread(open_transport)
-        link = cls(transport, on_event)
+        link = cls(transport, on_event, name)
         try:
             ready = await asyncio.wait_for(link._ready, ready_timeout)
         except TimeoutError:
             await link.close()
             raise LinkError("controller did not report READY") from None
         return link, ready
+
+    @property
+    def port(self) -> str | None:
+        """The serial port in use (None for the simulator)."""
+        return getattr(self._transport, "port", None)
 
     @property
     def closed(self) -> bool:
@@ -107,7 +118,7 @@ class Link:
         return self._close_reason
 
     async def request(
-        self, command: str, *args: int, timeout: float = 1.0, motion: bool = False
+        self, command: str, *args: int | str, timeout: float = 1.0, motion: bool = False
     ) -> dict[str, str]:
         """Send a request and return its reply data. Raises DeviceError or LinkError.
 

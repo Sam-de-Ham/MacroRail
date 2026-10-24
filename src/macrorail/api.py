@@ -15,12 +15,13 @@ import anyio
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, FiniteFloat
 from starlette.websockets import WebSocketDisconnect
 
 from . import __version__
 from .log import LogEntry
 from .machine import Machine, OperationError, Point
+from .motion.module import Rotary
 from .review.store import ReviewError
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,20 @@ class PointBody(BaseModel):
 
 class MotorsBody(BaseModel):
     enabled: bool
+
+
+class ModuleHomeBody(BaseModel):
+    axes: tuple[Rotary, ...] = ("tilt", "yaw")
+
+
+class ModuleJogBody(BaseModel):
+    axis: Rotary
+    delta_deg: FiniteFloat
+
+
+class PoseBody(BaseModel):
+    tilt: FiniteFloat | None = Field(None, ge=-90, le=120)
+    yaw: FiniteFloat | None = Field(None, ge=-3600, le=3600)
 
 
 class CameraSettingBody(BaseModel):
@@ -173,6 +188,26 @@ def create_app(machine: Machine) -> FastAPI:
     @app.post("/api/rail/motors", status_code=204, dependencies=controlled)
     async def motors(body: MotorsBody) -> None:
         await machine.set_motors(body.enabled)
+
+    @app.post("/api/module/home", status_code=204, dependencies=controlled)
+    async def home_module(body: ModuleHomeBody) -> None:
+        machine.home_module(body.axes)
+
+    @app.post("/api/module/jog", status_code=204, dependencies=controlled)
+    async def jog_module(body: ModuleJogBody) -> None:
+        machine.jog_module(body.axis, body.delta_deg)
+
+    @app.post("/api/module/pose", status_code=204, dependencies=controlled)
+    async def pose(body: PoseBody) -> None:
+        machine.pose(body.tilt, body.yaw)
+
+    @app.post("/api/module/calibrate/yaw", status_code=204, dependencies=controlled)
+    async def calibrate_yaw() -> None:
+        machine.calibrate_yaw()
+
+    @app.post("/api/module/calibrate/tilt", status_code=204, dependencies=controlled)
+    async def calibrate_tilt() -> None:
+        machine.calibrate_tilt()
 
     @app.post("/api/points/{point}", status_code=204, dependencies=controlled)
     async def set_point(point: Point, body: PointBody) -> None:

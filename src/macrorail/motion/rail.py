@@ -10,8 +10,9 @@ from dataclasses import replace
 
 from ..config import RailConfig
 from ..log import ActivityLog
-from .base import AxisError, AxisState, MotionInterrupted
+from .base import AxisError, AxisState, MotionInterrupted, motion_time
 from .link import DeviceError, Link, LinkError, Transport
+from .ports import AUTO
 from .protocol import PROTOCOL_VERSION, Event
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,11 @@ class RailAxis:
     async def _session(self) -> None:
         link, ready = await Link.open(self._open_transport, self._on_event)
         try:
+            if ready.data.get("role") == "module":
+                raise AxisError(
+                    f"{self._config.port} is the scan module's controller, not the rail's. Set "
+                    'the rail\'s port to "auto" in config.toml.'
+                )
             if ready.data.get("proto") != str(PROTOCOL_VERSION):
                 raise AxisError(
                     f"The rail firmware speaks protocol {ready.data.get('proto')}, but this app "
@@ -119,6 +125,8 @@ class RailAxis:
         if isinstance(exc, AxisError):
             return str(exc)
         if isinstance(exc, OSError):
+            if self._config.port == AUTO:
+                return "Rail controller not found. Is its Nano plugged in?"
             return f"Rail controller not found on {self._config.port}. Is the Nano plugged in?"
         return f"Lost connection to the rail controller ({exc})."
 
@@ -189,8 +197,9 @@ class RailAxis:
             self._update(moving=False)
 
     def diagnostics(self) -> dict[str, object]:
+        link = self._link
         return {
-            "port": self._config.port,
+            "port": (link.port if link is not None else None) or self._config.port,
             "protocol": PROTOCOL_VERSION,
             "connections": self._connections,
             "connected_since": self._connected_since,
@@ -223,9 +232,9 @@ class RailAxis:
         accel = round(c.homing_accel_mm_s2 * spm)
         max_steps = self.max_position + round(20 * spm)
         timeout = (
-            _motion_time(max_steps, fast, accel)
-            + _motion_time(release_max, fast, accel)
-            + _motion_time(release_max + 2 * clearance, slow, accel)
+            motion_time(max_steps, fast, accel)
+            + motion_time(release_max, fast, accel)
+            + motion_time(release_max + 2 * clearance, slow, accel)
         )
         reply = await self._motion(
             "HOME", fast, slow, clearance, max_steps, release_max, accel, timeout=timeout
@@ -244,7 +253,7 @@ class RailAxis:
             raise AxisError(_ERRORS["LIMIT"])
         distance = abs(target - self._state.position)
         await self._motion(
-            "MOVE", target, round(speed), round(accel), timeout=_motion_time(distance, speed, accel)
+            "MOVE", target, round(speed), round(accel), timeout=motion_time(distance, speed, accel)
         )
         return self._state.position
 
@@ -254,7 +263,7 @@ class RailAxis:
         ):
             raise AxisError(_ERRORS["LIMIT"])
         await self._motion(
-            "JOG", delta, round(speed), round(accel), timeout=_motion_time(abs(delta), speed, accel)
+            "JOG", delta, round(speed), round(accel), timeout=motion_time(abs(delta), speed, accel)
         )
         return self._state.position
 
@@ -263,8 +272,3 @@ class RailAxis:
         # briefly lag a motion that has just been started.
         if self._link is not None:
             await self._request("STOP")
-
-
-def _motion_time(distance: float, speed: float, accel: float) -> float:
-    """A generous upper bound for how long a move may take before the link is presumed dead."""
-    return 3.0 + 1.5 * (distance / speed + speed / accel)

@@ -12,11 +12,18 @@ import math
 from collections.abc import Callable
 from dataclasses import replace
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 from ..camera.base import CameraError, CameraSetting, CameraState, Capture
+
+if TYPE_CHECKING:
+    from .specimen import SimSpecimen
+
+# What the 3D workspace shows, when it does: the specimen and the module's (tilt, yaw) in degrees.
+SpecimenView = Callable[[], "tuple[SimSpecimen, float, float] | None"]
 
 WIDTH, HEIGHT = 960, 640
 SETTINGS = (
@@ -39,8 +46,10 @@ class SimCamera:
         subject_depth_mm: float = 1.5,
         capture_s: float = 1.2,
         speedup: float = 1.0,
+        specimen: SpecimenView | None = None,
     ) -> None:
         self._focus_mm = focus_mm
+        self._specimen = specimen  # when it returns a view, frames show it instead of the dome
         self._near = subject_near_mm
         self._depth = subject_depth_mm
         self._capture_s = capture_s / speedup
@@ -72,7 +81,7 @@ class SimCamera:
             raise CameraError("The camera did not confirm the shot within 10 s.")
         self._shots += 1
         name = f"DSC{self._shots:05d}.JPG"
-        self._files[name] = await asyncio.to_thread(self._render, self._focus_mm())
+        self._files[name] = await self._frame()
         return Capture(folder="/", name=name, duration_s=self._capture_s)
 
     async def download(self, capture: Capture) -> bytes:
@@ -100,9 +109,17 @@ class SimCamera:
     async def preview(self) -> bytes:
         if not self._state.connected:
             raise CameraError(self._state.problem or "The camera is not connected.")
-        return await asyncio.to_thread(self._render, self._focus_mm())
+        return await self._frame()
 
     # -- rendering ----------------------------------------------------------------------------
+
+    async def _frame(self) -> bytes:
+        focus = self._focus_mm()
+        view = self._specimen() if self._specimen else None
+        if view is None:
+            return await asyncio.to_thread(self._render, focus)
+        specimen, tilt_deg, yaw_deg = view
+        return await asyncio.to_thread(specimen.render, tilt_deg, yaw_deg, focus)
 
     @cached_property
     def _layers(self) -> tuple[list[Image.Image], Image.Image]:

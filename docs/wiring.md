@@ -77,3 +77,11 @@ Never connect or disconnect the motor while the driver is powered.
   TMC2209 modules. Check yours: the set current scales with it.
 - Motor current is set over UART from the web UI (Settings → Motor current). The module's
   VREF potentiometer is ignored.
+
+## Scan module (3D)
+
+The 3D scan module has its own Arduino Nano, so nothing above changes. Its wiring (two
+ULN2003 boards and 28BYJ-48s, the tilt switch, the KY-024 hall sensor, a separate 5 V supply)
+is in the [scan module wiring guide](module-guide/MacroRail-module-wiring-guide.pdf). With both
+Nanos plugged in, set `port = "auto"` (or a `/dev/serial/by-path/...` socket path) for the
+rail in `config.toml`: the two CH340 clones share one `/dev/serial/by-id` name.

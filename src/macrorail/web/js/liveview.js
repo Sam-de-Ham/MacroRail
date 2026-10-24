@@ -42,7 +42,7 @@ export const actions = {
   },
 };
 
-export function render({ s, connected }) {
+export function render({ s, connected, workspace }) {
   const stack = s.stack;
   const shot = connected && stack && isActive(stack) && stack.latest_preview;
   showingShots = Boolean(shot);
@@ -52,7 +52,13 @@ export function render({ s, connected }) {
   } else {
     renderStream(s, connected);
   }
-  $("liveview-position").textContent = s.rail.connected ? `${fmt.mm(s.rail.position, s.rail.steps_per_mm)} mm` : "–";
+  const rail = s.rail.connected ? `${fmt.mm(s.rail.position, s.rail.steps_per_mm)} mm` : "–";
+  const m = s.module;
+  const pose =
+    workspace === "3d" && m.connected
+      ? ` · T ${m.tilt_homed ? `${m.tilt_deg.toFixed(1)}°` : "–"} · Y ${m.yaw_homed ? `${m.yaw_deg.toFixed(1)}°` : "–"}`
+      : "";
+  $("liveview-position").textContent = rail + pose;
 }
 
 /** The newest shot of the running stack, or the one held while paused. */
