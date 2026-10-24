@@ -115,3 +115,30 @@ async def test_controller_stops_motion_when_the_host_goes_quiet() -> None:
         await link.request("HOME", 800, 80, 200, 60000, 2000, 4000, timeout=10)
     assert error.value.code == "LINK"
     await link.close()
+
+
+class RunningTransport(ScriptedTransport):
+    """A controller the open didn't reset: no READY, but it answers INFO."""
+
+    def write_line(self, line: str) -> None:
+        super().write_line(line)
+        request_id, command = line.split()[:2]
+        if command == "INFO":
+            self.incoming.put(f"{request_id} OK fw=1.0.0 proto=1 role=module")
+
+
+async def test_a_controller_that_kept_running_is_asked_instead() -> None:
+    transport = RunningTransport()
+    link, ready = await Link.open(lambda: transport, lambda event: None, ask_after=0.1)
+    assert ready == Event("READY", {"fw": "1.0.0", "proto": "1", "role": "module"})
+    assert transport.sent == ["1 INFO"]
+    await link.close()
+
+
+async def test_a_reset_controller_still_says_ready_first() -> None:
+    transport = RunningTransport()
+    transport.incoming.put("! READY fw=1.0.0 proto=1 role=module")
+    link, ready = await Link.open(lambda: transport, lambda event: None, ask_after=1.0)
+    assert ready.data["role"] == "module"
+    assert transport.sent == []  # no need to ask
+    await link.close()

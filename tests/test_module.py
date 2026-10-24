@@ -378,3 +378,14 @@ def test_api_rejects_bad_angles_and_strangers(client: TestClient) -> None:
     assert response.status_code == 422
     stranger = {"X-Client-Id": "laptop"}
     assert client.post("/api/module/home", json={}, headers=stranger).status_code == 403
+
+
+async def test_spin_turns_until_stopped(machine: Machine) -> None:
+    await module_ready(machine)
+    start = machine.module.state.yaw_steps
+    machine.spin()
+    await until(lambda: machine.module.state.yaw_steps - start > 500, timeout=10)
+    await machine.stop()
+    await idle(machine, timeout=10)
+    assert machine.module.state.moving is None
+    assert "Stopped" in machine.log.entries[-1].message

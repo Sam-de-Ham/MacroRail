@@ -34,10 +34,11 @@ export const actions = {
   "calibrate-yaw": () => post("module/calibrate/yaw"),
   "calibrate-tilt": () => post("module/calibrate/tilt"),
   pose: (button, app) => {
-    const { tilt, yaw } = button.dataset;
+    const { tilt, yaw, screw } = button.dataset;
+    const screwYaw = screw ? app.state.module.centring.screw_yaws[screw] : undefined;
     return post("module/pose", {
       tilt: tilt === undefined ? null : tilt === "min" ? app.state.module.tilt_min_deg : Number(tilt),
-      yaw: yaw === undefined ? null : Number(yaw),
+      yaw: screwYaw ?? (yaw === undefined ? null : Number(yaw)),
     });
   },
 };
@@ -116,7 +117,7 @@ export function render(ctx) {
   enable($("pose-go"), why(ctx, goNeeds));
   for (const id of ["pose-tilt", "pose-yaw"]) $(id).disabled = !mine;
   for (const button of document.querySelectorAll("[data-action=pose]")) {
-    const needs = button.dataset.tilt !== undefined ? { tilt: true } : { yaw: true };
+    const needs = button.dataset.tilt !== undefined ? { tilt: true } : { yaw: true }; // screws: yaw
     enable(button, why(ctx, needs));
   }
   setText(

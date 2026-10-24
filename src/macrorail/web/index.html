@@ -231,10 +231,11 @@
             <button class="button" data-action="pose" data-tilt="0" data-tilt-ui>Level</button>
             <button class="button" data-action="pose" data-tilt="90" data-tilt-ui>Top view</button>
             <button class="button" data-action="pose" data-tilt="min" data-tilt-ui>Belly view</button>
-            <button class="button" data-action="pose" data-yaw="0" title="Yaw 0">Screw X to you</button>
-            <button class="button" data-action="pose" data-yaw="270" title="Yaw 270°">Screw Y to you</button>
+            <button class="button" data-action="pose" data-screw="x">Screw X to you</button>
+            <button class="button" data-action="pose" data-screw="y">Screw Y to you</button>
           </div>
-          <p class="muted small-text">"To you" means pointing away from the lens, where the hex key reaches it.</p>
+          <p class="muted small-text">"To you" turns the screw to the angle set in the Centre tab, where the hex key
+            reaches it.</p>
         </article>
       </div>
 
@@ -261,6 +262,18 @@
             <button class="button small" data-action="new-specimen" id="new-specimen">New specimen</button>
           </div>
           <p class="muted small-text" id="centring-progress"></p>
+          <h3>Rough centring by eye</h3>
+          <p class="muted small-text">Spin keeps yaw turning: watch the insect in live view and turn the screws until it
+            stops swinging from side to side, then Stop and Measure for the fine rest.</p>
+          <div class="button-row">
+            <button class="button grow" data-action="spin" id="spin">Spin</button>
+            <button class="button danger grow" data-action="stop">Stop</button>
+          </div>
+          <div class="fields">
+            <label class="field-group"><span>Screw angle for the key</span><span class="field-with-unit"><input class="field" type="number" step="5" data-plan="screw_access_deg"><span class="unit">°</span></span></label>
+          </div>
+          <p class="muted small-text">Where "Screw to you" turns a screw: 0° points it at the camera, positive turns it
+            counter-clockwise seen from above. 45° keeps the hex key clear of the objective.</p>
         </article>
 
         <article class="card" data-tilt-ui>

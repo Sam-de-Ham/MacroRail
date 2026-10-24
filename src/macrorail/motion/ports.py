@@ -21,12 +21,14 @@ from collections.abc import Callable
 from typing import Literal
 
 from .link import SerialTransport, Transport
-from .protocol import ProtocolError, parse_line
+from .protocol import Event, ProtocolError, Reply, parse_line
 
 log = logging.getLogger(__name__)
 
 AUTO = "auto"
-PROBE_TIMEOUT_S = 3.0  # READY arrives about 1.6 s after the port opens
+PROBE_TIMEOUT_S = 3.5  # READY arrives about 1.6 s after the port opens
+ASK_AFTER_S = 2.2  # no READY by then: the Nano wasn't reset, so ask it
+PROBE_ID = 1
 IGNORE_FOR_S = 60.0  # how long a port that isn't one of ours is left alone
 
 Role = Literal["rail", "module"]
@@ -49,11 +51,17 @@ def candidate_ports() -> list[str]:
 
 
 def probe(port: str, timeout: float = PROBE_TIMEOUT_S) -> Role | None:
-    """Open `port`, wait for READY and say which controller it is (None: not one of ours)."""
+    """Open `port`, wait for READY and say which controller it is (None: not one of ours).
+    A Nano the open didn't reset (the module keeps running between connections) stays
+    silent, so after ASK_AFTER_S it is asked with INFO."""
     transport = SerialTransport(port)
     try:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        start = time.monotonic()
+        asked = False
+        while time.monotonic() - start < timeout:
+            if not asked and time.monotonic() - start > ASK_AFTER_S:
+                transport.write_line(f"{PROBE_ID} INFO")
+                asked = True
             line = transport.read_line()
             if not line:
                 continue
@@ -61,7 +69,9 @@ def probe(port: str, timeout: float = PROBE_TIMEOUT_S) -> Role | None:
                 message = parse_line(line)
             except ProtocolError:
                 continue  # bootloader noise after the reset
-            if getattr(message, "name", None) == "READY":
+            if isinstance(message, Event) and message.name == "READY":
+                return role_of(message.data)
+            if isinstance(message, Reply) and message.id == PROBE_ID and message.ok:
                 return role_of(message.data)
         return None
     finally:
@@ -133,10 +143,13 @@ class PortFinder:
 def opener(finder: PortFinder, role: Role, port: str) -> Callable[[], Transport]:
     """The transport factory for one controller: a fixed port, or `auto` (searched afresh
     on every connection, since a reconnect may follow an unplug)."""
+    # The module's Nano keeps running between connections, so a reconnect (a USB hiccup, an
+    # app restart) keeps its homing. The rail's is reset on every connection, as it always was.
+    keep = role == "module"
     if port != AUTO:
         finder.claim(role, port)
-        return lambda: SerialTransport(port)
-    return lambda: SerialTransport(finder.find(role))
+        return lambda: SerialTransport(port, keep_running=keep)
+    return lambda: SerialTransport(finder.find(role), keep_running=keep)
 
 
 def _same(port: str) -> str:

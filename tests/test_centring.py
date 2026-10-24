@@ -8,6 +8,7 @@ import random
 import pytest
 
 from macrorail.scan.centring import (
+    DESIGN_SIGNS,
     SCREW_X_YAW_DEG,
     CentringError,
     Observation,
@@ -15,6 +16,7 @@ from macrorail.scan.centring import (
     height_error,
     screw_facing_yaw,
     screw_turns,
+    wrong_way,
 )
 
 AXIS_SIDEWAYS = 0.37  # where the yaw axis appears in the image, mm from its centre
@@ -79,12 +81,28 @@ def test_centred_needs_no_turns() -> None:
     assert screw_turns(result) == []
 
 
-def test_screw_facing_the_user() -> None:
-    # At yaw θ screw X points along θ + SCREW_X_YAW_DEG and screw Y 90° further; 180° is away
-    # from the lens. On the rig screw X faces away at yaw 0.
-    assert (screw_facing_yaw("x") + SCREW_X_YAW_DEG) % 360 == 180
-    assert (screw_facing_yaw("y") + SCREW_X_YAW_DEG + 90) % 360 == 180
-    assert screw_facing_yaw("x") == 0.0
+@pytest.mark.parametrize("access", [0.0, 45.0, -45.0])
+def test_screw_turned_to_the_access_angle(access: float) -> None:
+    # At yaw θ screw X points along θ + SCREW_X_YAW_DEG and screw Y 90° further round.
+    assert (screw_facing_yaw("x", access) + SCREW_X_YAW_DEG - access) % 360 == 0
+    assert (screw_facing_yaw("y", access) + SCREW_X_YAW_DEG + 90 - access) % 360 == 0
+
+
+def test_a_screw_that_moves_the_other_way_is_caught() -> None:
+    before = fit(observe(0.6, -0.4, [0, 90, 180, 270]))
+    advice = screw_turns(before)  # x 1.25 in, y 0.75 out
+    # Screw X did as predicted; screw Y moved the plate the other way (say, a mirrored view).
+    after = fit(observe(0.6 - 0.625, -0.4 - 0.375, [0, 90, 180, 270]))
+    assert wrong_way(before, after, advice, DESIGN_SIGNS) == ["y"]
+    # With Y's direction flipped, the advice for the new offset brings it back.
+    signs = {"x": 1, "y": -1}
+    assert {t.screw: t.turns for t in screw_turns(after, signs)} == {"y": 1.5}
+
+
+def test_screws_left_alone_are_not_judged() -> None:
+    before = fit(observe(0.6, -0.4, [0, 90, 180, 270]))
+    after = fit(observe(0.6, -0.4, [0, 90, 180, 270], noise=0.002))
+    assert wrong_way(before, after, screw_turns(before), DESIGN_SIGNS) == []
 
 
 @pytest.mark.parametrize("sign", [1, -1])

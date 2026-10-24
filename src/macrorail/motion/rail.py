@@ -226,7 +226,7 @@ class RailAxis:
     async def home(self) -> None:
         c, spm = self._config, self.steps_per_mm
         fast = round(c.homing_speed_mm_s * spm)
-        slow = round(c.homing_probe_speed_mm_s * spm)
+        slow = fast  # the second touch is as fast as the seek: the switch stops it at once
         clearance = round(c.homing_clearance_mm * spm)
         release_max = round(c.homing_release_max_mm * spm)
         accel = round(c.homing_accel_mm_s2 * spm)

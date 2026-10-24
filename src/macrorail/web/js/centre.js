@@ -16,6 +16,7 @@ export const actions = {
   "measure-centring": () => post("module/centring"),
   "measure-height": () => post("module/height"),
   "new-specimen": () => post("module/specimen"),
+  spin: () => post("module/spin"),
   "face-screw": (button, app) =>
     post("module/pose", { tilt: app.state.scan3d.plan.manual_tilt ? null : 0, yaw: Number(button.dataset.yaw) }),
 };
@@ -33,6 +34,7 @@ export function render(ctx) {
   $("centring-badge").classList.toggle("ok", Boolean(last?.centred));
   $("centring-badge").classList.toggle("warn", Boolean(last && !last.centred));
   enable($("measure-centring"), blocked);
+  enable($("spin"), why(ctx));
   setText("measure-centring", c.rounds.length ? "Measure again" : "Measure");
   const empty = !c.rounds.length && c.height_mm === null;
   enable($("new-specimen"), !mine || busy ? why(ctx) : empty ? "Nothing measured yet for this specimen." : "");

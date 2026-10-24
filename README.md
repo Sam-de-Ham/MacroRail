@@ -96,7 +96,7 @@ still chime, vibrate and mark the tab title.
 
 ## Shooting a stack
 
-1. **Home** the rail. It finds the switch, backs off until it opens, touches it again slowly, and
+1. **Home** the rail. It finds the switch, backs off until it opens plus 1 mm, touches it again, and
    parks just clear of it.
 2. **Set the range.** Either jog to the front of the subject on the live view and press
    **Set here** for Start, then the same for End; or bring any part of it roughly into focus

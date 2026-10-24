@@ -41,10 +41,12 @@ from .scan.centring import (
     CentringError,
     CentringFit,
     Observation,
+    ScrewTurn,
     fit,
     height_error,
     screw_facing_yaw,
     screw_turns,
+    wrong_way,
 )
 from .scan.library import ScanLibrary
 from .scan.measure import best_focus, row_focus
@@ -87,6 +89,8 @@ CENTRING_YAWS = (0.0, 90.0, 180.0, 270.0)
 HEIGHT_TILT_DEG = 20.0  # inside the range even before tilt is calibrated
 HEIGHT_OK_MM = 0.1
 MAX_SWEEP_FRAMES = 40  # centring sweeps: coarse is enough, the image gives the precision
+MAX_EXTRA_SWEEP_MM = 3.0  # the plate's travel each way, about
+SPIN_TURNS = 100  # the spin for rough centring stops by itself after this many turns
 RANGE_SCAN_S = 45.0  # a pose's focus scan, about, for the estimate
 TURN_S = 6.0  # turning to the next pose and settling, about
 PREVIEW_S_PER_SHOT = 0.4  # making a pose's preview stack on the Pi 3B+, about
@@ -123,6 +127,7 @@ class Machine:
         self._module_store = module_store
         self.module_settings = module_store.load()  # the scan module's calibration
         self.centring: list[CentringFit] = []  # this specimen's rounds, newest last
+        self._advice: list[ScrewTurn] = []  # what the last round told the user to turn
         self.height_mm: float | None = None  # this specimen's height above the tilt axis
         self._plan_store = plan_store
         self.scan_plan = plan_store.load()
@@ -139,7 +144,7 @@ class Machine:
         self.scanner = FocusScanner(axis, camera, self._approach, self._check_stop, self.changed)
         self.review = ReviewStore(config.data_dir / "stacks", activity_log, self.changed)
         self.diagnostics = Diagnostics(
-            axis, camera, config.data_dir, self._driver_idle, self.changed
+            axis, camera, config.data_dir, self._driver_idle, self.changed, activity_log
         )
         self.module = module(self._module_geometry)
         self.poser = Poser(self.module, config.module, self._check_stop, activity_log)
@@ -399,10 +404,22 @@ class Machine:
             raise OperationError("Centre with yaw first: that measures which way the rail moves.")
         self._start("scanning", self._measure_height())
 
+    def spin(self) -> None:
+        """Turn yaw round and round, for centring roughly by eye. Stop ends it."""
+        self._require_module()
+        self._start("rotating", self._spin())
+
+    async def _spin(self) -> None:
+        self.log.info("Spinning yaw for rough centring: press Stop to end.")
+        for _ in range(SPIN_TURNS):
+            await self.poser.jog("yaw", 360.0)
+        self.log.info(f"Spun {SPIN_TURNS} turns: stopped.")
+
     def new_specimen(self) -> None:
         """Forget the last specimen's centring rounds and height."""
         self._require_idle()
         self.centring.clear()
+        self._advice = []
         self.height_mm = None
         self.changed()
 
@@ -1015,10 +1032,14 @@ class Machine:
             f"{previous.tilt_switch_deg:.2f}°). Tilt is now level."
         )
 
-    async def _focus_here(self, center: int, task: str) -> int:
-        """Sweep around `center` and arrive (from below) where the whole frame is sharpest."""
-        span = self._steps(self.settings.scan.span_mm)
-        step = max(self._dof_steps(), span // MAX_SWEEP_FRAMES)
+    async def _focus_here(
+        self, center: int, task: str, extra_mm: float = 0.0, fine: bool = False
+    ) -> int:
+        """Sweep around `center` (wider by `extra_mm` each way) and arrive (from below) where
+        the whole frame is sharpest. `fine`: one frame per depth of field, where the focus
+        position itself is the measurement (not just a place to look from)."""
+        span = self._steps(self.settings.scan.span_mm + 2 * extra_mm)
+        step = self._dof_steps() if fine else max(self._dof_steps(), span // MAX_SWEEP_FRAMES)
         samples = await self.scanner.sweep(task, center, span, step, self._scan_motion())
         focus = round(best_focus(samples))
         await self._approach(focus, 1)
@@ -1031,9 +1052,12 @@ class Machine:
         start = center = self.axis.state.position
         observations = []
         try:
-            for yaw in CENTRING_YAWS:
+            # Turning the screws since the last round moved the insect in depth too, by up to
+            # that round's offset: the first sweep looks that much further either way.
+            moved = min(self.centring[-1].distance_mm, MAX_EXTRA_SWEEP_MM) if self.centring else 0.0
+            for i, yaw in enumerate(CENTRING_YAWS):
                 await self.poser.go(self._level(), yaw)
-                center = await self._focus_here(center, "centring")
+                center = await self._focus_here(center, "centring", moved if i == 0 else 0.0)
                 frame = await self.camera.preview()
                 detail = await asyncio.to_thread(detail_centre, frame)
                 if detail is None:
@@ -1050,8 +1074,10 @@ class Machine:
         except (AnalysisError, CameraError):
             await self._recover(start, (self._level(), 0.0))
             raise
+        learnt = self._check_screws(result, learnt)
         self.centring.append(result)
         self._save_module_quietly(learnt)
+        self._advice = [] if result.centred else screw_turns(result, self._screw_signs(learnt))
         # Back at yaw 0 and in focus, ready for the screws to be turned.
         await self.poser.go(self._level(), 0.0)
         await self._approach(round(observations[0].focus_mm * self.axis.steps_per_mm), 1)
@@ -1060,9 +1086,31 @@ class Machine:
         else:
             advice = ", ".join(
                 f"screw {t.screw.upper()} {abs(t.turns):g} turn {'in' if t.turns > 0 else 'out'}"
-                for t in screw_turns(result)
+                for t in self._advice
             )
             self.log.info(f"{result.distance_mm:.2f} mm off the yaw axis: turn {advice}.")
+
+    @staticmethod
+    def _screw_signs(calibration: ModuleSettings) -> dict[Literal["x", "y"], int]:
+        return {"x": calibration.screw_x_sign, "y": calibration.screw_y_sign}
+
+    def _check_screws(self, result: CentringFit, learnt: ModuleSettings) -> ModuleSettings:
+        """Compare this round with the last one's advice: a screw that moved the plate the
+        other way than predicted has its direction flipped (and remembered), so the next
+        advice is right whatever the camera, the yaw motor or the head's mounting do."""
+        if not (self.centring and self._advice):
+            return learnt
+        signs = self._screw_signs(learnt)
+        flipped = wrong_way(self.centring[-1], result, self._advice, signs)
+        for screw in flipped:
+            signs[screw] = -signs[screw]
+            self.log.warning(
+                f"Screw {screw.upper()} moved the plate the other way than predicted. Its "
+                "direction is corrected from now on: follow the new advice."
+            )
+        if not flipped:
+            return learnt
+        return _calibrated(learnt, screw_x_sign=signs["x"], screw_y_sign=signs["y"])
 
     async def _recover(self, rail: int, pose: tuple[float | None, float | None]) -> None:
         """After a measurement found nothing: back to where the user focused, as every scan
@@ -1084,7 +1132,7 @@ class Machine:
         try:
             for tilt in (HEIGHT_TILT_DEG, -HEIGHT_TILT_DEG):
                 await self.poser.go(tilt, 0.0)
-                center = await self._focus_here(center, "height")
+                center = await self._focus_here(center, "height", fine=True)
                 focus[tilt] = center / self.axis.steps_per_mm
             height = height_error(focus, self.module_settings.rail_sign)
         except (AnalysisError, CameraError):
@@ -1113,13 +1161,18 @@ class Machine:
             }
             for r in self.centring
         ]
-        last = self.centring[-1] if self.centring else None
+        access = self.scan_plan.screw_access_deg
         return {
             "rounds": rounds,
             "turns": [
-                {"screw": t.screw, "turns": t.turns, "facing_yaw": screw_facing_yaw(t.screw)}
-                for t in (screw_turns(last) if last else [])
+                {
+                    "screw": t.screw,
+                    "turns": t.turns,
+                    "facing_yaw": screw_facing_yaw(t.screw, access),
+                }
+                for t in self._advice
             ],
+            "screw_yaws": {s: screw_facing_yaw(s, access) for s in ("x", "y")},
             "height_mm": None if self.height_mm is None else round(self.height_mm, 4),
             "height_ok_mm": HEIGHT_OK_MM,
             "rail_sign": self.module_settings.rail_sign,

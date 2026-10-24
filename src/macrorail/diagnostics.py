@@ -18,13 +18,15 @@ from typing import Any
 
 from . import __version__
 from .camera.base import Camera
+from .log import ActivityLog
 from .motion.base import Axis, AxisError
 
 REFRESH_S = 5.0
 
 # Bits of `vcgencmd get_throttled`.
+UNDER_VOLTAGE_NOW = "Under-voltage now"
 THROTTLE_FLAGS = {
-    0: "Under-voltage now",
+    0: UNDER_VOLTAGE_NOW,
     1: "CPU frequency capped now",
     2: "Throttled now",
     3: "Soft temperature limit now",
@@ -43,6 +45,7 @@ class Diagnostics:
         data_dir: Path,
         driver_idle: Callable[[], bool],
         on_change: Callable[[], None],
+        log: ActivityLog | None = None,
     ) -> None:
         self._axis = axis
         self._camera = camera
@@ -52,6 +55,8 @@ class Diagnostics:
         self._started = time.time()
         self._system: dict[str, Any] = {}
         self._driver: dict[str, Any] | None = None
+        self._log = log
+        self._under_voltage = False
 
     async def run(self) -> None:
         while True:
@@ -60,6 +65,7 @@ class Diagnostics:
 
     async def refresh(self) -> None:
         self._system = await asyncio.to_thread(read_system, self._data_dir)
+        self._warn_power(UNDER_VOLTAGE_NOW in self._system.get("power", []))
         if self._driver_idle():
             try:
                 self._driver = parse_driver(await self._axis.read_driver())
@@ -68,6 +74,15 @@ class Diagnostics:
         elif not self._axis.state.driver_ok:
             self._driver = None
         self._on_change()
+
+    def _warn_power(self, under_voltage: bool) -> None:
+        """Say so once each time the Pi goes under-voltage: USB devices then drop out."""
+        if under_voltage and not self._under_voltage and self._log is not None:
+            self._log.warning(
+                "The Pi is under-voltage: the camera and the Nanos may drop off USB. Use a "
+                "2.5 A supply, and set the camera's USB Power Supply to Off."
+            )
+        self._under_voltage = under_voltage
 
     def snapshot(self) -> dict[str, Any]:
         rail = self._axis.state

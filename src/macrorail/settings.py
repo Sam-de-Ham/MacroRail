@@ -84,6 +84,9 @@ class ModuleSettings(_Model):
     # other way, 0 not yet known; and where the yaw axis appears across live view (0-1).
     rail_sign: Literal[-1, 0, 1] = 0
     axis_image_x: float | None = Field(None, ge=0.0, le=1.0)
+    # Learnt by centring: -1 if a screw moves the plate the other way than designed.
+    screw_x_sign: Literal[-1, 1] = 1
+    screw_y_sign: Literal[-1, 1] = 1
 
 
 class ScanPlanSettings(_Model):
@@ -96,6 +99,9 @@ class ScanPlanSettings(_Model):
     name: str = Field("", max_length=60)
     # Tilt set by hand: the tilt motor isn't used, scans pause for each ring (System tab).
     manual_tilt: bool = False
+    # Where a centring screw is turned to for the hex key: degrees counter-clockwise from the
+    # camera, seen from above (0 points it straight at the camera, where the lens is in the way).
+    screw_access_deg: float = Field(45.0, ge=-180.0, le=180.0)
 
     @model_validator(mode="after")
     def _tilts_in_reach(self) -> Self:

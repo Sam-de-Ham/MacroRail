@@ -221,6 +221,10 @@ def create_app(machine: Machine) -> FastAPI:
     async def measure_height() -> None:
         machine.measure_height()
 
+    @app.post("/api/module/spin", status_code=204, dependencies=controlled)
+    async def spin() -> None:
+        machine.spin()
+
     @app.post("/api/module/specimen", status_code=204, dependencies=controlled)
     async def new_specimen() -> None:
         machine.new_specimen()

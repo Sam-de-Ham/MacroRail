@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from macrorail.diagnostics import THROTTLE_FLAGS, parse_driver, read_system
+from macrorail.diagnostics import THROTTLE_FLAGS, Diagnostics, parse_driver, read_system
+from macrorail.log import ActivityLog
 from macrorail.machine import Machine
 
 
@@ -35,3 +36,12 @@ async def test_machine_reports_driver_and_link(machine: Machine) -> None:
     assert rail["driver"]["microsteps"] == 16
     # Until it has been idle a while, the motor holds at full current (no change mid-work).
     assert rail["driver"]["run_current_scale"] == rail["driver"]["hold_current_scale"]
+
+
+def test_under_voltage_is_told_once_each_time() -> None:
+    log = ActivityLog()
+    diagnostics = Diagnostics(None, None, Path("."), lambda: False, lambda: None, log)  # type: ignore[arg-type]
+    for now in (False, True, True, False, True):
+        diagnostics._warn_power(now)
+    warnings = [e for e in log.entries if "under-voltage" in e.message]
+    assert len(warnings) == 2

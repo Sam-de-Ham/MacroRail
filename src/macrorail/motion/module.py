@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 1
 STATUS_INTERVAL_S = 0.5
+READY_WAIT_S = 2.5  # READY comes 1.6 s after a reset
 YAW_SWEEP_MAX = 5376  # the most half-steps the controller's yaw homing sweeps
 HALL_STEP = 4  # hall changes smaller than this (noise) don't update the pushed state
 RETRY_INTERVAL_S = 2.0
@@ -176,7 +177,11 @@ class ScanModule:
             await asyncio.sleep(RETRY_INTERVAL_S)
 
     async def _session(self) -> None:
-        link, ready = await Link.open(self._open_transport, self._on_event, name="module")
+        # READY comes only when the open reset the Nano; otherwise it kept running (and kept
+        # its homing), and is asked instead.
+        link, ready = await Link.open(
+            self._open_transport, self._on_event, name="module", ask_after=READY_WAIT_S
+        )
         try:
             if ready.data.get("role") != "module":
                 raise AxisError(

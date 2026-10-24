@@ -34,9 +34,7 @@ async def test_centring_needs_the_rig(machine: Machine) -> None:
 
 
 async def test_centring_rounds_converge(machine: Machine) -> None:
-    # Screw X faces away from the camera at yaw 0, so this offset puts the insect 0.6 mm
-    # further away there: focused (as the user would) at about 19.4 mm.
-    specimen = await rig(machine, focus_mm=19.4)
+    specimen = await rig(machine)
     specimen.offset_mm = (0.6, -0.4, 0.15)
 
     machine.measure_centring()

@@ -11,9 +11,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import sys
 import threading
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 from .protocol import Event, ProtocolError, Reply, format_request, parse_line
 
@@ -45,7 +46,11 @@ class Transport(Protocol):
 
 
 class SerialTransport:
-    def __init__(self, port: str, baudrate: int = 115200) -> None:
+    def __init__(self, port: str, baudrate: int = 115200, *, keep_running: bool = False) -> None:
+        """`keep_running`: leave the Nano running when this port is closed and opened again.
+        Opening a port raises DTR, which resets a Nano; Linux drops DTR again on close
+        (HUPCL), so every reconnect would reset it and lose its homing. With HUPCL cleared,
+        DTR stays up after the first open and later opens find the Nano as it was."""
         import serial
 
         self.port = port
@@ -53,6 +58,8 @@ class SerialTransport:
         # a second time, so a port search can never read another link's replies.
         self._serial = serial.Serial(port, baudrate, timeout=0.1, write_timeout=1.0, exclusive=True)
         self._buffer = bytearray()
+        if keep_running:
+            _keep_dtr_on_close(self._serial)
 
     def read_line(self) -> str | None:
         self._buffer += self._serial.read_until(b"\n")
@@ -67,6 +74,16 @@ class SerialTransport:
 
     def close(self) -> None:
         self._serial.close()
+
+
+def _keep_dtr_on_close(port: Any) -> None:
+    if sys.platform == "win32":  # closing a port there doesn't drop DTR
+        return
+    import termios
+
+    attrs = termios.tcgetattr(port.fd)
+    attrs[2] &= ~termios.HUPCL
+    termios.tcsetattr(port.fd, termios.TCSANOW, attrs)
 
 
 class Link:
@@ -93,13 +110,22 @@ class Link:
         on_event: Callable[[Event], None],
         ready_timeout: float = 5.0,
         name: str = "rail",
+        ask_after: float | None = None,
     ) -> tuple[Link, Event]:
-        """Open the transport and wait for the controller's READY event."""
+        """Open the transport and wait for the controller's READY event. With `ask_after`, a
+        controller that stays silent that long (it wasn't reset by the open: it kept running)
+        is asked with INFO instead, whose reply carries the same fields as READY."""
         transport = await asyncio.to_thread(open_transport)
         link = cls(transport, on_event, name)
         try:
-            ready = await asyncio.wait_for(link._ready, ready_timeout)
-        except TimeoutError:
+            if ask_after is None:
+                ready = await asyncio.wait_for(link._ready, ready_timeout)
+            else:
+                try:
+                    ready = await asyncio.wait_for(asyncio.shield(link._ready), ask_after)
+                except TimeoutError:
+                    ready = Event("READY", await link.request("INFO"))
+        except (TimeoutError, LinkError, DeviceError):
             await link.close()
             raise LinkError("controller did not report READY") from None
         return link, ready

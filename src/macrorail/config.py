@@ -37,15 +37,27 @@ class RailConfig(_Section):
         "past the switch's release point if that is further.",
     )
     travel_mm: float = Field(140.0, gt=0, description="Soft limit furthest from the switch.")
-    homing_speed_mm_s: float = Field(1.0, gt=0)
-    homing_probe_speed_mm_s: float = Field(0.2, gt=0)
+    homing_speed_mm_s: float = Field(
+        2.0,
+        gt=0,
+        description="Both the seek and the second touch of the switch (user, 2026-10-24).",
+    )
     homing_clearance_mm: float = Field(
-        0.5, gt=0, description="How far past the switch's release point to back off."
+        1.0, gt=0, description="How far past the switch's release point to back off."
     )
     homing_release_max_mm: float = Field(
         5.0, gt=0, description="Homing fails if the switch is still pressed after this."
     )
     homing_accel_mm_s2: float = Field(10.0, gt=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired(cls, data: object) -> object:
+        # The slow second touch was retired (user, 2026-10-24); config files written before
+        # still name its speed, and must keep loading.
+        if isinstance(data, dict):
+            data = {k: v for k, v in data.items() if k != "homing_probe_speed_mm_s"}
+        return data
 
 
 class ModuleConfig(_Section):

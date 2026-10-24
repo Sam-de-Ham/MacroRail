@@ -36,9 +36,9 @@ async def test_home_parks_with_the_switch_released(rail: RailAxis, sim_rail: Sim
     await rail.enable()
     await rail.home()
     assert rail.state.homed
-    # The simulated switch releases 0.6 mm out, so the park lands past it (+0.5 mm clearance).
-    # The release is measured to within one simulator tick at this speed-up (~30 steps).
-    assert 240 + 200 <= rail.state.position <= 240 + 200 + 30
+    # The simulated switch releases 0.6 mm out, so the park lands past it (+1 mm clearance).
+    # The release is measured to within one simulator tick at this speed-up (~60 steps).
+    assert 240 + 400 <= rail.state.position <= 240 + 400 + 60
     assert sim_rail.physical == pytest.approx(rail.state.position, abs=1)
     await until(lambda: not rail.state.endstop)
 
