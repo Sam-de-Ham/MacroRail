@@ -31,7 +31,7 @@ class ScanLibrary:
         return scan_id
 
     def folder(self, scan_id: str) -> Path:
-        if not SCAN_ID.match(scan_id):
+        if not SCAN_ID.fullmatch(scan_id):
             raise KeyError(scan_id)
         return self.root / scan_id
 
@@ -44,7 +44,7 @@ class ScanLibrary:
             return []
         summaries = []
         for folder in sorted(self.root.iterdir(), reverse=True):
-            if not (folder.is_dir() and SCAN_ID.match(folder.name)):
+            if not (folder.is_dir() and SCAN_ID.fullmatch(folder.name)):
                 continue
             record = read_record(folder)
             if record is None:
@@ -83,12 +83,15 @@ class ScanLibrary:
             if result.get("outcome") != "done":
                 continue
             pose = poses.get(index, {"tilt_deg": 0.0, "yaw_deg": 0.0})
+            try:
+                preview = review.preview_path(result["stack"])
+                depths = [review.depth_path(result["stack"], colour) for colour in (False, True)]
+            except ReviewError:
+                continue  # that pose's stack was deleted
             name = f"pose-{index + 1:03d}_tilt{pose['tilt_deg']:+04.0f}_yaw{pose['yaw_deg']:03.0f}"
-            preview = review.preview_path(result["stack"])
             if preview.is_file():
                 entries.append((preview, f"{base}/images/{name}.jpg"))
-            for colour, suffix in ((False, ".png"), (True, "-colour.jpg")):
-                depth = review.depth_path(result["stack"], colour)
+            for depth, suffix in zip(depths, (".png", "-colour.jpg"), strict=True):
                 if depth.is_file():
                     entries.append((depth, f"{base}/depth/{name}{suffix}"))
             files = result.get("files", [])

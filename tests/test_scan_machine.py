@@ -118,3 +118,18 @@ async def test_one_test_pose(machine: Machine) -> None:
     assert machine.scan.phase == "done"
     assert len(machine.scan.poses) == 1
     assert machine.snapshot()["scan3d"]["unfinished"] == []  # tests aren't offered to continue
+
+
+async def test_stop_while_homing_yaw_ends_the_scan(machine: Machine) -> None:
+    await ready(machine)
+    machine.start_scan()
+    run = machine.scan
+    assert run is not None
+    with pytest.raises(OperationError, match="can't change while a 3D scan runs"):
+        await machine.update_settings({"stack": {"step": 30}})
+    await until(lambda: machine.module.state.moving == "yaw", timeout=10)
+    await machine.stop()
+    await idle(machine, timeout=30)
+    assert run.phase == "stopped"
+    assert not run.active
+    machine.delete_scan(run.id)  # not stuck "running"

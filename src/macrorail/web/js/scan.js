@@ -30,7 +30,7 @@ export const actions = {
 export function planPatch(input) {
   const key = input.dataset.plan;
   if (key === "tilts") {
-    const tilts = input.value.split(/[,;\s]+/).filter(Boolean).map(Number);
+    const tilts = input.value.replaceAll("−", "-").split(/[,;\s]+/).filter(Boolean).map(Number);
     if (!tilts.length || tilts.some((t) => !Number.isFinite(t))) throw new Error("Enter tilts like 60, 30, 0, -30.");
     return { tilts };
   }
@@ -58,7 +58,8 @@ export function render({ s, mine, busy, force }) {
 
   const blocked = scan.preflight.some((c) => c.blocking && !c.ok);
   $("scan-start").disabled = !mine || busy || Boolean(scan.error) || blocked;
-  $("scan-test").disabled = !mine || busy || !(s.module.tilt_homed && s.module.yaw_homed);
+  const liveView = s.camera.connected && s.camera.live_view;
+  $("scan-test").disabled = !mine || busy || !(s.module.tilt_homed && s.module.yaw_homed && s.rail.homed && liveView);
   $("scan-controls").hidden = !run;
   $("scan-idle-buttons").hidden = Boolean(run);
   if (run) {
@@ -84,7 +85,7 @@ function summary(scan) {
   const rings = new Set(scan.poses.map(([tilt]) => tilt)).size;
   const head = `${poses} poses (${rings} ${rings === 1 ? "ring" : "rings"} of ${poses / rings})`;
   const e = scan.estimate;
-  if (!e) return `${head}. Set a stack step (Shoot tab, 2D) to see the shots and time.`;
+  if (!e) return `${head}. Find the specimen's range once (Test this pose, or the Shoot tab) to estimate the shots and time.`;
   return `${head} · about ${e.shots_per_pose} shots each, ${e.shots.toLocaleString()} in all · about ${fmt.duration(e.seconds)} · Pi ${gb(e.pi_bytes)} · camera card ${gb(e.card_bytes)}`;
 }
 
@@ -117,7 +118,7 @@ function renderPreflight(checks) {
 /** Yaw across, tilt rings down (highest first): each pose a dot, filled when done, ringed
  * while it runs. A planned pose can be clicked to go there. */
 function renderMap(scan, canGo) {
-  const run = scan.run;
+  const run = scan.run && ["running", "pausing", "paused", "stopping"].includes(scan.run.phase) ? scan.run : null;
   const poses = run ? run.poses.map((p) => [p.tilt_deg, p.yaw_deg]) : scan.poses;
   const results = run ? run.results : {};
   const current = run?.current?.index ?? null;
@@ -148,13 +149,13 @@ function renderMap(scan, canGo) {
     const dot = svgEl("circle", { cx: x, cy: y, r: index === current ? 8 : 6, class: cls });
     const label = `Pose ${index + 1}: tilt ${tilt}°, yaw ${yaw}°${outcome ? ` (${outcome})` : ""}`;
     dot.append(svgEl("title", {}, label));
-    if (canGo && !run) {
-      dot.setAttribute("data-action", "scan-pose");
-      dot.setAttribute("data-tilt", String(tilt));
-      dot.setAttribute("data-yaw", String(yaw));
-      dot.classList.add("map-clickable");
-    }
     parts.push(dot);
+    if (canGo && !run) {
+      // A larger invisible target, so a finger can hit it on a phone.
+      const target = svgEl("circle", { cx: x, cy: y, r: 13, class: "map-target", "data-action": "scan-pose", "data-tilt": tilt, "data-yaw": yaw });
+      target.append(svgEl("title", {}, `Go to ${label.toLowerCase()}`));
+      parts.push(target);
+    }
   });
   svg.replaceChildren(...parts);
 }

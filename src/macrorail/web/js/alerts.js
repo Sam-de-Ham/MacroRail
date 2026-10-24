@@ -1,6 +1,7 @@
 // Tells you when a stack needs you: it finished, stopped, failed, or paused on a camera
-// problem. A chime and vibration on this device, the tab title, and (where the browser allows
-// it: HTTPS or localhost) a system notification.
+// problem. During a 3D scan, the scan's own end and pauses are told instead of each pose's
+// stack (a camera problem still is). A chime and vibration on this device, the tab title, and
+// (where the browser allows it: HTTPS or localhost) a system notification.
 
 import { $ } from "./dom.js";
 import { readPref, writePref } from "./prefs.js";
@@ -12,12 +13,19 @@ const MESSAGES = {
   failed: ["Stack failed", "Open MacroRail to see why."],
   camera_error: ["Stack paused: camera problem", "Fix the camera, then resume to retake the shot."],
 };
+const SCAN_ACTIVE = new Set(["running", "pausing", "paused", "stopping"]);
+const SCAN_MESSAGES = {
+  done: ["Scan complete", "Every pose is shot."],
+  stopped: ["Scan stopped", "Continue it from the Scan tab."],
+  failed: ["Scan failed", "Open MacroRail to see why."],
+};
 const TITLE = document.title;
 const canNotify = "Notification" in window && window.isSecureContext;
 
 let sound = readPref("alert-sound", true);
 let seenId = null;
 let seenPhase = null;
+let seenScan = null; // [id, phase, error] of the 3D scan last seen
 let audio = null;
 
 $("alert-sound").checked = sound;
@@ -48,6 +56,7 @@ export const actions = {
 
 export function render({ s }) {
   renderSettings();
+  const scanning = renderScan(s.scan3d.run);
   const stack = s.stack;
   if (!stack) return;
   if (stack.id !== seenId) {
@@ -59,9 +68,25 @@ export function render({ s }) {
   if (stack.phase === seenPhase) return;
   const previous = seenPhase;
   seenPhase = stack.phase;
-  if (stack.phase === "camera_error" || (ACTIVE.has(previous) && MESSAGES[stack.phase])) {
+  if (stack.phase === "camera_error" || (!scanning && ACTIVE.has(previous) && MESSAGES[stack.phase])) {
     alert(...MESSAGES[stack.phase], stack.phase === "done");
   }
+}
+
+/** Alerts for the 3D scan; returns whether one is running (its poses' stacks stay quiet). */
+function renderScan(run) {
+  if (!run) return false;
+  const now = [run.id, run.phase, run.error];
+  const before = seenScan;
+  seenScan = now;
+  const active = SCAN_ACTIVE.has(run.phase);
+  if (!before || before[0] !== run.id) return active; // not news on page load
+  if (before[1] !== run.phase && SCAN_ACTIVE.has(before[1]) && SCAN_MESSAGES[run.phase]) {
+    alert(...SCAN_MESSAGES[run.phase], run.phase === "done");
+  } else if (run.error && run.error !== before[2] && run.phase === "paused") {
+    alert("Scan paused", run.error, false); // e.g. the specimen wasn't found
+  }
+  return active;
 }
 
 function renderSettings() {

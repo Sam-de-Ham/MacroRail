@@ -61,7 +61,7 @@ export function render({ s, connected, workspace }) {
   $("liveview-position").textContent = rail + pose;
   // Where the yaw axis appears (learnt by centring): the insect should sit on this line.
   const axis = m.centring.axis_image_x;
-  const showAxis = workspace === "3d" && axis !== null && !shot;
+  const showAxis = workspace === "3d" && axis !== null && !shot && connected && s.live_view.available;
   $("liveview-axis").hidden = !showAxis;
   if (showAxis) $("liveview-axis").style.left = `${(axis * 100).toFixed(2)}%`;
 }

@@ -88,7 +88,10 @@ HEIGHT_OK_MM = 0.1
 MAX_SWEEP_FRAMES = 40  # centring sweeps: coarse is enough, the image gives the precision
 RANGE_SCAN_S = 45.0  # a pose's focus scan, about, for the estimate
 TURN_S = 6.0  # turning to the next pose and settling, about
+PREVIEW_S_PER_SHOT = 0.4  # making a pose's preview stack on the Pi 3B+, about
+
 DISK_MARGIN = 1.2  # free space wanted on the Pi beyond a scan's estimate
+DISK_CHECK_S = 5.0
 SIM_BACKLASH_MM = 0.04  # a realistic lead-screw backlash for the simulator
 DEFAULT_CAPTURE_S = 1.5
 IDLE_CHECK_S = 1.0
@@ -126,6 +129,8 @@ class Machine:
         self.scan: ScanRun | None = None  # the running 3D scan, or the last one
         self._scan_center: int | None = None  # where the last pose's subject was in focus
         self._unfinished = self._find_unfinished()
+        self._disk_free_bytes = 0
+        self._disk_checked = -math.inf
         self.activity: Activity = "idle"
         self.stack: StackRun | None = None
         self.control = ControlLease(self.changed)
@@ -185,7 +190,7 @@ class Machine:
             "camera": asdict(camera),
             "live_view": {
                 "available": camera.connected and camera.live_view,
-                "paused": self.activity == "stacking",
+                "paused": self._shooting(),
             },
             "settings": self.settings.model_dump(),
             "optics": {
@@ -418,28 +423,27 @@ class Machine:
             poses = [Pose(0, tilt, round(self.module.yaw_deg() % 360, 1))]
         else:
             poses = self._scan_poses()
-        blocking = [c for c in self._preflight(poses) if c["blocking"] and not c["ok"]]
-        if blocking:
-            raise OperationError(blocking[0]["text"])
-        started = time.time()
-        scan_id = self.scans.new_id(started)
+        self._require_preflight(poses)
+        scan_id = self.scans.new_id(time.time())
+        # Everything a pose's stack depends on is fixed here, so a continued scan (or a
+        # settings edit elsewhere) shoots the remaining poses the same way.
         plan = {
             **self.scan_plan.model_dump(mode="json"),
             "test": test,
             "step": self.settings.stack.step,
+            "stack_settle_s": self.settings.stack.settle_s,
+            "span_mm": self.settings.scan.span_mm,
         }
-        self._begin_scan(
-            ScanRun(
-                scan_id,
-                self.scans.folder(scan_id),
-                poses,
-                plan,
-                self._scan_steps(scan_id),
-                self.log,
-                self.changed,
-            ),
-            rehome=not test,
+        run = ScanRun(
+            scan_id,
+            self.scans.folder(scan_id),
+            poses,
+            plan,
+            self._scan_steps(scan_id, plan, rehome=not test),
+            self.log,
+            self.changed,
         )
+        self._begin_scan(run)
 
     def continue_scan(self, scan_id: str) -> None:
         """Carry on with an unfinished scan (after a stop or a restart): the poses already done
@@ -447,29 +451,33 @@ class Machine:
         self._require_idle()
         try:
             record = self.scans.record(scan_id)
-        except KeyError:
-            record = None
-        if record is None:
-            raise OperationError("That scan's record can't be read.")
-        poses = [Pose(**p) for p in record["poses"]]
-        blocking = [c for c in self._preflight(poses) if c["blocking"] and not c["ok"]]
-        if blocking:
-            raise OperationError(blocking[0]["text"])
-        done = {
-            int(i): r for i, r in record.get("results", {}).items() if r.get("outcome") == "done"
-        }
+            if record is None:
+                raise ValueError("unreadable")
+            poses = [Pose(**p) for p in record["poses"]]
+            plan = dict(record["plan"])
+            done = {
+                int(i): r
+                for i, r in record.get("results", {}).items()
+                if r.get("outcome") == "done"
+            }
+        except (KeyError, TypeError, ValueError):
+            raise OperationError("That scan's record can't be read.") from None
+        self._require_preflight([p for p in poses if p.index not in done])
+        plan.setdefault("step", self.settings.stack.step)
+        plan.setdefault("stack_settle_s", self.settings.stack.settle_s)
+        plan.setdefault("span_mm", self.settings.scan.span_mm)
         run = ScanRun(
             scan_id,
             self.scans.folder(scan_id),
             poses,
-            record["plan"],
-            self._scan_steps(scan_id),
+            plan,
+            self._scan_steps(scan_id, plan, rehome=True),
             self.log,
             self.changed,
             done=done,
         )
         run.started_at = record.get("started_at", run.started_at)
-        self._begin_scan(run, rehome=True)
+        self._begin_scan(run)
 
     def pause_scan(self) -> None:
         if self.scan is None or not self.scan.active:
@@ -494,58 +502,70 @@ class Machine:
         self._unfinished = self._find_unfinished()
         self.changed()
 
-    def _begin_scan(self, run: ScanRun, rehome: bool) -> None:
+    def _require_preflight(self, poses: list[Pose]) -> None:
+        blocking = [c for c in self._preflight(poses) if c["blocking"] and not c["ok"]]
+        if blocking:
+            raise OperationError(blocking[0]["text"])
+
+    def _begin_scan(self, run: ScanRun) -> None:
         self.scan = run
         self._scan_center = None
-        self._start("scanning_3d", self._run_scan(run, rehome))
+        self._start("scanning_3d", self._run_scan(run))
 
-    async def _run_scan(self, run: ScanRun, rehome: bool) -> None:
+    async def _run_scan(self, run: ScanRun) -> None:
+        kept = self.scanner.range  # the 2D Shoot tab's last range: the poses' scans aren't it
         try:
+            await run.run(self._check_stop)
+        finally:
+            self.scanner.range = kept
+            self.stack = None
+            self._unfinished = self._find_unfinished()
+
+    def _scan_steps(self, scan_id: str, plan: dict[str, Any], rehome: bool) -> ScanSteps:
+        step = int(plan["step"])
+        stack_settle_s = float(plan["stack_settle_s"])
+        span = self._steps(float(plan["span_mm"]))
+        settle_s = float(plan.get("settle_s", 0.0))
+
+        async def begin() -> None:
             await self._prepare_motion()
             if rehome:
                 # Yaw only ever turns forwards during a scan; homing first starts its count
                 # from zero again, so it never runs out of range over many scans.
                 self.log.info("Homing yaw before the scan…")
                 await self.module.home_yaw()
-            await run.run(self._check_stop)
-        finally:
-            self.stack = None
-            self._unfinished = self._find_unfinished()
 
-    def _scan_steps(self, scan_id: str) -> ScanSteps:
         async def go(pose: Pose) -> None:
             self._check_stop()
             await self.poser.go(pose.tilt_deg, pose.yaw_deg)
-            await asyncio.sleep(self.scan_plan.settle_s)
+            await asyncio.sleep(settle_s)
 
         async def find_range() -> RangeResult:
-            center = (
-                self._scan_center if self._scan_center is not None else self.axis.state.position
-            )
-            span = self._steps(self.settings.scan.span_mm)
-            result = await self.scanner.find_range(
-                center, span, self._dof_steps(), self._scan_motion()
-            )
+            here = self.axis.state.position
+            center = self._scan_center if self._scan_center is not None else here
+            try:
+                result = await self.scanner.find_range(
+                    center, span, self._dof_steps(), self._scan_motion()
+                )
+            except AnalysisError:
+                await self._approach(center, 1)  # back where it looked, not drifting away
+                raise
             self._scan_center = (result.start + result.end) // 2
             return result
 
         def stack(found: RangeResult, pose: Pose, name: str) -> StackRun:
-            plan = plan_range(
-                found.start,
-                found.end,
-                self.settings.stack.step,
-                self.axis.min_position,
-                self.axis.max_position,
-            )
+            low, high = self.axis.min_position, self.axis.max_position
+            start, end = max(found.start, low), min(found.end, high)  # its margin may overhang
+            stack_plan = plan_range(start, end, step, low, high)
             speed, accel = self._profile(self.settings.motion.stack_speed_mm_s)
             self.stack = StackRun(
-                plan,
+                stack_plan,
                 axis=self.axis,
                 camera=self.camera,
                 approach=self._approach,
                 speed=speed,
                 accel=accel,
-                settle_s=self.settings.stack.settle_s,
+                settle_s=stack_settle_s,
                 log=self.log,
                 on_change=self.changed,
                 store=self.review,
@@ -561,7 +581,11 @@ class Machine:
             return self.stack
 
         return ScanSteps(
-            go=go, find_range=find_range, stack=stack, keep_frames=self.review.keep_frames
+            begin=begin,
+            go=go,
+            find_range=find_range,
+            stack=stack,
+            keep_frames=self.review.keep_frames,
         )
 
     def _scan_poses(self) -> list[Pose]:
@@ -599,11 +623,13 @@ class Machine:
             / self.axis.steps_per_mm
             / self.settings.motion.stack_speed_mm_s
         )
+        depth_mm = shots * self.settings.stack.step / self.axis.steps_per_mm
         per_pose = (
             RANGE_SCAN_S
             + TURN_S
             + self.scan_plan.settle_s
-            + shots * (capture_s + self.settings.stack.settle_s + step_s)
+            + shots * (capture_s + self.settings.stack.settle_s + step_s + PREVIEW_S_PER_SHOT)
+            + 2 * depth_mm / self.settings.motion.travel_speed_mm_s  # to the start and back
         )
         e = estimate(poses, shots, per_pose, self.scan_plan.keep_every)
         return {
@@ -614,7 +640,9 @@ class Machine:
             "card_bytes": e.card_bytes,
         }
 
-    def _preflight(self, poses: list[Pose]) -> list[dict[str, Any]]:
+    def _preflight(
+        self, poses: list[Pose], estimate: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """What a scan needs, checked before it starts: blocking problems stop it, the rest
         are reminders."""
         rail, module, camera = self.axis.state, self.module.state, self.camera.state
@@ -643,11 +671,9 @@ class Machine:
                 "Not centred yet: see the Centre tab.",
             )
         )
-        e = self._scan_estimate(len(poses))
+        e = estimate if estimate is not None else self._scan_estimate(len(poses))
         if e is not None:
-            free = shutil.disk_usage(
-                self.config.data_dir if self.config.data_dir.exists() else Path.home()
-            ).free
+            free = self._disk_free()
             room = free >= e["pi_bytes"] * DISK_MARGIN
             checks.append(
                 (
@@ -671,6 +697,16 @@ class Machine:
             for ok, blocking, label, problem in checks
         ]
 
+    def _disk_free(self) -> int:
+        """Free space on the Pi's card, read at most every few seconds (the pre-flight list is
+        part of every state push)."""
+        now = time.monotonic()
+        if now - self._disk_checked > DISK_CHECK_S:
+            folder = self.config.data_dir if self.config.data_dir.exists() else Path.home()
+            self._disk_free_bytes = shutil.disk_usage(folder).free
+            self._disk_checked = now
+        return self._disk_free_bytes
+
     def _find_unfinished(self) -> list[dict[str, Any]]:
         return [
             s
@@ -686,12 +722,13 @@ class Machine:
             error = None
         except ScanPlanError as exc:
             poses, error = [], str(exc)
+        e = self._scan_estimate(len(poses)) if poses else None
         return {
             "plan": self.scan_plan.model_dump(mode="json"),
             "poses": [[p.tilt_deg, p.yaw_deg] for p in poses],
             "error": error,
-            "estimate": self._scan_estimate(len(poses)) if poses else None,
-            "preflight": self._preflight(poses) if poses else [],
+            "estimate": e,
+            "preflight": self._preflight(poses, e) if poses else [],
             "run": self.scan.snapshot() if self.scan else None,
             "unfinished": [
                 s
@@ -749,6 +786,8 @@ class Machine:
         self._last_active = time.monotonic()
 
     async def update_settings(self, patch: dict[str, dict[str, Any]]) -> None:
+        if self.activity == "scanning_3d" and patch.keys() & {"motion", "stack", "scan", "optics"}:
+            raise OperationError("These settings can't change while a 3D scan runs.")
         try:
             new = self.settings.merged(patch)
         except ValueError as exc:
@@ -954,7 +993,7 @@ class Machine:
             calibration = _calibrated(
                 previous, tilt_switch_deg=round(switch, 2), tilt_calibrated=True
             )
-        except AnalysisError:
+        except (AnalysisError, CameraError):
             await self._recover(start, (0.0, 0.0))
             raise
         await self._save_module(calibration)
@@ -990,16 +1029,17 @@ class Machine:
                 sideways = (detail.u / detail.width - 0.5) * self._live_field_mm()
                 observations.append(Observation(yaw, sideways, center / self.axis.steps_per_mm))
             result = fit(observations)
-        except AnalysisError:
+            update: dict[str, object] = {
+                "axis_image_x": 0.5 + result.axis_sideways_mm / self._live_field_mm(),
+            }
+            if result.rail_sign:
+                update["rail_sign"] = result.rail_sign
+            learnt = _calibrated(self.module_settings, **update)
+        except (AnalysisError, CameraError):
             await self._recover(start, (0.0, 0.0))
             raise
         self.centring.append(result)
-        update: dict[str, object] = {
-            "axis_image_x": 0.5 + result.axis_sideways_mm / self._live_field_mm(),
-        }
-        if result.rail_sign:
-            update["rail_sign"] = result.rail_sign
-        self._save_module_quietly(_calibrated(self.module_settings, **update))
+        self._save_module_quietly(learnt)
         # Back at yaw 0 and in focus, ready for the screws to be turned.
         await self.poser.go(0.0, 0.0)
         await self._approach(round(observations[0].focus_mm * self.axis.steps_per_mm), 1)
@@ -1017,6 +1057,7 @@ class Machine:
         does, and the module to `pose`. A failure here mustn't hide the original error."""
         with contextlib.suppress(AxisError):
             await self._approach(rail, 1)
+        with contextlib.suppress(AxisError):
             await self.poser.go(*pose)
 
     def _live_field_mm(self) -> float:
@@ -1034,7 +1075,7 @@ class Machine:
                 center = await self._focus_here(center, "height")
                 focus[tilt] = center / self.axis.steps_per_mm
             height = height_error(focus, self.module_settings.rail_sign)
-        except AnalysisError:
+        except (AnalysisError, CameraError):
             await self._recover(start, (0.0, 0.0))
             raise
         await self.poser.go(0.0, 0.0)

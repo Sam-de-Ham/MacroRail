@@ -114,7 +114,7 @@ class ReviewStore:
             return []
         summaries = []
         for folder in sorted(self.root.iterdir(), reverse=True):
-            if not (folder.is_dir() and STACK_ID.match(folder.name)):
+            if not (folder.is_dir() and STACK_ID.fullmatch(folder.name)):
                 continue
             record = _read_record(folder)
             if record.get("scan") is not None:
@@ -127,7 +127,7 @@ class ReviewStore:
         out = []
         for stack_id in stack_ids:
             folder = self.root / stack_id
-            if STACK_ID.match(stack_id) and folder.is_dir():
+            if STACK_ID.fullmatch(stack_id) and folder.is_dir():
                 out.append(_summary(folder, _read_record(folder)))
         return out
 
@@ -158,18 +158,21 @@ class ReviewStore:
             folder.name
             for folder in self.root.iterdir()
             if folder.is_dir()
-            and STACK_ID.match(folder.name)
+            and STACK_ID.fullmatch(folder.name)
             and _read_record(folder).get("scan") == scan_id
         ]
 
-    def keep_frames(self, stack_id: str, every: int) -> None:
+    async def keep_frames(self, stack_id: str, every: int) -> None:
         """Delete all but every `every`-th frame (and the last), once the preview is made."""
-        frames = sorted(
-            (self._folder(stack_id) / "frames").glob("*.jpg"), key=lambda f: int(f.stem)
-        )
-        for i, frame in enumerate(frames):
-            if every > 1 and i % every and i != len(frames) - 1:
-                frame.unlink(missing_ok=True)
+        folder = self._folder(stack_id) / "frames"
+
+        def thin() -> None:
+            frames = sorted(folder.glob("*.jpg"), key=lambda f: int(f.stem))
+            for i, frame in enumerate(frames):
+                if every > 1 and i % every and i != len(frames) - 1:
+                    frame.unlink(missing_ok=True)
+
+        await asyncio.to_thread(thin)
         self._changed()
 
     def frame_path(self, stack_id: str, index: int) -> Path:
@@ -183,7 +186,7 @@ class ReviewStore:
 
     def _folder(self, stack_id: str) -> Path:
         folder = self.root / stack_id
-        if not STACK_ID.match(stack_id) or not folder.is_dir():
+        if not STACK_ID.fullmatch(stack_id) or not folder.is_dir():
             raise ReviewError("No such stack.")
         return folder
 
