@@ -7,9 +7,10 @@
 #define PROTOCOL_VERSION 1
 
 // Pins: ULN2003 inputs IN1..IN4 of each 28BYJ-48, as wired on the rig. (Tilt skips D8, and
-// D10, which is the switch.)
+// D10, which is the switch. On the rig its IN1 and IN2 went to D7 and D6, the other way round
+// from the wiring guide.)
 constexpr uint8_t YAW_IN[4] = {2, 3, 4, 5};
-constexpr uint8_t TILT_IN[4] = {6, 7, 9, 11};
+constexpr uint8_t TILT_IN[4] = {7, 6, 9, 11};
 constexpr uint8_t PIN_TILT_SWITCH = 10;  // switch to GND, internal pull-up; pin-change interrupt
 constexpr uint8_t PIN_HALL = A0;         // KY-024 analog output
 
