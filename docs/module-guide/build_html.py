@@ -91,8 +91,8 @@ def arrow_defs(colors):
 
 NANO_TOP = ["D12", "D11", "D10", "D9", "D8", "D7", "D6", "D5", "D4", "D3", "D2", "GND", "RST", "RX0", "TX1"]
 NANO_BOT = ["D13", "3V3", "REF", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "5V", "RST", "GND", "VIN"]
-NANO_RING_TOP = {0: COL["in4"], 1: COL["in3"], 2: COL["sw"], 3: COL["in2"], 4: COL["in1"],
-                 5: COL["in4"], 6: COL["in3"], 7: COL["in2"], 8: COL["in1"], 11: COL["gnd"]}
+NANO_RING_TOP = {1: COL["in4"], 2: COL["sw"], 3: COL["in3"], 5: COL["in2"], 6: COL["in1"],
+                 7: COL["in4"], 8: COL["in3"], 9: COL["in2"], 10: COL["in1"], 11: COL["gnd"]}
 NANO_RING_BOT = {3: COL["hall"], 11: COL["nv"], 13: COL["gnd"]}
 
 
@@ -330,8 +330,8 @@ def overview_figure():
     link([(270, 150), (294, 150), (294, 91), (308, 91)], "#adb5bd")
     link([(270, 166), (294, 166), (294, 185), (308, 185)], "#495057", "USB × 3", 278, 122, "start")
     link([(430, 91), (468, 91)], "#adb5bd")
-    link([(430, 170), (450, 170), (450, 160), (468, 160)], COL["in1"], "D4–D7", 449, 134, "middle")
-    link([(430, 200), (450, 200), (450, 210), (468, 210)], COL["in1"], "D8–D12", 449, 246, "middle")
+    link([(430, 170), (450, 170), (450, 160), (468, 160)], COL["in1"], "D2–D5", 449, 134, "middle")
+    link([(430, 200), (450, 200), (450, 210), (468, 210)], COL["in1"], "D6–D11", 449, 246, "middle")
     link([(562, 160), (598, 160)], "#5c7cfa")
     link([(562, 210), (598, 210)], "#5c7cfa")
     link([(342, 270), (342, 232)], COL["sw"], "D10", 348, 258, "start")
@@ -451,23 +451,23 @@ def build_figure():
 
     # ---- signal wires: Nano top row up to the boards, fanned out in lanes
     names = ["in4", "in3", "in2", "in1"]
-    # tilt: D12 (c7) → IN4, D11 (c8) → IN3, D9 (c10) → IN2, D8 (c11) → IN1, fanning left (D10, the
-    # switch, sits between them); the leftmost runs lowest
-    tilt_cols = (7, 8, 10, 11)
+    # tilt: D11 (c8) → IN4, D9 (c10) → IN3, D7 (c12) → IN2, D6 (c13) → IN1, fanning left (D10, the
+    # switch, and the free D8 sit between them); the leftmost runs lowest
+    tilt_cols = (8, 10, 12, 13)
     for i, c in enumerate(tilt_cols):
         x, y = hole(f"a{c}")
         lane = LANES[i]
         px = tilt_in[i]
         o.append(wire([(x, y), (x, lane), (px, lane), (px, HY)], IN_COL[names[i]], r=6))
-    # yaw: D7 (c12) → IN4 ... D4 (c15) → IN1, fanning right; the rightmost runs lowest
-    yaw_cols = (12, 13, 14, 15)
+    # yaw: D5 (c14) → IN4 ... D2 (c17) → IN1, fanning right; the rightmost runs lowest
+    yaw_cols = (14, 15, 16, 17)
     for i, c in enumerate(yaw_cols):
         x, y = hole(f"a{c}")
         lane = LANES[3 - i]
         px = yaw_in[i]
         o.append(wire([(x, y), (x, lane), (px, lane), (px, HY)], IN_COL[names[i]], r=6))
-    tilt_ids = ["W11  D12 → IN4", "W10  D11 → IN3", "W9  D9 → IN2", "W8  D8 → IN1"]
-    yaw_ids = ["W7  D7 → IN4", "W6  D6 → IN3", "W5  D5 → IN2", "W4  D4 → IN1"]
+    tilt_ids = ["W11  D11 → IN4", "W10  D9 → IN3", "W9  D7 → IN2", "W8  D6 → IN1"]
+    yaw_ids = ["W7  D5 → IN4", "W6  D4 → IN3", "W5  D3 → IN2", "W4  D2 → IN1"]
     for i, c in enumerate(tilt_cols):
         o.append(tag((cx(c) + tilt_in[i]) / 2 + 2, LANES[i], tilt_ids[i], TXT[names[i]], 8))
     for i, c in enumerate(yaw_cols):
@@ -621,12 +621,12 @@ def sec(n, title):
 
 
 LEGEND = [
-    ("D4–D7", "yaw driver IN1–IN4", None),
-    ("D8–D12", "tilt driver IN1–IN4 (not D10)", None),
-    ("IN1", "D4 and D8", COL["in1"]),
-    ("IN2", "D5 and D9", COL["in2"]),
-    ("IN3", "D6 and D11", COL["in3"]),
-    ("IN4", "D7 and D12", COL["in4"]),
+    ("D2–D5", "yaw driver IN1–IN4", None),
+    ("D6–D11", "tilt driver: D6, D7, D9, D11", None),
+    ("IN1", "D2 and D6", COL["in1"]),
+    ("IN2", "D3 and D7", COL["in2"]),
+    ("IN3", "D4 and D9", COL["in3"]),
+    ("IN4", "D5 and D11", COL["in4"]),
     ("D10", "tilt switch NO", COL["sw"]),
     ("A0", "KY-024 AO (hall signal)", COL["hall"]),
     ("5V", "KY-024 + only", COL["nv"]),
@@ -637,14 +637,14 @@ CHECKLIST = [
     ("W1", COL["gnd"], "a18 (Nano GND, top row)", "top GND rail", "common ground with the motors"),
     ("W2", COL["nv"], "j18 (Nano 5V)", "bottom + rail", "Nano 5 V, sensor only"),
     ("W3", COL["gnd"], "j20 (Nano GND, bottom row)", "bottom GND rail", ""),
-    ("W4", COL["in1"], "a15 (D4)", "yaw IN1", ""),
-    ("W5", COL["in2"], "a14 (D5)", "yaw IN2", ""),
-    ("W6", COL["in3"], "a13 (D6)", "yaw IN3", ""),
-    ("W7", COL["in4"], "a12 (D7)", "yaw IN4", ""),
-    ("W8", COL["in1"], "a11 (D8)", "tilt IN1", ""),
-    ("W9", COL["in2"], "a10 (D9)", "tilt IN2", ""),
-    ("W10", COL["in3"], "a8 (D11)", "tilt IN3", "D10 between is the switch"),
-    ("W11", COL["in4"], "a7 (D12)", "tilt IN4", ""),
+    ("W4", COL["in1"], "a17 (D2)", "yaw IN1", ""),
+    ("W5", COL["in2"], "a16 (D3)", "yaw IN2", ""),
+    ("W6", COL["in3"], "a15 (D4)", "yaw IN3", ""),
+    ("W7", COL["in4"], "a14 (D5)", "yaw IN4", ""),
+    ("W8", COL["in1"], "a13 (D6)", "tilt IN1", ""),
+    ("W9", COL["in2"], "a12 (D7)", "tilt IN2", ""),
+    ("W10", COL["in3"], "a10 (D9)", "tilt IN3", "D8 stays free"),
+    ("W11", COL["in4"], "a8 (D11)", "tilt IN4", "D10 between is the switch"),
     ("W12", COL["sw"], "b9 (D10)", "tilt switch NO", "runs between rows a and b"),
     ("W13", COL["gnd"], "top GND rail (column 1)", "tilt switch C", "NC stays empty"),
     ("W14", COL["hall"], "j10 (A0)", "KY-024 AO", "the analog pin, not DO"),
@@ -790,9 +790,8 @@ and only its <b>ground</b> is joined to the Nano's.
   <div class="fig">{nano_figure()}<p class="cap">As it sits on the breadboard: USB on the left.</p></div>
   <div class="legend"><div class="lh">Pins this module uses</div><ul>{legend}</ul></div>
 </div>
-<p>The yaw driver takes D4–D7 and the tilt driver D8, D9, D11, D12 (D10 between them is the switch), both in the
-order IN1, IN2, IN3, IN4. IN1 has the same colour on both boards, and so on, so a swapped pair is easy to spot. D2 and
-D3 stay free.</p>
+<p>The yaw driver takes D2–D5 and the tilt driver D6, D7, D9, D11 (D8 stays free, D10 is the switch), both in the
+order IN1, IN2, IN3, IN4. IN1 has the same colour on both boards, and so on, so a swapped pair is easy to spot.</p>
 """))
 
     # ---------------- page 4: complete build
@@ -805,8 +804,8 @@ the Nano's GND pins; the two + rails never touch. Motors, switch and sensor sit 
 <h2>Quick reference</h2>
 <table class="parts qr">
 <tr><th>Nano</th><th>Goes to</th><th>Why</th></tr>
-<tr><td>D4, D5, D6, D7</td><td>Yaw ULN2003 IN1, IN2, IN3, IN4</td><td>Yaw motor coils, half-stepped.</td></tr>
-<tr><td>D8, D9, D11, D12</td><td>Tilt ULN2003 IN1, IN2, IN3, IN4</td><td>Tilt motor coils, half-stepped.</td></tr>
+<tr><td>D2, D3, D4, D5</td><td>Yaw ULN2003 IN1, IN2, IN3, IN4</td><td>Yaw motor coils, half-stepped.</td></tr>
+<tr><td>D6, D7, D9, D11</td><td>Tilt ULN2003 IN1, IN2, IN3, IN4</td><td>Tilt motor coils, half-stepped.</td></tr>
 <tr><td>{swatch(COL['sw'])}D10</td><td>Switch NO (switch C → GND)</td><td>Low when pressed. Internal pull-up; watched during every move.</td></tr>
 <tr><td>{swatch(COL['hall'])}A0</td><td>KY-024 AO</td><td>The magnet's field, 0–1023, about 512 with no magnet near.</td></tr>
 <tr><td>{swatch(COL['nv'])}5V</td><td>KY-024 +</td><td>The sensor only. Never the drivers, never the supply.</td></tr>
@@ -929,8 +928,8 @@ calibration and centring steps follow in the scan module's assembly and usage gu
 {sec(7, "Troubleshooting")}
 <table class="parts trouble">
 <tr><th>Symptom</th><th>Likely cause and fix</th></tr>
-<tr><td>Motor hums or twitches but doesn't turn</td><td>IN wires in the wrong order (IN1–IN4 must be D4–D7, or D8, D9, D11,
-D12, in that order), or a wire loose. Or no 5 V on the driver: check the supply, the driver's − + wires and its power jumper. LEDs
+<tr><td>Motor hums or twitches but doesn't turn</td><td>IN wires in the wrong order (IN1–IN4 must be D2–D5, or D6, D7, D9,
+D11, in that order), or a wire loose. Or no 5 V on the driver: check the supply, the driver's − + wires and its power jumper. LEDs
 that blink while the motor stays still point at the motor plug or the supply.</td></tr>
 <tr><td>Nothing moves, LEDs dark</td><td>The IN wires don't reach the board, or the module isn't connected (see below).</td></tr>
 <tr><td>Turns the wrong way</td><td>Set <code>TILT_INVERT</code> or <code>YAW_INVERT</code> in

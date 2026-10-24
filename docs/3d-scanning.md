@@ -135,7 +135,7 @@ then a Ø29.8 adapter.
 ### Electronics: a second Nano (user, 2026-10-24)
 
 The module has its own Arduino Nano on its own USB cable, so the rail's Nano, firmware and
-wiring don't change at all. Its pins: yaw ULN2003 IN1–IN4 on D4–D7, tilt on D8, D9, D11, D12, the tilt
+wiring don't change at all. Its pins: yaw ULN2003 IN1–IN4 on D2–D5, tilt on D6, D7, D9, D11, the tilt
 switch on D10, the KY-024's analog output on A0. Wiring guide:
 [`module-guide/MacroRail-module-wiring-guide.pdf`](module-guide/MacroRail-module-wiring-guide.pdf);
 protocol: [`protocol-module.md`](protocol-module.md).

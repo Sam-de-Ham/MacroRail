@@ -6,10 +6,10 @@
 #define FIRMWARE_VERSION "1.0.0"
 #define PROTOCOL_VERSION 1
 
-// Pins: ULN2003 inputs IN1..IN4 of each 28BYJ-48. (D10 is the switch, so tilt skips it;
-// D2 and D3 stay free.)
-constexpr uint8_t YAW_IN[4] = {4, 5, 6, 7};
-constexpr uint8_t TILT_IN[4] = {8, 9, 11, 12};
+// Pins: ULN2003 inputs IN1..IN4 of each 28BYJ-48, as wired on the rig. (Tilt skips D8, and
+// D10, which is the switch.)
+constexpr uint8_t YAW_IN[4] = {2, 3, 4, 5};
+constexpr uint8_t TILT_IN[4] = {6, 7, 9, 11};
 constexpr uint8_t PIN_TILT_SWITCH = 10;  // switch to GND, internal pull-up; pin-change interrupt
 constexpr uint8_t PIN_HALL = A0;         // KY-024 analog output
 
