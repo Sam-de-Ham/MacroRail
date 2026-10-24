@@ -30,7 +30,13 @@ Keep it current: update it after every chunk of work, and prune instead of appen
       continue after a stop or restart.
     - M5: scans in the 3D Review tab (pose thumbnails → the stack viewer) and the
       "Download for 3D" zip (one all-in-focus image per pose, depth maps, pose table).
-    - Next: the user wires the module and tests on the rig, milestone by milestone.
+    - **On the rig (2026-10-24):** the module is wired (yaw D2–D5, tilt D6, D7, D9, D11; the
+      reused Nano's RST capacitor removed), its Nano flashed (old bootloader, 57600), and
+      the `3d-scanning` app deployed with both ports `auto` (old config kept as
+      `config.toml.bak-2d`). After the restart both controllers connected: rail on
+      ttyUSB0 (USB socket 1.2), module on ttyUSB1 (1.3). Nothing has moved yet.
+    - Next: with the user at the rig, System (3D) → Module test: one small move per motor
+      (directions, which driver is which), then `docs/3d-rig-checklist.md` from section 1.
 - **Before the v1.1.0 release:** the user tests the three newest features and the items under
   **Not yet tested on hardware**. Then set the version to 1.1.0 in `pyproject.toml`, date the
   CHANGELOG, tag, and push and make a GitHub release once the user agrees.
@@ -357,8 +363,8 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
   - Camera unplug mid-stack.
   - The three newest features: incoming shots in the live view, the zip download, and the
     depth map / 3D view (seen only on the sim's dome).
-- **On the Pi:** commit `7e27aa5`'s code runs. Of the later commits, only the depth map
-  (`73f2b65`) changes the app, and it isn't deployed yet.
+- **On the Pi:** the `3d-scanning` branch runs (deployed 2026-10-24, so the depth map and
+  everything on local `main` too). 2D should be unchanged; the user confirms on the rig.
 - **3D scan module:** printed and assembled (2026-10-24), not wired or powered. Still to check
   once it runs: tilt torque near +90°, the switch's real click angle, the hall signal.
 - **Known issue:** the machine tests are timing-sensitive. With a sim server running alongside,
