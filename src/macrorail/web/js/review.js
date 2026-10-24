@@ -148,7 +148,7 @@ async function loadScan(key, ctx) {
     }
   } catch (error) {
     showToast(`Could not load the scan: ${error.message}`, "error");
-    scan = null;
+    if (scan?.id === id) scan = null;
   } finally {
     loading = false;
     ctx.render();
