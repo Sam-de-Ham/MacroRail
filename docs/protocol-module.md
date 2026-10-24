@@ -169,8 +169,8 @@ which pulls the rotor back, so the count stays right and the first step is a nor
 
 | Signal | Pin |
 |---|---|
-| Yaw ULN2003 IN1, IN2, IN3, IN4 | D2, D3, D4, D5 |
-| Tilt ULN2003 IN1, IN2, IN3, IN4 | D6, D7, D8, D9 |
+| Yaw ULN2003 IN1, IN2, IN3, IN4 | D4, D5, D6, D7 |
+| Tilt ULN2003 IN1, IN2, IN3, IN4 | D8, D9, D11, D12 |
 | Tilt switch (C → GND, NO → pin, internal pull-up, active low) | D10 |
 | KY-024 analog output | A0 |
 

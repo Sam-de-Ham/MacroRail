@@ -91,8 +91,8 @@ def arrow_defs(colors):
 
 NANO_TOP = ["D12", "D11", "D10", "D9", "D8", "D7", "D6", "D5", "D4", "D3", "D2", "GND", "RST", "RX0", "TX1"]
 NANO_BOT = ["D13", "3V3", "REF", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "5V", "RST", "GND", "VIN"]
-NANO_RING_TOP = {2: COL["sw"], 3: COL["in4"], 4: COL["in3"], 5: COL["in2"], 6: COL["in1"],
-                 7: COL["in4"], 8: COL["in3"], 9: COL["in2"], 10: COL["in1"], 11: COL["gnd"]}
+NANO_RING_TOP = {0: COL["in4"], 1: COL["in3"], 2: COL["sw"], 3: COL["in2"], 4: COL["in1"],
+                 5: COL["in4"], 6: COL["in3"], 7: COL["in2"], 8: COL["in1"], 11: COL["gnd"]}
 NANO_RING_BOT = {3: COL["hall"], 11: COL["nv"], 13: COL["gnd"]}
 
 
@@ -330,8 +330,8 @@ def overview_figure():
     link([(270, 150), (294, 150), (294, 91), (308, 91)], "#adb5bd")
     link([(270, 166), (294, 166), (294, 185), (308, 185)], "#495057", "USB × 3", 278, 122, "start")
     link([(430, 91), (468, 91)], "#adb5bd")
-    link([(430, 170), (450, 170), (450, 160), (468, 160)], COL["in1"], "D2–D5", 449, 134, "middle")
-    link([(430, 200), (450, 200), (450, 210), (468, 210)], COL["in1"], "D6–D9", 449, 246, "middle")
+    link([(430, 170), (450, 170), (450, 160), (468, 160)], COL["in1"], "D4–D7", 449, 134, "middle")
+    link([(430, 200), (450, 200), (450, 210), (468, 210)], COL["in1"], "D8–D12", 449, 246, "middle")
     link([(562, 160), (598, 160)], "#5c7cfa")
     link([(562, 210), (598, 210)], "#5c7cfa")
     link([(342, 270), (342, 232)], COL["sw"], "D10", 348, 258, "start")
@@ -351,7 +351,7 @@ TOP_PLUS, TOP_MINUS = B + 20, B + 44
 BOT_PLUS, BOT_MINUS = B + 388, B + 412
 ROW_IDX = {r: i for i, r in enumerate("abcde")}
 ROW_IDX.update({r: i + 7 for i, r in enumerate("fghij")})
-NANO_C0 = 6       # D12 / D13 column
+NANO_C0 = 7       # D12 / D13 column
 
 
 def cx(c):
@@ -410,9 +410,9 @@ def build_figure():
         o.append(wire([(x, y), (x, y_rail)], color))
         o.append(tag(lx if lx is not None else x, ly if ly is not None else (y + y_rail) / 2, label, color, 8))
 
-    jumper("a17", TOP_MINUS, COL["gnd"], "W1", ly=(ry("a") + TOP_MINUS) / 2 + 2)
-    jumper("j17", BOT_PLUS, COL["nv"], "W2", ly=ry("j") + 22)
-    jumper("j19", BOT_MINUS, COL["gnd"], "W3", ly=ry("j") + 34)
+    jumper("a18", TOP_MINUS, COL["gnd"], "W1", ly=(ry("a") + TOP_MINUS) / 2 + 2)
+    jumper("j18", BOT_PLUS, COL["nv"], "W2", ly=ry("j") + 22)
+    jumper("j20", BOT_MINUS, COL["gnd"], "W3", ly=ry("j") + 34)
 
     # ---- ULN2003 boards above the breadboard
     board_top = B - 228
@@ -441,42 +441,45 @@ def build_figure():
         o.append(t(mcx + 48, mcy + 9, "28BYJ-48, 5 V", 9, MUTED, "start"))
         return bx0, bx1, mcx, mcy
 
-    # tilt: IN4..IN1 at c5..c8, + at c2, − at c3; yaw: IN4..IN1 at c19..c22, − at c24, + at c25
-    tilt_in = [cx(5), cx(6), cx(7), cx(8)]
+    # tilt: IN4..IN1 at c3..c6, + at c1, − at c2; yaw: IN4..IN1 at c19..c22, − at c24, + at c25
+    tilt_in = [cx(3), cx(4), cx(5), cx(6)]
     yaw_in = [cx(19), cx(20), cx(21), cx(22)]
-    tb = uln(tilt_in, [(cx(2), "+"), (cx(3), "−")], "left", "TILT driver", "tilt motor")
+    tb = uln(tilt_in, [(cx(1), "+"), (cx(2), "−")], "left", "TILT driver", "tilt motor")
     yb = uln(yaw_in, [(cx(24), "−"), (cx(25), "+")], "right", "YAW driver", "yaw motor")
     o.append(tag(tb[2] + 42, tb[3] + 66, "M2", "#495057", 8.5))
     o.append(tag(yb[2] + 42, yb[3] + 66, "M1", "#495057", 8.5))
 
     # ---- signal wires: Nano top row up to the boards, fanned out in lanes
     names = ["in4", "in3", "in2", "in1"]
-    # tilt: D9 (c9) → IN4 ... D6 (c12) → IN1, fanning left; the leftmost runs lowest
-    for i, c in enumerate((9, 10, 11, 12)):
+    # tilt: D12 (c7) → IN4, D11 (c8) → IN3, D9 (c10) → IN2, D8 (c11) → IN1, fanning left (D10, the
+    # switch, sits between them); the leftmost runs lowest
+    tilt_cols = (7, 8, 10, 11)
+    for i, c in enumerate(tilt_cols):
         x, y = hole(f"a{c}")
         lane = LANES[i]
         px = tilt_in[i]
         o.append(wire([(x, y), (x, lane), (px, lane), (px, HY)], IN_COL[names[i]], r=6))
-    # yaw: D5 (c13) → IN4 ... D2 (c16) → IN1, fanning right; the rightmost runs lowest
-    for i, c in enumerate((13, 14, 15, 16)):
+    # yaw: D7 (c12) → IN4 ... D4 (c15) → IN1, fanning right; the rightmost runs lowest
+    yaw_cols = (12, 13, 14, 15)
+    for i, c in enumerate(yaw_cols):
         x, y = hole(f"a{c}")
         lane = LANES[3 - i]
         px = yaw_in[i]
         o.append(wire([(x, y), (x, lane), (px, lane), (px, HY)], IN_COL[names[i]], r=6))
-    tilt_ids = ["W11  D9 → IN4", "W10  D8 → IN3", "W9  D7 → IN2", "W8  D6 → IN1"]
-    yaw_ids = ["W7  D5 → IN4", "W6  D4 → IN3", "W5  D3 → IN2", "W4  D2 → IN1"]
-    for i, c in enumerate((9, 10, 11, 12)):
+    tilt_ids = ["W11  D12 → IN4", "W10  D11 → IN3", "W9  D9 → IN2", "W8  D8 → IN1"]
+    yaw_ids = ["W7  D7 → IN4", "W6  D6 → IN3", "W5  D5 → IN2", "W4  D4 → IN1"]
+    for i, c in enumerate(tilt_cols):
         o.append(tag((cx(c) + tilt_in[i]) / 2 + 2, LANES[i], tilt_ids[i], TXT[names[i]], 8))
-    for i, c in enumerate((13, 14, 15, 16)):
+    for i, c in enumerate(yaw_cols):
         o.append(tag((cx(c) + yaw_in[i]) / 2 - 2, LANES[3 - i], yaw_ids[i], TXT[names[i]], 8))
 
     # ---- driver power: straight down to the top rails
-    o.append(wire([(cx(2), HY), (cx(2), TOP_PLUS)], COL["mv"]))
-    o.append(wire([(cx(3), HY), (cx(3), TOP_MINUS)], COL["gnd"]))
+    o.append(wire([(cx(1), HY), (cx(1), TOP_PLUS)], COL["mv"]))
+    o.append(wire([(cx(2), HY), (cx(2), TOP_MINUS)], COL["gnd"]))
     o.append(wire([(cx(24), HY), (cx(24), TOP_MINUS)], COL["gnd"]))
     o.append(wire([(cx(25), HY), (cx(25), TOP_PLUS)], COL["mv"]))
-    o.append(tag(cx(2), B - 50, "W18", COL["mv"], 8))
-    o.append(tag(cx(3), B - 30, "W17", COL["gnd"], 8))
+    o.append(tag(cx(1), B - 50, "W18", COL["mv"], 8))
+    o.append(tag(cx(2), B - 30, "W17", COL["gnd"], 8))
     o.append(tag(cx(24), B - 30, "W19", COL["gnd"], 8))
     o.append(tag(cx(25), B - 50, "W20", COL["mv"], 8))
 
@@ -494,30 +497,30 @@ def build_figure():
     o.append(tag(gx - 4, B - 50, "V1 −", "#25262b", 8))
     o.append(tag(vx + 6, B - 30, "V2 +", "#c92a2a", 8))
 
-    # ---- tilt switch, top left. NO → b8 (D10) along a lane between rows a and b; C → top GND rail
+    # ---- tilt switch, top left. NO → b9 (D10) along a lane between rows a and b; C → top GND rail
     sw_x, sw_y, ss = 6, B - 186, 0.75   # terminals NC, NO, C at x = 21, 43.5, 66
     o.append(switch_drawing(sw_x, sw_y, ss, order=("NC", "NO", "C"), roller_left=False))
     no_x, c_x = sw_x + 50 * ss, sw_x + 80 * ss
     sb = sw_y + 52 * ss
     lane_ab = ry("a") + 12
-    o.append(wire([(no_x, sb), (no_x, lane_ab), (cx(8), lane_ab), (cx(8), ry("b"))], COL["sw"], r=6))
+    o.append(wire([(no_x, sb), (no_x, lane_ab), (cx(9), lane_ab), (cx(9), ry("b"))], COL["sw"], r=6))
     o.append(wire([(c_x, sb), (c_x, TOP_MINUS), (cx(1), TOP_MINUS)], COL["gnd"], r=6))
     o.append(t(sw_x + 50 * ss, sw_y - 24, "tilt switch", 10, INK, "middle", "bold"))
     o.append(tag(no_x, B - 60, "W12", TXT["sw"], 8))
     o.append(tag(c_x, B - 30, "W13", COL["gnd"], 8))
     o.append(tag(cx(4.6), lane_ab, "W12  D10 → NO", TXT["sw"], 8))
 
-    # ---- KY-024 below the board: AO → j9 (A0), G → bottom GND rail, + → bottom Nano-5 V rail
+    # ---- KY-024 below the board: AO → j10 (A0), G → bottom GND rail, + → bottom Nano-5 V rail
     ky_y = B + 478
-    o.append(ky024_drawing(cx(9), ky_y, P))
-    o.append(wire([(cx(9), ry("j")), (cx(9), ky_y)], COL["hall"]))
-    o.append(wire([(cx(10), BOT_MINUS), (cx(10), ky_y)], COL["gnd"]))
-    o.append(wire([(cx(11), BOT_PLUS), (cx(11), ky_y)], COL["nv"]))
-    o.append(tag(cx(9) - 32, ky_y - 22, "W14  A0 → AO", TXT["hall"], 8))
-    o.append(tag(cx(12) + 26, ky_y - 30, "W15  G", COL["gnd"], 8))
-    o.append(tag(cx(12) + 30, ky_y - 14, "W16  +", COL["nv"], 8))
-    o.append(t(cx(13) + 6, ky_y + 30, "KY-024", 10.5, INK, "start", "bold"))
-    o.append(t(cx(13) + 6, ky_y + 43, "DO and pot unused", 9, MUTED, "start"))
+    o.append(ky024_drawing(cx(10), ky_y, P))
+    o.append(wire([(cx(10), ry("j")), (cx(10), ky_y)], COL["hall"]))
+    o.append(wire([(cx(11), BOT_MINUS), (cx(11), ky_y)], COL["gnd"]))
+    o.append(wire([(cx(12), BOT_PLUS), (cx(12), ky_y)], COL["nv"]))
+    o.append(tag(cx(10) - 32, ky_y - 22, "W14  A0 → AO", TXT["hall"], 8))
+    o.append(tag(cx(13) + 26, ky_y - 30, "W15  G", COL["gnd"], 8))
+    o.append(tag(cx(13) + 30, ky_y - 14, "W16  +", COL["nv"], 8))
+    o.append(t(cx(14) + 6, ky_y + 30, "KY-024", 10.5, INK, "start", "bold"))
+    o.append(t(cx(14) + 6, ky_y + 43, "DO and pot unused", 9, MUTED, "start"))
 
     # ---- USB to the Pi
     usb_y = (ry("d") + ry("h")) / 2
@@ -618,12 +621,12 @@ def sec(n, title):
 
 
 LEGEND = [
-    ("D2–D5", "yaw driver IN1–IN4", None),
-    ("D6–D9", "tilt driver IN1–IN4", None),
-    ("IN1", "D2 and D6", COL["in1"]),
-    ("IN2", "D3 and D7", COL["in2"]),
-    ("IN3", "D4 and D8", COL["in3"]),
-    ("IN4", "D5 and D9", COL["in4"]),
+    ("D4–D7", "yaw driver IN1–IN4", None),
+    ("D8–D12", "tilt driver IN1–IN4 (not D10)", None),
+    ("IN1", "D4 and D8", COL["in1"]),
+    ("IN2", "D5 and D9", COL["in2"]),
+    ("IN3", "D6 and D11", COL["in3"]),
+    ("IN4", "D7 and D12", COL["in4"]),
     ("D10", "tilt switch NO", COL["sw"]),
     ("A0", "KY-024 AO (hall signal)", COL["hall"]),
     ("5V", "KY-024 + only", COL["nv"]),
@@ -631,32 +634,32 @@ LEGEND = [
 ]
 
 CHECKLIST = [
-    ("W1", COL["gnd"], "a17 (Nano GND, top row)", "top GND rail", "common ground with the motors"),
-    ("W2", COL["nv"], "j17 (Nano 5V)", "bottom + rail", "Nano 5 V, sensor only"),
-    ("W3", COL["gnd"], "j19 (Nano GND, bottom row)", "bottom GND rail", ""),
-    ("W4", COL["in1"], "a16 (D2)", "yaw IN1", ""),
-    ("W5", COL["in2"], "a15 (D3)", "yaw IN2", ""),
-    ("W6", COL["in3"], "a14 (D4)", "yaw IN3", ""),
-    ("W7", COL["in4"], "a13 (D5)", "yaw IN4", ""),
-    ("W8", COL["in1"], "a12 (D6)", "tilt IN1", ""),
-    ("W9", COL["in2"], "a11 (D7)", "tilt IN2", ""),
-    ("W10", COL["in3"], "a10 (D8)", "tilt IN3", ""),
-    ("W11", COL["in4"], "a9 (D9)", "tilt IN4", ""),
-    ("W12", COL["sw"], "b8 (D10)", "tilt switch NO", "runs between rows a and b"),
+    ("W1", COL["gnd"], "a18 (Nano GND, top row)", "top GND rail", "common ground with the motors"),
+    ("W2", COL["nv"], "j18 (Nano 5V)", "bottom + rail", "Nano 5 V, sensor only"),
+    ("W3", COL["gnd"], "j20 (Nano GND, bottom row)", "bottom GND rail", ""),
+    ("W4", COL["in1"], "a15 (D4)", "yaw IN1", ""),
+    ("W5", COL["in2"], "a14 (D5)", "yaw IN2", ""),
+    ("W6", COL["in3"], "a13 (D6)", "yaw IN3", ""),
+    ("W7", COL["in4"], "a12 (D7)", "yaw IN4", ""),
+    ("W8", COL["in1"], "a11 (D8)", "tilt IN1", ""),
+    ("W9", COL["in2"], "a10 (D9)", "tilt IN2", ""),
+    ("W10", COL["in3"], "a8 (D11)", "tilt IN3", "D10 between is the switch"),
+    ("W11", COL["in4"], "a7 (D12)", "tilt IN4", ""),
+    ("W12", COL["sw"], "b9 (D10)", "tilt switch NO", "runs between rows a and b"),
     ("W13", COL["gnd"], "top GND rail (column 1)", "tilt switch C", "NC stays empty"),
-    ("W14", COL["hall"], "j9 (A0)", "KY-024 AO", "the analog pin, not DO"),
+    ("W14", COL["hall"], "j10 (A0)", "KY-024 AO", "the analog pin, not DO"),
     ("W15", COL["gnd"], "bottom GND rail", "KY-024 G", ""),
     ("W16", COL["nv"], "bottom + rail (Nano 5 V)", "KY-024 +", ""),
-    ("W17", COL["gnd"], "tilt driver −", "top GND rail (column 3)", ""),
-    ("W18", COL["mv"], "tilt driver +", "top + rail (column 2)", "motor 5 V"),
+    ("W17", COL["gnd"], "tilt driver −", "top GND rail (column 2)", ""),
+    ("W18", COL["mv"], "tilt driver +", "top + rail (column 1)", "motor 5 V"),
     ("W19", COL["gnd"], "yaw driver −", "top GND rail (column 24)", ""),
     ("W20", COL["mv"], "yaw driver +", "top + rail (column 25)", "motor 5 V"),
     ("U1", COL["usb"], "module Nano USB", "Raspberry Pi", "a data cable, not charge-only"),
 ]
 
 PLACE = [
-    ("P1", "Module Nano", "rows <b>d</b> and <b>h</b>, columns <b>6–20</b>",
-     "D12/D13 in column 6, USB left"),
+    ("P1", "Module Nano", "rows <b>d</b> and <b>h</b>, columns <b>7–21</b>",
+     "D12/D13 in column 7, USB left"),
     ("P2", "Power jumpers", "on both ULN2003 boards", "the ON/OFF jumper by − +"),
 ]
 
@@ -787,8 +790,9 @@ and only its <b>ground</b> is joined to the Nano's.
   <div class="fig">{nano_figure()}<p class="cap">As it sits on the breadboard: USB on the left.</p></div>
   <div class="legend"><div class="lh">Pins this module uses</div><ul>{legend}</ul></div>
 </div>
-<p>The yaw driver takes D2–D5 and the tilt driver D6–D9, both in the order IN1, IN2, IN3, IN4. IN1 has the same colour
-on both boards, and so on, so a swapped pair is easy to spot.</p>
+<p>The yaw driver takes D4–D7 and the tilt driver D8, D9, D11, D12 (D10 between them is the switch), both in the
+order IN1, IN2, IN3, IN4. IN1 has the same colour on both boards, and so on, so a swapped pair is easy to spot. D2 and
+D3 stay free.</p>
 """))
 
     # ---------------- page 4: complete build
@@ -801,8 +805,8 @@ the Nano's GND pins; the two + rails never touch. Motors, switch and sensor sit 
 <h2>Quick reference</h2>
 <table class="parts qr">
 <tr><th>Nano</th><th>Goes to</th><th>Why</th></tr>
-<tr><td>D2, D3, D4, D5</td><td>Yaw ULN2003 IN1, IN2, IN3, IN4</td><td>Yaw motor coils, half-stepped.</td></tr>
-<tr><td>D6, D7, D8, D9</td><td>Tilt ULN2003 IN1, IN2, IN3, IN4</td><td>Tilt motor coils, half-stepped.</td></tr>
+<tr><td>D4, D5, D6, D7</td><td>Yaw ULN2003 IN1, IN2, IN3, IN4</td><td>Yaw motor coils, half-stepped.</td></tr>
+<tr><td>D8, D9, D11, D12</td><td>Tilt ULN2003 IN1, IN2, IN3, IN4</td><td>Tilt motor coils, half-stepped.</td></tr>
 <tr><td>{swatch(COL['sw'])}D10</td><td>Switch NO (switch C → GND)</td><td>Low when pressed. Internal pull-up; watched during every move.</td></tr>
 <tr><td>{swatch(COL['hall'])}A0</td><td>KY-024 AO</td><td>The magnet's field, 0–1023, about 512 with no magnet near.</td></tr>
 <tr><td>{swatch(COL['nv'])}5V</td><td>KY-024 +</td><td>The sensor only. Never the drivers, never the supply.</td></tr>
@@ -815,6 +819,9 @@ the Nano's GND pins; the two + rails never touch. Motors, switch and sensor sit 
 <h2 class="first">Wire it in this order</h2>
 <p>Tick off one line at a time and compare with the picture. “Top rails” are above row a, “bottom rails” below row j.
 Holes are named row + column, like <code>a17</code>. On the driver boards, go by the labels printed next to the pins.</p>
+<div class="callout warn" style="margin-top:0"><b>Reusing a Nano from another project?</b> Take off any capacitor between <b>RST</b> and GND
+(often 10 µF, fitted to stop the Nano resetting when its port opens). The app relies on that reset: the Nano then
+says which controller it is, and uploading firmware needs it too. A capacitor across 5V and GND can stay.</div>
 {checklist_html()}
 """))
 
@@ -922,8 +929,8 @@ calibration and centring steps follow in the scan module's assembly and usage gu
 {sec(7, "Troubleshooting")}
 <table class="parts trouble">
 <tr><th>Symptom</th><th>Likely cause and fix</th></tr>
-<tr><td>Motor hums or twitches but doesn't turn</td><td>IN wires in the wrong order (IN1–IN4 must be D2–D5 or D6–D9 in that
-order), or a wire loose. Or no 5 V on the driver: check the supply, the driver's − + wires and its power jumper. LEDs
+<tr><td>Motor hums or twitches but doesn't turn</td><td>IN wires in the wrong order (IN1–IN4 must be D4–D7, or D8, D9, D11,
+D12, in that order), or a wire loose. Or no 5 V on the driver: check the supply, the driver's − + wires and its power jumper. LEDs
 that blink while the motor stays still point at the motor plug or the supply.</td></tr>
 <tr><td>Nothing moves, LEDs dark</td><td>The IN wires don't reach the board, or the module isn't connected (see below).</td></tr>
 <tr><td>Turns the wrong way</td><td>Set <code>TILT_INVERT</code> or <code>YAW_INVERT</code> in
@@ -940,7 +947,7 @@ DO), the sensor's + and G, that the sensor is bent flat under the magnet, and th
 <tr><td>Tilt loses steps near +90°</td><td>The cradle is heavy there. Homing on the switch shows any loss. Add the
 counterweight: an 8 mm rod with nuts through the holes at the top of the arms.</td></tr>
 <tr><td>The module isn't found</td><td>Check <code>port = "auto"</code> under <code>[module]</code>, that the module firmware
-is flashed, and that the USB cable carries data (try another). <code>ls /dev/serial/by-path/</code> must show it.</td></tr>
+is flashed, that no capacitor sits between RST and GND, and that the USB cable carries data (try another). <code>ls /dev/serial/by-path/</code> must show it.</td></tr>
 <tr><td>The rail stopped being found after plugging the module in</td><td>Its config still names a by-id path, which now
 points at either Nano. Set <code>port = "auto"</code> under <code>[rail]</code> (or its by-path socket) and restart the
 app.</td></tr>
