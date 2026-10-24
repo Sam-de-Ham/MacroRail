@@ -49,8 +49,8 @@ fixed `/dev/serial/by-path` (USB socket) can be set in `config.toml` instead.
 
 | What | Nano pin | Notes |
 |---|---|---|
-| Yaw ULN2003 IN1–IN4 | D4, D5, D6, D7 | the user's Nano came with this driver soldered on |
-| Tilt ULN2003 IN1–IN4 | D8, D9, D11, D12 | D10 is the switch; D2, D3 free |
+| Yaw ULN2003 IN1–IN4 | D2, D3, D4, D5 | as wired on the rig |
+| Tilt ULN2003 IN1–IN4 | D6, D7, D9, D11 | D8 free; D10 is the switch |
 | Tilt switch (C → GND, NO → pin) | D10 | `INPUT_PULLUP`, active low, like the rail's |
 | KY-024 analog out | A0 | its digital out and pot unused |
 | ULN2003 power | separate 5 V supply | ground shared with the Nano; not from USB (2 × ~240 mA) |

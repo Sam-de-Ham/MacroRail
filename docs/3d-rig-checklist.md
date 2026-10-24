@@ -14,11 +14,14 @@ back.
       when the port opens). Keep the 330 µF across 5V and GND; put it across the motor supply
       at the drivers if convenient.
 - [ ] Wire the module per the [wiring guide](module-guide/MacroRail-module-wiring-guide.pdf):
-      yaw driver on D4–D7 (already soldered), tilt driver on D8, D9, D11, D12, switch on D10,
+      yaw driver on D2–D5, tilt driver on D6, D7, D9, D11, switch on D10,
       hall on A0. Both drivers' + go to the separate 5 V supply, not the Nano's 5V. Motors
       unplugged from their drivers at first. Then flash `firmware-module/`.
 
 ## 1. Module and Rig tab (milestone 1)
+
+System (3D) → **Module test** shows every raw reading (switch, hall, half-steps, link) and has
+one forward and one back button per motor: the place for this whole section.
 
 - [ ] System (3D): the Scan module card says Connected; the port shown is a `/dev/ttyUSB*`.
 - [ ] The rail still connects (the two Nanos are told apart by their first line).

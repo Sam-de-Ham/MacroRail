@@ -42,11 +42,15 @@ export const actions = {
   },
 };
 
-$("rotary-steps").append(
-  ...STEPS_DEG.map((deg) =>
-    el("button", { "data-action": "rotary-step", "data-deg": String(deg), role: "radio" }, `${deg}°`),
-  ),
-);
+// The Rig tab's step and the System tab's test card share one step choice.
+const STEP_GROUPS = ["rotary-steps", "test-steps"];
+for (const id of STEP_GROUPS) {
+  $(id).append(
+    ...STEPS_DEG.map((deg) =>
+      el("button", { "data-action": "rotary-step", "data-deg": String(deg), role: "radio" }, `${deg}°`),
+    ),
+  );
+}
 
 function angleField(id) {
   const raw = $(id).value.trim();
@@ -77,8 +81,10 @@ export function render({ s, mine, busy }) {
     drawYaw($("yaw-gauge"), m.yaw_homed ? m.yaw_deg : null);
   }
 
-  setChecked($("rotary-steps"), "data-deg", stepDeg);
-  for (const button of $("rotary-steps").children) button.disabled = !mine;
+  for (const id of STEP_GROUPS) {
+    setChecked($(id), "data-deg", stepDeg);
+    for (const button of $(id).children) button.disabled = !mine;
+  }
   for (const id of ["module-home", "module-home-tilt", "module-home-yaw"]) $(id).disabled = !can;
   for (const button of document.querySelectorAll("[data-action=module-jog]")) {
     const tiltTooFar = button.dataset.axis === "tilt" && !m.tilt_homed && stepDeg > UNHOMED_TILT_JOG_DEG;
@@ -97,6 +103,7 @@ export function render({ s, mine, busy }) {
   );
 
   renderSystemCard(m);
+  renderTestCard(m);
   $("calibrate-yaw").disabled = !can;
   const liveView = s.camera.connected && s.camera.live_view;
   $("calibrate-tilt").disabled = !can || !(m.tilt_homed && m.yaw_homed && s.rail.homed && liveView);
@@ -132,6 +139,35 @@ function renderSystemCard(m) {
   // The bar shows how far the reading is from the no-field level, either way.
   const deviation = hall === null ? 0 : Math.min(1, Math.abs(hall - 512) / 200);
   $("hall-fill").style.width = `${Math.round(deviation * 100)}%`;
+}
+
+/** Every reading as the module reports it: raw half-steps as well as angles, for checking
+ * the wiring before anything is homed or calibrated. */
+function renderTestCard(m) {
+  const position = (axis) => {
+    const steps = m[`${axis}_steps`];
+    const homed = m[`${axis}_homed`];
+    const angle = homed ? `${m[`${axis}_deg`].toFixed(1)}°` : "not homed";
+    return `${steps} half-steps · ${angle}`;
+  };
+  const hall = m.hall === null ? null : `${m.hall} (${m.hall >= 512 ? "+" : "−"}${Math.abs(m.hall - 512)} from no field)`;
+  const rows = m.connected
+    ? [
+        ["Tilt switch", m.switch ? "PRESSED" : "released", m.switch ? "warn" : ""],
+        ["Hall sensor", hall],
+        ["Tilt", position("tilt")],
+        ["Yaw", position("yaw")],
+        ["Moving", m.moving || "no"],
+        ["Link", `${m.link.port} · firmware ${m.firmware} · ${m.link.status_ms ?? "–"} ms`],
+      ]
+    : [["Connection", m.problem || "Offline", "warn"]];
+  const container = $("module-test-readings");
+  const key = JSON.stringify(rows);
+  if (container.dataset.key === key) return;
+  container.dataset.key = key;
+  container.replaceChildren(
+    ...rows.flatMap(([label, value, tone]) => [el("dt", {}, label), el("dd", { class: tone || "" }, value ?? "–")]),
+  );
 }
 
 // -- gauges -----------------------------------------------------------------------------------

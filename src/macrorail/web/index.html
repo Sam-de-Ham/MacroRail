@@ -454,6 +454,26 @@
           </div>
         </article>
 
+        <article class="card" data-only="3d">
+          <header class="card-header">
+            <h2>Module test</h2>
+            <button class="button small danger" data-action="stop">Stop</button>
+          </header>
+          <p class="muted small-text">Every reading straight from the module, and one move at a time for checking the
+            wiring: each button turns one motor by the step chosen. Before homing, tilt moves at most 10° per press and
+            nothing stops it short of the lens, so watch the cradle.</p>
+          <dl class="test-readings" id="module-test-readings"></dl>
+          <div class="segmented" id="test-steps" role="radiogroup" aria-label="Test step"></div>
+          <div class="rotary-jog">
+            <span class="rotary-label">Tilt</span>
+            <button class="button small" data-action="module-jog" data-axis="tilt" data-direction="-1" title="Turn the belly towards the lens">− Belly</button>
+            <button class="button small" data-action="module-jog" data-axis="tilt" data-direction="1" title="Turn the back towards the lens">Back +</button>
+            <span class="rotary-label">Yaw</span>
+            <button class="button small" data-action="module-jog" data-axis="yaw" data-direction="-1" title="Clockwise, seen from above">− Clockwise</button>
+            <button class="button small" data-action="module-jog" data-axis="yaw" data-direction="1" title="Counter-clockwise, seen from above">Counter +</button>
+          </div>
+        </article>
+
         <article class="card">
           <h2>Motion</h2>
           <div class="fields">
