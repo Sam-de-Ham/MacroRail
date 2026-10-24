@@ -1,9 +1,21 @@
-# Scan module: CAD model
+# Scan module: hardware
 
 The 3D-scanning module for the MacroRail, modelled in Fusion 360 (document
-**3d scanner macro v1.1**, project *Everything*, folder *Useful*). The design and its reasons
+**3d scanner macro v1.2**, project *Everything*, folder *Useful*). The design and its reasons
 are in [`docs/3d-scanning.md`](../../docs/3d-scanning.md); measurements are in
 [`MEASUREMENTS.md`](MEASUREMENTS.md).
+
+**Status (2026-10-24): printed and assembled.** The user printed `exports/final/` after two
+test rounds, and everything went together as designed. Nothing is wired or powered yet: the
+electronics, firmware and app are the next step (see `docs/3d-scanning.md`, "Software").
+
+| Folder | Holds |
+|---|---|
+| `fusion/` | Stage scripts that build the whole model, verification, guide renders, STL export |
+| `exports/final/` | The 9 printed parts (print 4 carriage washers) |
+| `exports/test-pieces/` | Fit-test slices and the small parts that are their own test |
+| `guide/` | Assembly and usage guide (PDF) and its builder |
+| `diagrams/` | Measurement diagrams (objective, carriage holes, 28BYJ-48) |
 
 ![Assembly](guide/img/assembled.png)
 
@@ -45,7 +57,7 @@ pictures come from `fusion/render_guide.py`, one shot per call.
   below the insect.
 - **Bodies, not components.** Names: printed parts plainly (`Fork`, `Cradle`, `Yaw Head`, …),
   reference geometry `REF …`, test pieces `TP …`. Features and sketches have part prefixes
-  (`FK`, `CR`, `HD`, `SP`, `PT`, `PK`, `PD`, `AX`, `AS`, `WS`, `GG`, `TP`).
+  (`FK`, `CR`, `HD`, `PT`, `PK`, `AX`, `AS`, `WS`, `GG`, `ES`, `TP`).
 - **Selection sets:** `1 Printed Parts`, `2 Hardware`, `3 Reference`, `4 Lens Keep-out`,
   `5 Test Pieces`.
 - **Poses:** `pose_tilt` (+ means the back of the insect turns towards the camera) and
@@ -53,7 +65,7 @@ pictures come from `fusion/render_guide.py`, one shot per call.
   EXPLODE moves after them. Keep all three at 0 for export (`export_stl.py` does). Add new
   features *before* `POSE Yaw`.
 
-## Verified (2026-10-21)
+## Verified (last full rebuild 2026-10-22)
 
 - **Tilt home (verify_interference MODE flag):** the flag bolt meets the roller at +90°
   (switch clicks at +97° by design) and clears the bracket and switch body by 2.3 mm even at
@@ -65,9 +77,8 @@ pictures come from `fusion/render_guide.py`, one shot per call.
     the spring housing reach the zone at about −35°. **Software tilt limits: −33° to +90°.**
 - **Moving vs fixed:** the cradle never comes closer to the fork than the 1 mm design gap,
   at any tilt. The yaw head clears the cradle all the way round (1 mm, hub to floor).
-- **Interference at rest:** only the intended overlaps remain. These are the four screws
-  through their nuts, and the pin under its pad, which is modelled centred though the pad
-  pushes it 0.1 mm aside.
+- **Interference at rest:** only the intended overlaps remain: every bolt through its nut,
+  and the switch's wood screws through the (solid-modelled) switch into the bracket.
 - **Hall sensor:** sits 0.8 mm under the hub magnet at the home angle.
 - **Sections** (saved, hidden): `SEC Stack XZ`, `SEC Tilt Axis YZ`, `SEC Carriage Bolts YZ`,
   `SEC Yaw Motor Bolts XZ`. They were checked for seats, wall thicknesses and bolt stack-ups.
@@ -105,7 +116,7 @@ The STLs are in model coordinates, so use *Place on face* in the slicer.
 | M3 × 17.5 + nut | 5 | Base to carriage (4, with printed washers), tilt home flag (1) |
 | M3 × 11.8 + nut | 11 | Tilt motor (2), yaw motor (2), KY-024 (1), centring screws (2), pin clamp screw (1), hub set screw (1), endstop bracket (2) |
 | Roller microswitch + 2 wood screws Ø1.9 | 1 | On the endstop bracket, pivot end towards +X (camera), pins down; glue as well |
-| M3 × 27.7 + nut | 1 | Tilt axle (assumes about 25.8 under the head) |
+| M3 × 27.7 + nut | 1 | Tilt axle |
 
 All screws are button heads, turned with a 2 mm hex key; no knobs. Yaw turns each centring
 screw round to the user.
@@ -116,7 +127,7 @@ bearing blocks and the lead screw.
 
 Check the KY-024 bolt: it sticks out about 6 mm below the board's nut, near the potentiometer.
 
-## Test pieces (print these first)
+## Test pieces (done: two rounds)
 
 STLs are in [`exports/test-pieces/`](exports/test-pieces/). The six `tp-*` slices cover the
 big parts (`tp-base-holes` is only the bottom 2.5 mm of the base, with the screw-head
@@ -155,9 +166,12 @@ Fit parameters to adjust if a test fails: `fit_press` (608 seat), `fit_D` (yaw D
 - Yaw D-bore held only once the set screw was tight: `fit_D` 0.2 → 0.1 (2026-10-23).
 - Everything else passed.
 
-## Open
+## Open (needs the electronics)
 
+- **Tilt torque near +90°:** whether the tilt motor lifts the cradle without skipping steps.
+  If not, an 8 mm rod with nuts through the Ø8.3 holes at the top of the arms balances it.
 - **Endstop click angle:** modelled at `home_t` = 97° from the measured click height (P2).
-  Check it on the rig; if the switch clicks early or late, change `home_t` (or shim the
-  switch) and re-export the bracket.
-- **Final print:** `exports/final/` is exported. Print it once the test pieces pass.
+  The firmware calibration measures the real offset to level once; the bracket only needs
+  changing if the click lands far from that.
+- **Hall sensor:** the magnet passes 0.8 mm over it; check the analog signal's peak once the
+  board is wired.

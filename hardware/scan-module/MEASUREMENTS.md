@@ -1,6 +1,6 @@
 # Scan module: measurements
 
-Rounds 1 and 2: 2026-10-21. All values in mm and measured by the user with calipers, unless marked
+Rounds 1 to 3: 2026-10-21 (round 3 is the tilt home microswitch). All values in mm and measured by the user with calipers, unless marked
 otherwise. **Never guess a dimension: ask.** Photos are in `reference-images/` at the repo
 root.
 
@@ -101,6 +101,9 @@ Lighting (COB LEDs, panels, heatsinks): deferred by the user.
 
 ## Derived values (computed, not measured)
 
+Planning-stage numbers. Where the design moved on, the final value is the Fusion parameter
+named in brackets (`fusion/stage_01_params.py`).
+
 - **Magnification** at 4×: 23.5 / 5.5 = **4.27×**. Field 5.5 × 3.65 mm; 0.92 µm per
   full-resolution pixel.
 - **Depth of field** (step helper formula, NA 0.10): 0.55/NA² + 3.92/(M·NA) = **64 µm**;
@@ -110,20 +113,22 @@ Lighting (COB LEDs, panels, heatsinks): deferred by the user.
   - from x 42.5: radius 14.9 (adapter tube).
   - Add at least 2 of clearance. Anything nearer the lens axis than that must stay at
     x < 10 when the module tilts or turns.
-- **Module footprint**: a base kept within ±24 across the rail clears every bearing-block
-  screw head. M4 bolts on 60 × 20 with Ø4.8 clearance holes allow for the C1/C2 scatter.
-- **Shaft coupling**: double-D 5 / 3 shaft; a printed hub bore of 5.2 with 3.2 across
-  the flats.
-- **Turntable bearing**: 608 (22 / 8 / 7). Bore for the outer ring: 22.0 + 0.6 = 22.6
-  (the lens-mount friction-fit rule).
-- **Specimen puck** without steel balls: printed hemispheres into printed V-grooves,
-  held by Ø5.7 × 1.8 magnets. Steel balls are an upgrade if repeatability falls short.
+- **Module footprint**: the base is wider than ±24 across the rail, so it has pockets for the
+  bearing-block screw heads. Final: M3 bolts (user: M3 for everything) in Ø3.4 holes on 60 × 20,
+  with printed washers under the nuts in the carriage's Ø4.5 holes.
+- **Shaft coupling**: double-D 5 / 3 shaft. Final, after the test prints: yaw head bore
+  5.1 / 3.1 (`fit_D` 0.1, printed vertical, plus a set screw); tilt hub bore 5.05 / 3.05
+  (`fit_Dt` 0.05, printed on its side).
+- **Tilt bearing**: one 608 (21.8 / 7.9 / 7 measured). Final seat 21.8 + 0.35 (`fit_press`;
+  0.25 was a little tight). The yaw head sits straight on its motor shaft, no bearing.
+- **Specimen puck**: dropped (user, 2026-10-21). The clamp is printed onto the centring
+  plate (the specimen holder); only one magnet is used, for yaw home.
 
 ## Still to measure / confirm
 
-- [ ] A second 608 bearing (or a pack). Tilt and yaw each need one: see the sketch page.
+- [x] Second 608: not needed (the yaw head sits on its motor shaft).
 - [x] Tilt home: roller microswitch, measured (round 3).
-- [ ] KY-024 board size and hole position (when the home sensors are designed).
+- [x] KY-024 board: 34.5 × 15.2, 13 thick with the potentiometer, hole centre 8.3 from the pin end.
 - [ ] 2× setup: working distance and field width (optional).
 - [x] L4 shaft (9.7) and flats (7.8); pin sizes; fasteners (M3 throughout); springs (round 2).
 - [x] Objective front, field of view, carriage holes, 28BYJ-48, ULN2003, magnets, hall
