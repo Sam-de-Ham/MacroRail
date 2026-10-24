@@ -73,13 +73,36 @@ NOMINAL_HALF_STEPS_PER_TURN = 4075.7728
 
 
 class ModuleSettings(_Model):
-    """The 3D scan module's calibration, measured once per machine (System tab). Changed only
-    by the calibrations themselves, never by a settings edit."""
+    """The 3D scan module's calibration, measured once per machine (System tab) or learnt
+    while centring. Changed only by those measurements, never by a settings edit."""
 
     half_steps_per_turn: float = Field(NOMINAL_HALF_STEPS_PER_TURN, ge=3800.0, le=4400.0)
     yaw_calibrated: bool = False  # half_steps_per_turn measured from two magnet peaks
     tilt_switch_deg: float = Field(97.0, ge=90.0, le=110.0)  # where the tilt switch trips
     tilt_calibrated: bool = False  # tilt_switch_deg measured against level, not from the CAD
+    # Learnt by centring: +1 if moving the rail up brings the insect towards the camera, -1 the
+    # other way, 0 not yet known; and where the yaw axis appears across live view (0-1).
+    rail_sign: Literal[-1, 0, 1] = 0
+    axis_image_x: float | None = Field(None, ge=0.0, le=1.0)
+
+
+class ScanPlanSettings(_Model):
+    """A 3D scan's plan (Scan tab): tilt rings, the yaw step, and what the Pi keeps."""
+
+    tilts: tuple[float, ...] = Field((60.0, 30.0, 0.0, -30.0), min_length=1, max_length=12)
+    yaw_step_deg: float = Field(36.0, ge=5.0, le=360.0)
+    keep_every: int = Field(10, ge=1, le=1000)  # frames kept per pose (all go into the preview)
+    settle_s: float = Field(1.0, ge=0.0, le=30.0)  # after turning, before the focus scan
+    name: str = Field("", max_length=60)
+
+    @model_validator(mode="after")
+    def _tilts_in_reach(self) -> Self:
+        if any(not -90.0 <= t <= 120.0 for t in self.tilts):
+            raise ValueError("tilts must be between -90 and 120 degrees")
+        return self
+
+    def merged(self, patch: dict[str, object]) -> ScanPlanSettings:
+        return ScanPlanSettings.model_validate({**self.model_dump(), **patch})
 
 
 class Settings(_Model):
@@ -130,3 +153,8 @@ class SettingsStore(Store[Settings]):
 class ModuleStore(Store[ModuleSettings]):
     def __init__(self, path: Path) -> None:
         super().__init__(path, ModuleSettings)
+
+
+class ScanPlanStore(Store[ScanPlanSettings]):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, ScanPlanSettings)

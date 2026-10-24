@@ -26,6 +26,7 @@ const ACTIVITY_TEXT = {
   capturing: "Taking a test shot…",
   scanning: "Scanning…",
   rotating: "Moving the scan module…",
+  scanning_3d: "3D scan",
 };
 // Common objectives for the step helper: [label, magnification, NA].
 const LENSES = [

@@ -18,14 +18,19 @@ Keep it current: update it after every chunk of work, and prune instead of appen
   - **Hardware: done.** The v1 module is modelled in Fusion 360, test-printed in two rounds,
     printed and assembled (2026-10-24); it went together exactly as designed. Model, fits,
     print files and guide: `hardware/scan-module/README.md`.
-  - **Software: milestones 1–2 built** (agreed plan: `docs/3d-software-plan.md`), tested in
-    the simulator only. Nothing is wired on the rig yet.
+  - **Software: milestones 1–5 built** (agreed plan: `docs/3d-software-plan.md`), tested in
+    the simulator only (unit, end-to-end and in the browser). Nothing is wired on the rig yet.
     - M1: a second Nano with its own firmware (`firmware-module/`, protocol
       `docs/protocol-module.md`), port auto-discovery, the host driver, poses, the 2D/3D
       switch, the Rig tab, the Scan module card, the wiring guide PDF (`docs/module-guide/`).
     - M2: yaw-turn and tilt-level calibration (System tab, 3D), stored in `module.json`.
-    - Next: M3 centring wizard, M4 scans, M5 review and export. The user wires the module and
-      tests M1–M2 on the rig when ready.
+    - M3: the centring wizard (Centre tab): four yaws → fit → screw dials; height from ±20°
+      tilt; the live-view line where the yaw axis appears.
+    - M4: scans (Scan tab): plan, pose map, estimate, pre-flight, test pose, pause/resume,
+      continue after a stop or restart.
+    - M5: scans in the 3D Review tab (pose thumbnails → the stack viewer) and the
+      "Download for 3D" zip (one all-in-focus image per pose, depth maps, pose table).
+    - Next: the user wires the module and tests on the rig, milestone by milestone.
 - **Before the v1.1.0 release:** the user tests the three newest features and the items under
   **Not yet tested on hardware**. Then set the version to 1.1.0 in `pyproject.toml`, date the
   CHANGELOG, tag, and push and make a GitHub release once the user agrees.
@@ -70,7 +75,7 @@ Not a prototype: no placeholders, no band-aids. Clean, modular, and nothing more
   - stack-done alerts, installable app (PWA), diagnostics, backlash measurement, CI upkeep;
   - a rough depth map per preview stack (false colour, 3D relief, 16-bit PNG): idea 8.
 - **Next major version: 3D scanning.** v1 module design agreed with the user (2026-10-21);
-  hardware built 2026-10-24, software milestones 1–2 built (sim-tested). Full plan: `docs/3d-scanning.md`.
+  hardware built 2026-10-24, software milestones 1–5 built (sim-tested). Full plan: `docs/3d-scanning.md`.
   - **2D stays exactly as it is (user rule).** The app gets a 2D/3D mode switch. In 2D mode,
     UI, behaviour, defaults and the rail firmware's behaviour stay identical to today. Any
     change that shows in 2D is proposed to the user first, and made only once agreed. The
@@ -161,7 +166,8 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
   - `motion/`: `protocol.py`, `link.py`, `rail.py` (`RailAxis`), `base.py` (`Axis`),
     `module.py` (`ScanModule`, `Geometry`), `ports.py` (`PortFinder`: port "auto").
   - `scan/` (3D): `pose.py` (`Poser`: homing, take-up arrivals), `calibrate.py`,
-    `centring.py` (fit, screw turns), `measure.py` (focus peaks per tile row).
+    `centring.py` (fit, screw turns), `measure.py` (focus peaks per tile row), `plan.py`
+    (poses, estimate), `runner.py` (`ScanRun`), `library.py` (scan folders, export zip).
   - `camera/`: `base.py` (`Camera`, `Capture`, `CameraSetting`), `gphoto.py`, `liveview.py`.
   - `stack/`: `plan.py` (pure planning), `runner.py` (`StackRun`, downloads previews).
   - `focus/`: `sharpness.py` (tile Laplacian), `analysis.py` (range, curve shift),
@@ -173,7 +179,8 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
   - `machine.py`, `api.py`, `config.py`, `settings.py`, `optics.py`, `diagnostics.py`,
     `control.py`, `log.py`, `__main__.py`.
   - `web/`: `index.html`, `css/app.css`, `js/` (one module per tab: `shoot`, `camera`,
-    `review`, `system`, `rig` (3D: tilt/yaw, gauges, Scan module card); plus `relief` (WebGL 3D view), `liveview`, `alerts`, `main`, `api`, `dom`, `prefs`, `toast`,
+    `review` (also scans, in 3D), `system`, `rig` (3D: tilt/yaw, gauges, Scan module card),
+    `centre`, `scan`; plus `relief` (WebGL 3D view), `liveview`, `alerts`, `main`, `api`, `dom`, `prefs`, `toast`,
     `format`), `manifest.webmanifest`, `sw.js`, `icon.svg`, `icons/` (from `scripts/make_icons.py`).
 - `tests/`: about 230 tests, all against the simulator (`conftest.py` runs the sim at 25× speed).
 - `deploy/`, `scripts/deploy-dev.sh`, `docs/`, `hardware/rail/`, `.github/workflows/ci.yml`.
@@ -190,7 +197,12 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
   - Config: `~/.config/macrorail/config.toml` (hardware constants).
   - Settings: `~/.local/share/macrorail/settings.json` (user settings, start/end, step).
   - Scan module calibration: `~/.local/share/macrorail/module.json` (kept apart so `main`
-    still reads `settings.json`).
+    still reads `settings.json`); the scan plan: `scan-plan.json`.
+  - 3D scans: `~/.local/share/macrorail/scans/<id>/scan.json`; each pose's stack is an
+    ordinary stack folder tagged with the scan (the 2D Review hides those).
+  - **Before the module's Nano is first plugged into the Pi**, its config.toml `[rail] port`
+    must become `"auto"` (it still holds a by-id path, which both CH340s share); see
+    `docs/wiring.md`, "Scan module".
   - Stacks: `~/.local/share/macrorail/stacks/<YYYYmmdd-HHMMSS>/`.
 - **The Pi:** 3B+, `ssh pi`. The app is in `~/macrorail` and runs as the `macrorail` systemd
   service (autostart on, `Restart=on-failure`). Logs: `journalctl -u macrorail -f`.
@@ -361,9 +373,9 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
    - Date the CHANGELOG.
    - Tag, push, and make a GitHub release.
 3. README screenshots and photos of the real setup (the user supplies them), and a sample stack.
-4. **3D-scanning software** (on `3d-scanning`), per `docs/3d-software-plan.md`: M3 centring
-   wizard, M4 scans, M5 review and export; each with simulator tests, screenshots and an
-   adversarial review. The user wires the module (`docs/module-guide/`) and tests on the rig.
+4. **3D scanning on the rig** (branch `3d-scanning`): the user wires the module
+   (`docs/module-guide/`, and first set `[rail] port = "auto"` on the Pi), flashes
+   `firmware-module/`, then tests M1 → M5 in order. Fix what they find.
 5. Otherwise the user picks the next work from **Candidate ideas**.
 
 ## Lessons learned

@@ -82,6 +82,10 @@ Never connect or disconnect the motor while the driver is powered.
 
 The 3D scan module has its own Arduino Nano, so nothing above changes. Its wiring (two
 ULN2003 boards and 28BYJ-48s, the tilt switch, the KY-024 hall sensor, a separate 5 V supply)
-is in the [scan module wiring guide](module-guide/MacroRail-module-wiring-guide.pdf). With both
-Nanos plugged in, set `port = "auto"` (or a `/dev/serial/by-path/...` socket path) for the
-rail in `config.toml`: the two CH340 clones share one `/dev/serial/by-id` name.
+is in the [scan module wiring guide](module-guide/MacroRail-module-wiring-guide.pdf).
+
+**Before plugging the module's Nano into the Pi**, set `port = "auto"` (or a
+`/dev/serial/by-path/...` socket path) under `[rail]` in `~/.config/macrorail/config.toml`
+and restart the app. The two CH340 clones share one `/dev/serial/by-id` name, so the old
+by-id path may then point at the module, and the rail would refuse it (2D stops working
+until the config is changed). `install.sh` never overwrites an existing config.

@@ -52,6 +52,10 @@ class ModuleJogBody(BaseModel):
     delta_deg: FiniteFloat
 
 
+class ScanStartBody(BaseModel):
+    test: bool = False
+
+
 class PoseBody(BaseModel):
     tilt: FiniteFloat | None = Field(None, ge=-90, le=120)
     yaw: FiniteFloat | None = Field(None, ge=-3600, le=3600)
@@ -208,6 +212,81 @@ def create_app(machine: Machine) -> FastAPI:
     @app.post("/api/module/calibrate/tilt", status_code=204, dependencies=controlled)
     async def calibrate_tilt() -> None:
         machine.calibrate_tilt()
+
+    @app.post("/api/module/centring", status_code=204, dependencies=controlled)
+    async def measure_centring() -> None:
+        machine.measure_centring()
+
+    @app.post("/api/module/height", status_code=204, dependencies=controlled)
+    async def measure_height() -> None:
+        machine.measure_height()
+
+    @app.post("/api/module/specimen", status_code=204, dependencies=controlled)
+    async def new_specimen() -> None:
+        machine.new_specimen()
+
+    @app.patch("/api/scan3d/plan", status_code=204, dependencies=controlled)
+    async def update_scan_plan(patch: dict[str, Any]) -> None:
+        machine.update_scan_plan(patch)
+
+    @app.post("/api/scan3d/start", status_code=204, dependencies=controlled)
+    async def start_scan(body: ScanStartBody) -> None:
+        machine.start_scan(test=body.test)
+
+    @app.post("/api/scan3d/pause", status_code=204, dependencies=controlled)
+    async def pause_scan() -> None:
+        machine.pause_scan()
+
+    @app.post("/api/scan3d/resume", status_code=204, dependencies=controlled)
+    async def resume_scan() -> None:
+        machine.resume_scan()
+
+    @app.post("/api/scans/{scan_id}/continue", status_code=204, dependencies=controlled)
+    async def continue_scan(scan_id: str) -> None:
+        machine.continue_scan(scan_id)
+
+    @app.delete("/api/scans/{scan_id}", status_code=204, dependencies=controlled)
+    async def delete_scan(scan_id: str) -> None:
+        machine.delete_scan(scan_id)
+
+    @app.get("/api/scans")
+    async def list_scans() -> list[dict[str, Any]]:
+        return machine.scans.scans()
+
+    @app.get("/api/scans/{scan_id}/stacks")
+    async def scan_stacks(scan_id: str) -> list[dict[str, Any]]:
+        try:
+            record = machine.scans.record(scan_id)
+        except KeyError:
+            record = None
+        if record is None:
+            raise HTTPException(404, "No such scan.")
+        ids = [r["stack"] for r in record.get("results", {}).values() if r.get("stack")]
+        return machine.review.summaries(ids)
+
+    @app.get("/api/scans/{scan_id}/zip")
+    async def scan_zip(scan_id: str) -> StreamingResponse:
+        try:
+            name, chunks = machine.scans.archive(scan_id, machine.review)
+        except KeyError:
+            raise HTTPException(404, "No such scan.") from None
+        except ReviewError as exc:
+            raise HTTPException(409, str(exc)) from None
+        return StreamingResponse(
+            chunks,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
+
+    @app.get("/api/scans/{scan_id}")
+    async def scan_record(scan_id: str) -> dict[str, Any]:
+        try:
+            record = machine.scans.record(scan_id)
+        except KeyError:
+            record = None
+        if record is None:
+            raise HTTPException(404, "No such scan.")
+        return record
 
     @app.post("/api/points/{point}", status_code=204, dependencies=controlled)
     async def set_point(point: Point, body: PointBody) -> None:

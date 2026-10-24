@@ -4,9 +4,9 @@ The next major version: a full 3D scan of a pinned insect, driven by the existin
 rail. The v1 module design below was agreed with the user on 2026-10-21.
 
 **Status (2026-10-24):** the hardware is done. It is modelled, test-printed twice, printed
-and assembled, and it went together exactly as designed. Software milestones 1–2 (module
-firmware, host driver, Rig tab, calibration) are built and tested in the simulator; the module
-isn't wired on the rig yet. See "Software" below.
+and assembled, and it went together exactly as designed. All five software milestones
+(module firmware and driver, calibration, centring, scans, review and export) are built and
+tested in the simulator; the module isn't wired on the rig yet. See "Software" below.
 
 - Measurements and derived numbers: [`hardware/scan-module/MEASUREMENTS.md`](../hardware/scan-module/MEASUREMENTS.md)
 - Photos: [`reference-images/`](../reference-images/)

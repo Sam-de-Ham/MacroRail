@@ -15,7 +15,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from ..camera.base import Camera, CameraError, Capture
 from ..log import ActivityLog
@@ -64,6 +64,7 @@ class StackRun:
         store: ReviewStore,
         name: str = "",
         download_previews: bool = True,
+        tags: dict[str, Any] | None = None,
     ) -> None:
         self.plan = plan
         self.name = name
@@ -77,6 +78,7 @@ class StackRun:
         self._on_change = on_change
         self._store = store
         self._download_previews = download_previews
+        self._tags = tags or {}  # kept in the record (a 3D scan marks its poses' stacks)
         self._downloads: list[asyncio.Task[None]] = []
         self._preview_task: asyncio.Task[None] | None = None  # kept so it isn't collected
         self._download_problem_logged = False
@@ -93,7 +95,7 @@ class StackRun:
         self._stop_requested = False
         self._resume = asyncio.Event()
         self._shot_clock: list[float] = []  # active time at each shot, for the ETA
-        self.id = store.create(self.started_at)
+        self.id = store.create(self.started_at, self._tags)
 
     # -- control (from the event loop, any time) ----------------------------------------------
 
@@ -265,6 +267,11 @@ class StackRun:
         if self.previews >= 2:
             self._preview_task = asyncio.create_task(self._build_preview())
 
+    async def preview_ready(self) -> None:
+        """Wait until the preview stack made after the run (if any) is finished."""
+        if self._preview_task is not None:
+            await asyncio.gather(self._preview_task, return_exceptions=True)
+
     async def _build_preview(self) -> None:
         try:
             await self._store.build_preview(self.id)
@@ -285,6 +292,7 @@ class StackRun:
 
     def _save_record(self) -> None:
         record = {
+            **self._tags,
             "name": self.name,
             "started_at": self.started_at,
             "finished_at": self.finished_at,

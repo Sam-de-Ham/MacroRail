@@ -13,7 +13,6 @@ serialises their searches.
 
 from __future__ import annotations
 
-import glob
 import logging
 import os
 import threading
@@ -37,15 +36,16 @@ def role_of(ready_data: dict[str, str]) -> Role:
     return "module" if ready_data.get("role") == "module" else "rail"
 
 
+# USB serial chips found on Arduino Nanos: WCH CH340, FTDI, Silicon Labs CP210x, Arduino.
+NANO_USB_VENDORS = {0x1A86, 0x0403, 0x10C4, 0x2341}
+
+
 def candidate_ports() -> list[str]:
-    """USB serial ports to try, by USB socket where the system names them that way (Linux).
-    Built-in UARTs (the Pi's Bluetooth one, for instance) are never touched."""
-    by_path = sorted(glob.glob("/dev/serial/by-path/*usb*"))
-    if by_path:
-        return by_path
+    """Serial ports that may be a Nano. Built-in UARTs (the Pi's Bluetooth one, for instance)
+    and other USB devices are never opened, since opening a port resets what is on it."""
     from serial.tools import list_ports
 
-    return sorted(port.device for port in list_ports.comports() if port.vid is not None)
+    return sorted(p.device for p in list_ports.comports() if p.vid in NANO_USB_VENDORS)
 
 
 def probe(port: str, timeout: float = PROBE_TIMEOUT_S) -> Role | None:
@@ -93,16 +93,19 @@ class PortFinder:
         """Search the ports for `role`'s controller. Raises OSError if it isn't plugged in."""
         with self._lock:
             ports = self._candidates()
-            others = {
-                _same(port)
-                for owner, port in (*self._fixed.items(), *self._claims.items())
-                if owner != role
-            }
+            present = {_same(port) for port in ports}
+            # A claim on a port that is gone (unplugged) no longer protects anything.
+            self._claims = {owner: p for owner, p in self._claims.items() if p in present}
             now = time.monotonic()
-            for port in ports:
+            tried: set[str] = set()
+            # Probing can move a claim (a replug swapped the controllers), which may free a
+            # port skipped earlier in the same search, so go round until nothing new is tried.
+            while True:
+                port = next((p for p in ports if self._may_probe(role, p, tried, now)), None)
+                if port is None:
+                    break
                 real = _same(port)
-                if real in others or self._ignored.get(real, 0.0) > now:
-                    continue
+                tried.add(real)
                 try:
                     found = self._probe(port)
                 except OSError as exc:  # also: held open by the other controller's link
@@ -111,11 +114,20 @@ class PortFinder:
                 if found is None:
                     self._ignored[real] = now + IGNORE_FOR_S
                     continue
+                # One controller per port: a replug may have moved the other one here.
+                self._claims = {owner: p for owner, p in self._claims.items() if p != real}
                 self._claims[found] = real
                 if found == role:
                     return port
             name = "scan module" if role == "module" else "rail"
             raise OSError(f"no {name} controller found ({', '.join(ports) or 'no serial ports'})")
+
+    def _may_probe(self, role: Role, port: str, tried: set[str], now: float) -> bool:
+        real = _same(port)
+        others = {
+            _same(p) for owner, p in (*self._fixed.items(), *self._claims.items()) if owner != role
+        }
+        return real not in tried and real not in others and self._ignored.get(real, 0.0) <= now
 
 
 def opener(finder: PortFinder, role: Role, port: str) -> Callable[[], Transport]:

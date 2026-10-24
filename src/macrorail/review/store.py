@@ -55,14 +55,17 @@ class ReviewStore:
 
     # -- writing ------------------------------------------------------------------------------
 
-    def create(self, started_at: float) -> str:
-        """A new, empty stack folder. Returns its id."""
+    def create(self, started_at: float, tags: dict[str, Any] | None = None) -> str:
+        """A new, empty stack folder. Returns its id. `tags` start its record at once (a 3D
+        scan's pose is known as one from the start, so the 2D list never shows it)."""
         stamp = datetime.fromtimestamp(started_at).strftime("%Y%m%d-%H%M%S")
         stack_id, n = stamp, 1
         while (self.root / stack_id).exists():
             n += 1
             stack_id = f"{stamp}-{n}"
         (self.root / stack_id / "frames").mkdir(parents=True)
+        if tags:
+            self.write_record(stack_id, dict(tags))
         self._changed()
         return stack_id
 
@@ -114,26 +117,19 @@ class ReviewStore:
             if not (folder.is_dir() and STACK_ID.match(folder.name)):
                 continue
             record = _read_record(folder)
-            frames = sorted(int(f.stem) for f in (folder / "frames").glob("*.jpg"))
-            heights = _focus_heights(record, frames) if frames else None
-            preview = folder / PREVIEW
-            summaries.append(
-                {
-                    "id": folder.name,
-                    "name": record.get("name", ""),
-                    "started_at": record.get("started_at"),
-                    "outcome": record.get("outcome"),
-                    "shots": len(record.get("shots", [])),
-                    "planned": record.get("plan", {}).get("count"),
-                    "frames": frames,
-                    "preview": preview.exists(),
-                    # when the preview stack was made: tells viewers when to fetch it again
-                    "made_at": preview.stat().st_mtime if preview.exists() else None,
-                    "depth": (folder / DEPTH).exists(),
-                    "depth_mm": round(max(heights), 4) if heights else None,
-                }
-            )
+            if record.get("scan") is not None:
+                continue  # a 3D scan's pose: shown with its scan
+            summaries.append(_summary(folder, record))
         return summaries
+
+    def summaries(self, stack_ids: list[str]) -> list[dict[str, Any]]:
+        """The summaries of these stacks (a scan's poses), skipping any that are gone."""
+        out = []
+        for stack_id in stack_ids:
+            folder = self.root / stack_id
+            if STACK_ID.match(stack_id) and folder.is_dir():
+                out.append(_summary(folder, _read_record(folder)))
+        return out
 
     def archive(self, stack_id: str) -> tuple[str, Iterator[bytes]]:
         """A zip of the stack's record, preview and frames: its file name, and its bytes in
@@ -154,6 +150,28 @@ class ReviewStore:
         base = f"MacroRail-{stack_id}" + (f"-{slug}" if slug else "")
         return f"{base}.zip", _zip_chunks(base, folder, files)
 
+    def stacks_of_scan(self, scan_id: str) -> list[str]:
+        """The stacks a 3D scan's poses made, including any its record missed (a restart)."""
+        if not self.root.exists():
+            return []
+        return [
+            folder.name
+            for folder in self.root.iterdir()
+            if folder.is_dir()
+            and STACK_ID.match(folder.name)
+            and _read_record(folder).get("scan") == scan_id
+        ]
+
+    def keep_frames(self, stack_id: str, every: int) -> None:
+        """Delete all but every `every`-th frame (and the last), once the preview is made."""
+        frames = sorted(
+            (self._folder(stack_id) / "frames").glob("*.jpg"), key=lambda f: int(f.stem)
+        )
+        for i, frame in enumerate(frames):
+            if every > 1 and i % every and i != len(frames) - 1:
+                frame.unlink(missing_ok=True)
+        self._changed()
+
     def frame_path(self, stack_id: str, index: int) -> Path:
         return self._folder(stack_id) / "frames" / f"{index:04d}.jpg"
 
@@ -172,6 +190,26 @@ class ReviewStore:
     def _changed(self) -> None:
         self.revision += 1
         self._on_change()
+
+
+def _summary(folder: Path, record: dict[str, Any]) -> dict[str, Any]:
+    frames = sorted(int(f.stem) for f in (folder / "frames").glob("*.jpg"))
+    heights = _focus_heights(record, frames) if frames else None
+    preview = folder / PREVIEW
+    return {
+        "id": folder.name,
+        "name": record.get("name", ""),
+        "started_at": record.get("started_at"),
+        "outcome": record.get("outcome"),
+        "shots": len(record.get("shots", [])),
+        "planned": record.get("plan", {}).get("count"),
+        "frames": frames,
+        "preview": preview.exists(),
+        # when the preview stack was made: tells viewers when to fetch it again
+        "made_at": preview.stat().st_mtime if preview.exists() else None,
+        "depth": (folder / DEPTH).exists(),
+        "depth_mm": round(max(heights), 4) if heights else None,
+    }
 
 
 def _read_record(folder: Path) -> dict[str, Any]:
@@ -216,9 +254,18 @@ class _Chunks:
 
 
 def _zip_chunks(base: str, folder: Path, files: list[Path]) -> Iterator[bytes]:
+    return zip_stream([(path, f"{base}/{path.relative_to(folder).as_posix()}") for path in files])
+
+
+def zip_stream(entries: list[tuple[Path | bytes, str]]) -> Iterator[bytes]:
+    """An uncompressed zip of files (or bytes), in chunks as it is written: nothing is staged
+    on the card. Each entry is (its content, its name in the zip)."""
     sink = _Chunks()
     with zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED) as archive:
-        for path in files:
-            archive.write(path, f"{base}/{path.relative_to(folder).as_posix()}")
+        for content, name in entries:
+            if isinstance(content, bytes):
+                archive.writestr(name, content)
+            else:
+                archive.write(content, name)
             yield sink.take()
     yield sink.take()

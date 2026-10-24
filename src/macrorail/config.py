@@ -64,14 +64,14 @@ class ModuleConfig(_Section):
     # Tilt homing: the rail's sequence (seek the switch, back off until released, touch slowly).
     tilt_homing_speed_deg_s: float = Field(5.0, gt=0, le=30.0)
     tilt_homing_probe_speed_deg_s: float = Field(1.0, gt=0, le=10.0)
-    tilt_homing_clearance_deg: float = Field(1.0, gt=0, le=10.0)
+    tilt_homing_clearance_deg: float = Field(1.0, ge=0.2, le=10.0)
     tilt_homing_release_max_deg: float = Field(10.0, gt=0, le=30.0)
-    tilt_homing_max_deg: float = Field(150.0, gt=0, le=200.0)
+    tilt_homing_max_deg: float = Field(150.0, ge=10.0, le=200.0)
     # Yaw homing: sweep past the magnet, then approach its field peak from one side.
     yaw_homing_speed_deg_s: float = Field(20.0, gt=0, le=60.0)
     yaw_homing_turns: float = Field(1.25, ge=1.1, le=1.29)  # capped at the controller's 5376
     # Every arrival at a pose ends moving the same way, so gearbox backlash is taken up.
-    takeup_deg: float = Field(3.0, gt=0.0, le=20.0)
+    takeup_deg: float = Field(3.0, ge=0.2, le=20.0)
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -85,6 +85,9 @@ class ModuleConfig(_Section):
 class CameraConfig(_Section):
     capture_timeout_s: float = Field(10.0, gt=0)
     liveview_max_fps: float = Field(10.0, gt=0)
+    # The sensor's width (A6400, APS-C), for sizes in live view: with the magnification it
+    # gives mm per pixel, which the 3D centring needs. Live view shows the full width.
+    sensor_width_mm: float = Field(23.5, gt=0, le=60.0)
 
 
 class ServerConfig(_Section):

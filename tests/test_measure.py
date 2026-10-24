@@ -22,7 +22,7 @@ def test_peak_between_samples(centre: float) -> None:
 
 def test_peak_at_an_end_is_refused() -> None:
     positions = [0, 10, 20, 30]
-    with pytest.raises(MeasureError, match="end of the sweep"):
+    with pytest.raises(MeasureError, match="end of the scan"):
         peak(positions, [4.0, 3.0, 2.0, 1.0])
 
 

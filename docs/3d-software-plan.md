@@ -197,12 +197,25 @@ If a 3D scan is running, opening the app goes to 3D.
 
 ## 10. Milestones (each tested by you on the rig)
 
+All five are built and tested in the simulator (2026-10-24); none on the rig yet.
+
 1. **Wiring + module firmware + host driver + Rig tab:** home and move both axes from the app,
    pose gauges, quick poses. *You check: homing repeats, torque at +90°, switch angle.*
 2. **Calibration:** yaw steps per turn, tilt level, live-view axis crosshair.
-3. **Centring wizard.**
-4. **Scans:** plan, pose map, pre-flight, test pose, full scan with pause/resume/restart.
-5. **Review and export.**
+3. **Centring wizard.** As built: each round sweeps focus at yaw 0/90/180/270 (tilt 0), takes
+   the sharpest frame's detail centre sideways, fits the offset, and advises screw turns in
+   1/8 turns with a dial each and a "screw to you" button. It learns the rail's direction
+   (needed for the height) and where the yaw axis appears (the dashed live-view line).
+   Height: focus at tilt ±20° (inside the uncalibrated range), then "push/pull the pin".
+4. **Scans.** As built: tilt rings top down, yaw always forwards; yaw is homed at each scan's
+   start (so its count never runs out); per pose: turn → settle → auto range (falls back to
+   the last range; with none, it pauses for the user) → stack with the 2D step → preview
+   and depth map → keep one frame in n. `scan.json` after every pose; Continue skips the
+   poses done. "Test this pose" runs one pose at the module's current angle.
+5. **Review and export.** As built: scans list in the 3D Review tab, pose thumbnails open
+   the usual viewer (preview, depth, 3D relief, frames). "Download for 3D": `images/` with
+   one all-in-focus JPEG per pose named `pose-NNN_tilt+SSS_yawYYY.jpg`, `depth/`,
+   `poses.csv` (angles, stack, camera file names), `scan.json`, `about.json`.
 
 ## Decisions (user, 2026-10-24)
 
