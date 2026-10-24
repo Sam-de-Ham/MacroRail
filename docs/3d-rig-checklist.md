@@ -10,8 +10,13 @@ back.
       (it still holds a `/dev/serial/by-id/...` path, which both Nanos share), and add a
       `[module]` section with `port = "auto"` (see `deploy/config.example.toml`).
 - [ ] Deploy the `3d-scanning` branch and restart the app. **2D must work exactly as before.**
-- [ ] Wire the module per the [wiring guide](module-guide/MacroRail-module-wiring-guide.pdf),
-      motors unplugged from their drivers at first, and flash `firmware-module/`.
+- [ ] On the reused Nano, remove the capacitor between RST and GND (the app needs the reset
+      when the port opens). Keep the 330 µF across 5V and GND; put it across the motor supply
+      at the drivers if convenient.
+- [ ] Wire the module per the [wiring guide](module-guide/MacroRail-module-wiring-guide.pdf):
+      yaw driver on D4–D7 (already soldered), tilt driver on D8, D9, D11, D12, switch on D10,
+      hall on A0. Both drivers' + go to the separate 5 V supply, not the Nano's 5V. Motors
+      unplugged from their drivers at first. Then flash `firmware-module/`.
 
 ## 1. Module and Rig tab (milestone 1)
 
