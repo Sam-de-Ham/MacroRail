@@ -3,15 +3,16 @@
 // cut short by a restart) can be continued from here.
 
 import { post } from "./api.js";
-import { $, el, setField, setText } from "./dom.js";
+import { $, el, enable, setField, setText } from "./dom.js";
 import * as fmt from "./format.js";
-import { svgEl } from "./rig.js";
+import { svgEl, why } from "./rig.js";
 
 const STAGE = {
   turning: "turning to the pose",
   "finding the range": "finding the front and back",
   shooting: "shooting",
   saving: "saving",
+  "waiting for the tilt": "waiting for you to set the tilt",
 };
 const PHASE = { pausing: "Pausing…", paused: "Paused", stopping: "Stopping…", done: "Complete", stopped: "Stopped", failed: "Failed" };
 
@@ -23,7 +24,11 @@ export const actions = {
   "scan-pause": () => post("scan3d/pause"),
   "scan-resume": () => post("scan3d/resume"),
   "scan-continue": (button) => post(`scans/${button.dataset.id}/continue`),
-  "scan-pose": (button) => post("module/pose", { tilt: Number(button.dataset.tilt), yaw: Number(button.dataset.yaw) }),
+  "scan-pose": (button, app) =>
+    post("module/pose", {
+      tilt: app.state.scan3d.plan.manual_tilt ? null : Number(button.dataset.tilt),
+      yaw: Number(button.dataset.yaw),
+    }),
 };
 
 /** The change to send for a plan field (data-plan="key"); saved like the settings fields. */
@@ -34,6 +39,7 @@ export function planPatch(input) {
     if (!tilts.length || tilts.some((t) => !Number.isFinite(t))) throw new Error("Enter tilts like 60, 30, 0, -30.");
     return { tilts };
   }
+  if (input.type === "checkbox") return { [key]: input.checked };
   if (input.type === "number") {
     if (input.value === "" || !Number.isFinite(Number(input.value))) throw new Error("Enter a number.");
     return { [key]: Number(input.value) };
@@ -41,7 +47,8 @@ export function planPatch(input) {
   return { [key]: input.value.trim() };
 }
 
-export function render({ s, mine, busy, force }) {
+export function render(ctx) {
+  const { s, mine, busy, force } = ctx;
   const scan = s.scan3d;
   const plan = scan.plan;
   for (const input of document.querySelectorAll("[data-plan]")) {
@@ -56,10 +63,9 @@ export function render({ s, mine, busy, force }) {
   setText("scan-summary", summary(scan));
   renderPreflight(scan.preflight);
 
-  const blocked = scan.preflight.some((c) => c.blocking && !c.ok);
-  $("scan-start").disabled = !mine || busy || Boolean(scan.error) || blocked;
-  const liveView = s.camera.connected && s.camera.live_view;
-  $("scan-test").disabled = !mine || busy || !(s.module.tilt_homed && s.module.yaw_homed && s.rail.homed && liveView);
+  const firstProblem = scan.preflight.find((c) => c.blocking && !c.ok)?.text;
+  enable($("scan-start"), why(ctx) || scan.error || firstProblem || "");
+  enable($("scan-test"), why(ctx, { rail: true, yaw: true, tilt: true, liveView: true }));
   $("scan-controls").hidden = !run;
   $("scan-idle-buttons").hidden = Boolean(run);
   if (run) {

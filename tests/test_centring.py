@@ -8,6 +8,7 @@ import random
 import pytest
 
 from macrorail.scan.centring import (
+    SCREW_X_YAW_DEG,
     CentringError,
     Observation,
     fit,
@@ -25,7 +26,7 @@ def observe(x: float, y: float, yaws: list[float], sign: int = 1, noise: float =
     rng = random.Random(seed)
     out = []
     for yaw in yaws:
-        t = math.radians(yaw)
+        t = math.radians(yaw + SCREW_X_YAW_DEG)
         depth = x * math.cos(t) - y * math.sin(t)
         sideways = x * math.sin(t) + y * math.cos(t)
         out.append(
@@ -79,9 +80,11 @@ def test_centred_needs_no_turns() -> None:
 
 
 def test_screw_facing_the_user() -> None:
-    # At yaw θ screw X points along θ and screw Y along θ + 90°; 180° is away from the lens.
-    assert (screw_facing_yaw("x") + 0) % 360 == 180
-    assert (screw_facing_yaw("y") + 90) % 360 == 180
+    # At yaw θ screw X points along θ + SCREW_X_YAW_DEG and screw Y 90° further; 180° is away
+    # from the lens. On the rig screw X faces away at yaw 0.
+    assert (screw_facing_yaw("x") + SCREW_X_YAW_DEG) % 360 == 180
+    assert (screw_facing_yaw("y") + SCREW_X_YAW_DEG + 90) % 360 == 180
+    assert screw_facing_yaw("x") == 0.0
 
 
 @pytest.mark.parametrize("sign", [1, -1])

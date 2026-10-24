@@ -10,16 +10,16 @@ from macrorail.sim.specimen import SimSpecimen
 from .conftest import idle, until
 
 
-async def rig(machine: Machine) -> SimSpecimen:
-    """Rail and module homed, the specimen roughly in focus."""
+async def rig(machine: Machine, focus_mm: float = 18.5) -> SimSpecimen:
+    """Rail and module homed, the rail at `focus_mm`: roughly where the specimen is sharp."""
     await until(lambda: machine.module.state.connected and machine.camera.state.connected)
-    await machine.update_settings({"scan": {"span_mm": 3.0}})
+    await machine.update_settings({"scan": {"span_mm": 4.0}})  # the default
     machine.home()
     await idle(machine, timeout=30)
     machine.home_module(("tilt", "yaw"))
     await idle(machine, timeout=30)
     specimen: SimSpecimen = machine.camera._specimen()[0]  # type: ignore[attr-defined]
-    machine.set_point("start", round(18.5 * machine.axis.steps_per_mm))
+    machine.set_point("start", round(focus_mm * machine.axis.steps_per_mm))
     machine.go_to("start")
     await idle(machine, timeout=30)
     return specimen
@@ -34,7 +34,9 @@ async def test_centring_needs_the_rig(machine: Machine) -> None:
 
 
 async def test_centring_rounds_converge(machine: Machine) -> None:
-    specimen = await rig(machine)
+    # Screw X faces away from the camera at yaw 0, so this offset puts the insect 0.6 mm
+    # further away there: focused (as the user would) at about 19.4 mm.
+    specimen = await rig(machine, focus_mm=19.4)
     specimen.offset_mm = (0.6, -0.4, 0.15)
 
     machine.measure_centring()
@@ -50,7 +52,10 @@ async def test_centring_rounds_converge(machine: Machine) -> None:
 
     # Turn the screws as advised.
     advice = machine.snapshot()["module"]["centring"]["turns"]
-    assert {t["screw"]: t["turns"] for t in advice} == {"x": 1.25, "y": -0.75}
+    turns = {t["screw"]: t["turns"] for t in advice}
+    # 0.6 mm is 1.2 turns: either neighbouring 1/8 turn, as the measurement falls.
+    assert turns["x"] in (1.125, 1.25)
+    assert turns["y"] == -0.75
     for turn in advice:
         specimen.turn_screw(turn["screw"], turn["turns"])
 

@@ -37,6 +37,7 @@ from .optics import Optics
 from .review.store import ReviewError, ReviewStore
 from .scan import calibrate
 from .scan.centring import (
+    SCREW_X_YAW_DEG,
     CentringError,
     CentringFit,
     Observation,
@@ -335,6 +336,8 @@ class Machine:
         self._require_module()
         if not axes:
             raise OperationError("Choose tilt, yaw or both.")
+        if "tilt" in axes and self.manual_tilt:
+            raise OperationError("Tilt is set by hand: manual tilt is on (System tab).")
         self._start("rotating", self.poser.home(axes))
 
     def jog_module(self, axis: Rotary, delta_deg: float) -> None:
@@ -355,6 +358,8 @@ class Machine:
         state = self.module.state
         if tilt is None and yaw is None:
             raise OperationError("Give a tilt, a yaw or both.")
+        if tilt is not None and self.manual_tilt:
+            raise OperationError("Tilt is set by hand: manual tilt is on (System tab).")
         if tilt is not None:
             if not state.tilt_homed:
                 raise OperationError("Home tilt first.")
@@ -373,6 +378,8 @@ class Machine:
     def calibrate_tilt(self) -> None:
         """Measure where the tilt switch trips against level, from a straight needle on the
         holder, in focus at the current rail position."""
+        if self.manual_tilt:
+            raise OperationError("Levelling tilt needs the tilt motor: turn manual tilt off.")
         self._require_rig()
         self._start("scanning", self._calibrate_tilt())
 
@@ -385,6 +392,8 @@ class Machine:
     def measure_height(self) -> None:
         """How far the specimen sits above or below the tilt axis, from its focus at two
         tilts. Needs the rail's direction, which the first centring round learns."""
+        if self.manual_tilt:
+            raise OperationError("Measuring the height needs the tilt motor: turn manual tilt off.")
         self._require_rig()
         if self.module_settings.rail_sign == 0:
             raise OperationError("Centre with yaw first: that measures which way the rail moves.")
@@ -413,13 +422,14 @@ class Machine:
         """Scan every pose of the plan, or (`test`) just the current pose, as a trial."""
         self._require_idle()
         if test:
-            state = self.module.state
-            if not (state.tilt_homed and state.yaw_homed):
-                raise OperationError("Home the scan module first.")
-            tilt = round(self.module.tilt_deg(), 1)
-            low, high = self.poser.tilt_range()
-            if not low <= tilt <= high:
-                raise OperationError(f"Turn to a tilt from {low:g}° to {high:g}° first.")
+            self._require_module_homed()
+            if self.manual_tilt:
+                tilt = 0.0  # set by hand; the record says so (manual_tilt)
+            else:
+                tilt = round(self.module.tilt_deg(), 1)
+                low, high = self.poser.tilt_range()
+                if not low <= tilt <= high:
+                    raise OperationError(f"Turn to a tilt from {low:g}° to {high:g}° first.")
             poses = [Pose(0, tilt, round(self.module.yaw_deg() % 360, 1))]
         else:
             poses = self._scan_poses()
@@ -526,6 +536,7 @@ class Machine:
         stack_settle_s = float(plan["stack_settle_s"])
         span = self._steps(float(plan["span_mm"]))
         settle_s = float(plan.get("settle_s", 0.0))
+        manual_tilt = bool(plan.get("manual_tilt", False))
 
         async def begin() -> None:
             await self._prepare_motion()
@@ -538,7 +549,7 @@ class Machine:
 
         async def go(pose: Pose) -> None:
             self._check_stop()
-            await self.poser.go(pose.tilt_deg, pose.yaw_deg)
+            await self.poser.go(None if manual_tilt else pose.tilt_deg, pose.yaw_deg)
             await asyncio.sleep(settle_s)
 
         async def find_range() -> RangeResult:
@@ -592,7 +603,7 @@ class Machine:
     def _scan_poses(self) -> list[Pose]:
         try:
             return plan_poses(
-                list(self.scan_plan.tilts), self.scan_plan.yaw_step_deg, self.poser.tilt_range()
+                list(self.scan_plan.tilts), self.scan_plan.yaw_step_deg, self._scan_tilt_range()
             )
         except ScanPlanError as exc:
             raise OperationError(str(exc)) from None
@@ -650,7 +661,7 @@ class Machine:
         checks = [
             (rail.homed, True, "Rail homed", "Home the rail first."),
             (
-                module.tilt_homed and module.yaw_homed,
+                module.yaw_homed and (module.tilt_homed or self.manual_tilt),
                 True,
                 "Scan module homed",
                 "Home the scan module first.",
@@ -718,7 +729,7 @@ class Machine:
     def _scan_snapshot(self) -> dict[str, Any]:
         try:
             poses = plan_poses(
-                list(self.scan_plan.tilts), self.scan_plan.yaw_step_deg, self.poser.tilt_range()
+                list(self.scan_plan.tilts), self.scan_plan.yaw_step_deg, self._scan_tilt_range()
             )
             error = None
         except ScanPlanError as exc:
@@ -1021,7 +1032,7 @@ class Machine:
         observations = []
         try:
             for yaw in CENTRING_YAWS:
-                await self.poser.go(0.0, yaw)
+                await self.poser.go(self._level(), yaw)
                 center = await self._focus_here(center, "centring")
                 frame = await self.camera.preview()
                 detail = await asyncio.to_thread(detail_centre, frame)
@@ -1037,12 +1048,12 @@ class Machine:
                 update["rail_sign"] = result.rail_sign
             learnt = _calibrated(self.module_settings, **update)
         except (AnalysisError, CameraError):
-            await self._recover(start, (0.0, 0.0))
+            await self._recover(start, (self._level(), 0.0))
             raise
         self.centring.append(result)
         self._save_module_quietly(learnt)
         # Back at yaw 0 and in focus, ready for the screws to be turned.
-        await self.poser.go(0.0, 0.0)
+        await self.poser.go(self._level(), 0.0)
         await self._approach(round(observations[0].focus_mm * self.axis.steps_per_mm), 1)
         if result.centred:
             self.log.info(f"Centred: {result.distance_mm * 1000:.0f} µm off the yaw axis.")
@@ -1053,7 +1064,7 @@ class Machine:
             )
             self.log.info(f"{result.distance_mm:.2f} mm off the yaw axis: turn {advice}.")
 
-    async def _recover(self, rail: int, pose: tuple[float, float]) -> None:
+    async def _recover(self, rail: int, pose: tuple[float | None, float | None]) -> None:
         """After a measurement found nothing: back to where the user focused, as every scan
         does, and the module to `pose`. A failure here mustn't hide the original error."""
         with contextlib.suppress(AxisError):
@@ -1174,9 +1185,28 @@ class Machine:
         self._require_module()
         self._require_homed()
         self._require_live_view()
+        self._require_module_homed()
+
+    def _require_module_homed(self) -> None:
         state = self.module.state
-        if not (state.tilt_homed and state.yaw_homed):
-            raise OperationError("Home the scan module first.")
+        if not state.yaw_homed:
+            raise OperationError("Home yaw first (Rig tab).")
+        if not (state.tilt_homed or self.manual_tilt):
+            raise OperationError("Home tilt first (Rig tab), or turn on manual tilt (System).")
+
+    @property
+    def manual_tilt(self) -> bool:
+        """Tilt set by hand: the tilt motor isn't used (a System tab option)."""
+        return self.scan_plan.manual_tilt
+
+    def _level(self) -> float | None:
+        """Tilt for the yaw-only measurements: level, or as set by hand."""
+        return None if self.manual_tilt else 0.0
+
+    def _scan_tilt_range(self) -> tuple[float, float]:
+        if self.manual_tilt:  # set by hand: the full range the lens allows
+            return self.config.module.tilt_min_deg, self.config.module.tilt_max_deg
+        return self.poser.tilt_range()
 
     def _require_module(self) -> None:
         state = self.module.state
@@ -1224,6 +1254,7 @@ class Machine:
             "tilt_min_deg": geometry.tilt_min_deg,
             "tilt_max_deg": geometry.tilt_max_deg,
             "calibration": self.module_settings.model_dump(),
+            "screw_x_yaw_deg": SCREW_X_YAW_DEG,
             "centring": self._centring_snapshot(),
             "link": self.module.diagnostics(),
         }
@@ -1315,8 +1346,9 @@ def build_machine(config: Config, *, sim: bool = False, sim_speedup: float = 1.0
 
         def specimen_view() -> tuple[SimSpecimen, float, float] | None:
             # A homed module stands for the 3D rig: the camera then sees the insect on it.
-            if sim_module.tilt.homed and sim_module.yaw.homed:
-                return specimen, sim_module.tilt_deg, sim_module.yaw_deg
+            if sim_module.yaw.homed:  # tilt may be set "by hand" (manual tilt)
+                # The simulated head is mounted like the real one: screw X away at yaw 0.
+                return specimen, sim_module.tilt_deg, sim_module.yaw_deg + SCREW_X_YAW_DEG
             return None
 
         # The camera sees the carriage, which trails the motor by the backlash after a reversal.

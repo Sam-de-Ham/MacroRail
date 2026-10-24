@@ -63,7 +63,16 @@ document.addEventListener("click", async (event) => {
     return;
   }
   const target = event.target.closest("[data-action]");
-  if (!target || target.disabled || !app.state) return;
+  if (!target) {
+    // Greyed-out buttons let taps through (pointer-events: none); say why they're greyed out.
+    const greyed = [...document.querySelectorAll("[data-why]:disabled")].find((button) => {
+      const box = button.getBoundingClientRect();
+      return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+    });
+    if (greyed) showToast(greyed.dataset.why);
+    return;
+  }
+  if (target.disabled || !app.state) return;
   const action = actions[target.dataset.action];
   if (!action) return;
   try {
@@ -176,6 +185,8 @@ function render(force = false) {
   else setPill("module-pill", "warn", "Module not homed");
   $("stop").hidden = !app.connected || !busy;
 
+  // Manual tilt (System, 3D) hides the controls that need the tilt motor.
+  document.body.toggleAttribute("data-manual-tilt", s.scan3d.plan.manual_tilt);
   renderStatus(s);
   renderSettingFields(ctx);
   for (const panel of PANELS) panel.render(ctx);

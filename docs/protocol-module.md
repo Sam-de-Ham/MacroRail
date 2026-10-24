@@ -25,7 +25,8 @@ The module has its own Nano so the rail firmware never changes (see
   lens (the tilt *angle* decreases). The switch is at the dorsal end, past +90°.
 - **YAW:** positive turns the head **counter-clockwise seen from above**, and it is the
   direction `HOME YAW` turns. Yaw is unlimited. At yaw 0 the magnet is over the hall sensor,
-  centring screw X points at the camera and screw Y at the bearing side (+Y).
+  centring screw X points away from the camera and screw Y at the motor side (−Y) (found on
+  the rig; the app's `SCREW_X_YAW_DEG`).
 - Each axis has a direction constant in `firmware-module/src/config.h` (`TILT_INVERT`,
   `YAW_INVERT`) for the motor wiring.
 

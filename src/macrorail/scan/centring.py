@@ -2,15 +2,16 @@
 
 The wizard looks at the insect at several yaw angles. In the world frame (X towards the camera,
 Y along the tilt axis, Z up) an offset (x, y) of the centring plate, measured in the head frame
-that turns with yaw, sits at
+that turns with yaw (+x towards screw X, +y towards screw Y), sits at
 
-    X = x·cos θ - y·sin θ        (depth: along the lens axis)
-    Y = x·sin θ + y·cos θ        (sideways: across the image; the camera's right is +Y)
+    X = x·cos φ - y·sin φ        (depth: along the lens axis)
+    Y = x·sin φ + y·cos φ        (sideways: across the image; the camera's right is +Y)
 
-at yaw θ. The image gives the sideways position to a few µm, so that channel alone fixes the
-offset, together with where the yaw axis appears in the image. The rail position at which the
-insect is sharpest follows the depth channel; it is fitted independently as a cross-check, and
-its mean is the rail position that focuses the axis.
+where φ = θ + SCREW_X_YAW_DEG is the direction screw X points at yaw θ. The image gives the
+sideways position to a few µm, so that channel alone fixes the offset, together with where the
+yaw axis appears in the image. The rail position at which the insect is sharpest follows the
+depth channel; it is fitted independently as a cross-check, and its mean is the rail position
+that focuses the axis.
 
 Screw X sits on the head's +X side and screw Y on its +Y side. Turning a screw in pushes the
 plate away from it, by the M3 pitch per turn; backing it out lets the spring push it back.
@@ -29,6 +30,9 @@ from ..focus.analysis import AnalysisError
 M3_PITCH_MM = 0.5
 TURN_RESOLUTION = 1 / 8  # what a hex key can sensibly be turned by
 CENTRED_MM = 0.1  # good enough: well inside the frame at every yaw
+# Where screw X points at yaw 0, counter-clockwise from the camera (seen from above). On the rig
+# it points away from the camera (found 2026-10-24: the "screw to you" poses were 180° off).
+SCREW_X_YAW_DEG = 180.0
 # The rail's direction is learnt from a fit only when the offset shows clearly in depth.
 SIGN_MIN_OFFSET_MM = 0.15
 
@@ -76,7 +80,7 @@ def fit(observations: list[Observation]) -> CentringFit:
     angles = {round(o.yaw_deg % 360, 3) for o in observations}
     if len(angles) < 3:
         raise CentringError("Centring needs the insect seen at three or more yaw angles.")
-    theta = np.radians([o.yaw_deg for o in observations])
+    theta = np.radians([o.yaw_deg + SCREW_X_YAW_DEG for o in observations])
     sideways = np.array([o.sideways_mm for o in observations])
     focus = np.array([o.focus_mm for o in observations])
     ones = np.ones_like(theta)
@@ -116,8 +120,9 @@ def screw_turns(result: CentringFit) -> list[ScrewTurn]:
 
 
 def screw_facing_yaw(screw: Literal["x", "y"]) -> float:
-    """The yaw that points `screw` away from the lens, where a hex key reaches it."""
-    return 180.0 if screw == "x" else 90.0
+    """The yaw that points `screw` away from the lens, where a hex key reaches it. Screw Y
+    sits 90° counter-clockwise of screw X."""
+    return (180.0 - SCREW_X_YAW_DEG - (90.0 if screw == "y" else 0.0)) % 360.0
 
 
 def height_error(focus_at: dict[float, float], rail_sign: int) -> float:

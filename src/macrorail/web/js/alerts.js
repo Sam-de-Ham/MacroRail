@@ -84,6 +84,8 @@ function renderScan(run) {
   if (before[1] !== run.phase && SCAN_ACTIVE.has(before[1]) && SCAN_MESSAGES[run.phase]) {
     const [title, body] = SCAN_MESSAGES[run.phase];
     alert(title, run.error || body, run.phase === "done"); // e.g. the specimen wasn't found
+  } else if (run.phase === "paused" && before[1] !== "paused" && run.error) {
+    alert("Scan waiting for you", run.error, false); // manual tilt: set the next ring's tilt
   }
   return active;
 }

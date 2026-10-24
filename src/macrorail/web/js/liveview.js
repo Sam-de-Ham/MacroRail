@@ -56,7 +56,7 @@ export function render({ s, connected, workspace }) {
   const m = s.module;
   const pose =
     workspace === "3d" && m.connected
-      ? ` · T ${m.tilt_homed ? `${m.tilt_deg.toFixed(1)}°` : "–"} · Y ${m.yaw_homed ? `${m.yaw_deg.toFixed(1)}°` : "–"}`
+      ? `${s.scan3d.plan.manual_tilt ? "" : ` · T ${m.tilt_homed ? `${m.tilt_deg.toFixed(1)}°` : "–"}`} · Y ${m.yaw_homed ? `${m.yaw_deg.toFixed(1)}°` : "–"}`
       : "";
   $("liveview-position").textContent = rail + pose;
   // Where the yaw axis appears (learnt by centring): the insect should sit on this line.

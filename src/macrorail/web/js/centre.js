@@ -4,8 +4,8 @@
 // gets a dial. Then the height: how far the specimen sits above or below the tilt axis.
 
 import { post } from "./api.js";
-import { $, el, setText } from "./dom.js";
-import { svgEl } from "./rig.js";
+import { $, el, enable, setText } from "./dom.js";
+import { svgEl, why } from "./rig.js";
 
 const FRACTIONS = { 0.125: "⅛", 0.25: "¼", 0.375: "⅜", 0.5: "½", 0.625: "⅝", 0.75: "¾", 0.875: "⅞" };
 const TASKS = { centring: "Looking from four sides…", height: "Focusing at two tilts…" };
@@ -16,36 +16,39 @@ export const actions = {
   "measure-centring": () => post("module/centring"),
   "measure-height": () => post("module/height"),
   "new-specimen": () => post("module/specimen"),
-  "face-screw": (button) => post("module/pose", { tilt: 0, yaw: Number(button.dataset.yaw) }),
+  "face-screw": (button, app) =>
+    post("module/pose", { tilt: app.state.scan3d.plan.manual_tilt ? null : 0, yaw: Number(button.dataset.yaw) }),
 };
 
-export function render({ s, mine, busy }) {
+export function render(ctx) {
+  const { s, mine, busy } = ctx;
   const m = s.module;
   const c = m.centring;
   const last = c.rounds.at(-1);
-  const ready = mine && !busy && m.connected && m.tilt_homed && m.yaw_homed && s.rail.homed;
-  const liveView = s.camera.connected && s.camera.live_view;
+  const blocked = why(ctx, { rail: true, yaw: true, tilt: true, liveView: true });
+  const faceBlocked = why(ctx, { yaw: true, tilt: true });
 
   const badge = !last ? "Not measured" : last.centred ? "Centred" : `${formatMm(last.distance_mm)} off`;
   setText("centring-badge", badge);
   $("centring-badge").classList.toggle("ok", Boolean(last?.centred));
   $("centring-badge").classList.toggle("warn", Boolean(last && !last.centred));
-  $("measure-centring").disabled = !(ready && liveView);
+  enable($("measure-centring"), blocked);
   setText("measure-centring", c.rounds.length ? "Measure again" : "Measure");
-  $("new-specimen").disabled = !mine || busy || (!c.rounds.length && c.height_mm === null);
+  const empty = !c.rounds.length && c.height_mm === null;
+  enable($("new-specimen"), !mine || busy ? why(ctx) : empty ? "Nothing measured yet for this specimen." : "");
   setText("centring-progress", busy && TASKS[c.task] ? TASKS[c.task] : "");
   setText("centring-caption", caption(c, last));
 
-  const key = JSON.stringify([c.rounds, c.turns, ready]);
+  const key = JSON.stringify([c.rounds, c.turns, faceBlocked]);
   if (key !== drawn) {
     drawn = key;
     drawPlot($("centring-plot"), c.rounds);
-    $("screw-turns").replaceChildren(...c.turns.map((turn) => screwRow(turn, ready)));
+    $("screw-turns").replaceChildren(...c.turns.map((turn) => screwRow(turn, faceBlocked)));
   }
 
   // Height: needs the rail's direction, which the first centring round learns.
   const known = c.rail_sign !== 0;
-  $("measure-height").disabled = !(ready && liveView && known);
+  enable($("measure-height"), blocked || (known ? "" : "Measure the centring first: it learns which way the rail moves."));
   setText("height-text", heightText(c, known));
   const height = c.height_mm;
   setText("height-badge", height === null ? "–" : Math.abs(height) <= c.height_ok_mm ? "Good" : `${formatMm(Math.abs(height))} ${height > 0 ? "high" : "low"}`);
@@ -83,7 +86,7 @@ function formatTurns(turns) {
 
 /** One screw to turn: a dial showing how far and which way, and a button that turns the
  * head so the screw points at you. */
-function screwRow(turn, ready) {
+function screwRow(turn, blocked) {
   const amount = Math.abs(turn.turns);
   const inward = turn.turns > 0;
   const name = turn.screw.toUpperCase();
@@ -97,8 +100,14 @@ function screwRow(turn, ready) {
       el("strong", {}, `Screw ${name}: ${formatTurns(amount)} ${inward ? "in" : "out"}`),
       el("span", { class: "muted small-text" }, inward ? "Clockwise, pushing the plate away from the screw." : "Anticlockwise, letting the spring push the plate back."),
     ),
-    el("button", { class: "button small", "data-action": "face-screw", "data-yaw": String(turn.facing_yaw), disabled: !ready }, `Screw ${name} to you`),
+    faceButton(turn, name, blocked),
   );
+}
+
+function faceButton(turn, name, blocked) {
+  const button = el("button", { class: "button small", "data-action": "face-screw", "data-yaw": String(turn.facing_yaw) }, `Screw ${name} to you`);
+  enable(button, blocked);
+  return button;
 }
 
 /** A hex-key dial: the arc is the part of a turn beyond whole turns (whole turns are

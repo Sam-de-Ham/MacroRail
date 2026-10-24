@@ -82,6 +82,8 @@ class ScanRun:
                 start, end = result["range"]
                 self._last_range = RangeResult(int(start), int(end), (), (), clipped=False)
         self._resume = asyncio.Event()
+        # Manual tilt: the tilt the user last set by hand (asked again after a restart).
+        self._tilt_set: float | None = None
         self._pause_requested = False
         self._stop_requested = False
 
@@ -165,6 +167,8 @@ class ScanRun:
             f"(tilt {pose.tilt_deg:g}°, yaw {pose.yaw_deg:g}°)"
         )
         self._log.info(f"{label}…")
+        if self.plan.get("manual_tilt") and not self.plan.get("test"):
+            await self._ask_for_tilt(pose)
         self._stage("turning")
         await self._steps.go(pose)
         self._stage("finding the range")
@@ -202,6 +206,18 @@ class ScanRun:
             "finished_at": time.time(),
         }
         self._write_record()
+
+    async def _ask_for_tilt(self, pose: Pose) -> None:
+        """Manual tilt: pause until the user has set this pose's tilt by hand."""
+        if self._tilt_set == pose.tilt_deg:
+            return
+        self.error = f"Set the tilt to {pose.tilt_deg:g}° by hand, then press Resume."
+        self._log.info(self.error)
+        self._stage("waiting for the tilt")
+        self._pause_requested = True
+        await self._checkpoint()
+        self.error = None
+        self._tilt_set = pose.tilt_deg
 
     async def _range(self, pose: Pose) -> RangeResult | None:
         try:

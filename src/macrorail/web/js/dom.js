@@ -21,6 +21,13 @@ export function setField(input, value, force) {
   else if (input.value !== String(value)) input.value = value;
 }
 
+/** Enables `el`, or greys it out with `why`: tapping it then shows why (see main.js). */
+export function enable(el, why) {
+  el.disabled = Boolean(why);
+  if (why) el.dataset.why = why;
+  else delete el.dataset.why;
+}
+
 export function disable(selector, disabled) {
   for (const el of document.querySelectorAll(selector)) el.disabled = disabled;
 }

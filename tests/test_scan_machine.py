@@ -141,3 +141,62 @@ async def test_a_damaged_record_is_refused(machine: Machine) -> None:
     (folder / "scan.json").write_text('{"poses": [], "plan": {"step": null}, "results": []}')
     with pytest.raises(OperationError, match="can't be read"):
         machine.continue_scan("20261024-120000")
+
+
+async def manual_rig(machine: Machine) -> None:
+    """Manual tilt: only yaw and the rail are homed; the tilt motor never moves."""
+    await until(lambda: machine.module.state.connected and machine.camera.state.connected)
+    await machine.update_settings(
+        {"scan": {"span_mm": 3.0}, "stack": {"step": 60, "settle_s": 0.0}}
+    )
+    machine.update_scan_plan({"manual_tilt": True, "settle_s": 0.0, "keep_every": 4})
+    machine.home()
+    await idle(machine, timeout=30)
+    machine.home_module(("yaw",))
+    await idle(machine, timeout=30)
+    machine.camera._specimen()[0].offset_mm = (0.0, 0.0, 0.0)  # type: ignore[attr-defined]
+    machine.set_point("start", round(18.5 * machine.axis.steps_per_mm))
+    machine.go_to("start")
+    await idle(machine, timeout=30)
+
+
+async def test_manual_tilt_refuses_the_tilt_motor(machine: Machine) -> None:
+    await until(lambda: machine.module.state.connected)
+    machine.update_scan_plan({"manual_tilt": True})
+    with pytest.raises(OperationError, match="manual tilt is on"):
+        machine.home_module(("tilt", "yaw"))
+    with pytest.raises(OperationError, match="manual tilt is on"):
+        machine.pose(0.0, None)
+    with pytest.raises(OperationError, match="manual tilt off"):
+        machine.calibrate_tilt()
+    with pytest.raises(OperationError, match="manual tilt off"):
+        machine.measure_height()
+
+
+async def test_manual_tilt_scan_asks_for_each_ring(machine: Machine) -> None:
+    await manual_rig(machine)
+    tilt_steps = machine.module.state.tilt_steps
+    machine.update_scan_plan({"tilts": [10.0, 0.0], "yaw_step_deg": 360.0})
+    machine.start_scan()
+    run = machine.scan
+    assert run is not None
+    for ring in ("10", "0"):
+        await until(lambda: run.phase == "paused", timeout=120)
+        assert run.error
+        assert f"Set the tilt to {ring}°" in run.error
+        machine.resume_scan()
+        await until(lambda: run.phase == "running", timeout=5)
+    await idle(machine, timeout=300)
+    assert run.phase == "done", machine.log.entries[-1].message
+    assert machine.module.state.tilt_steps == tilt_steps  # the tilt motor never moved
+    assert not machine.module.state.tilt_homed
+
+
+async def test_manual_tilt_centring_needs_only_yaw(machine: Machine) -> None:
+    await manual_rig(machine)
+    machine.camera._specimen()[0].offset_mm = (0.5, 0.3, 0.0)  # type: ignore[attr-defined]
+    machine.measure_centring()
+    await idle(machine, timeout=150)
+    assert machine.centring, machine.log.entries[-1].message
+    assert machine.centring[-1].offset_x_mm == pytest.approx(0.5, abs=0.06)
+    assert machine.centring[-1].offset_y_mm == pytest.approx(0.3, abs=0.06)

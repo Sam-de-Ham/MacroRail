@@ -94,6 +94,8 @@ class ScanPlanSettings(_Model):
     keep_every: int = Field(10, ge=1, le=1000)  # frames kept per pose (all go into the preview)
     settle_s: float = Field(1.0, ge=0.0, le=30.0)  # after turning, before the focus scan
     name: str = Field("", max_length=60)
+    # Tilt set by hand: the tilt motor isn't used, scans pause for each ring (System tab).
+    manual_tilt: bool = False
 
     @model_validator(mode="after")
     def _tilts_in_reach(self) -> Self:

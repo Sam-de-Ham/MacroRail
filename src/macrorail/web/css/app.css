@@ -638,6 +638,15 @@ body[data-workspace="3d"] [data-only="2d"] { display: none !important; }
 .test-readings dt { color: var(--muted); }
 .test-readings dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .test-readings dd.warn { color: var(--warn); font-weight: 700; }
+/* A greyed-out button that can say why lets taps through to the page, which shows the reason. */
+button:disabled[data-why] { pointer-events: none; }
+body[data-manual-tilt] [data-tilt-ui] { display: none !important; }
+body[data-manual-tilt] .pose-gauges { grid-template-columns: 1fr; }
+[data-manual-only], [data-manual-only-inline] { display: none; }
+body[data-manual-tilt] [data-manual-only] { display: block; }
+body[data-manual-tilt] [data-manual-only-inline] { display: inline; }
+.check-row { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0 4px; font-size: 14px; }
+.check-row input { margin-top: 3px; }
 .calibration-step { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; }
 .calibration-step p { margin: 0; }
 

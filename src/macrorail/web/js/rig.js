@@ -3,10 +3,10 @@
 //
 // Angles follow the module's conventions: tilt 0 is level and + turns the insect's back
 // towards the camera; yaw + turns the head counter-clockwise seen from above, and at yaw 0
-// centring screw X points at the camera.
+// centring screw X points away from the camera (the module reports where: screw_x_yaw_deg).
 
 import { post } from "./api.js";
-import { $, el, setChecked, setText } from "./dom.js";
+import { $, el, enable, setChecked, setText } from "./dom.js";
 import { readPref, writePref } from "./prefs.js";
 
 const STEPS_DEG = [1, 5, 15, 45];
@@ -25,8 +25,8 @@ export const actions = {
     writePref("rotary-step", stepDeg);
     app.render();
   },
-  "pose-go": () => {
-    const tilt = angleField("pose-tilt");
+  "pose-go": (_button, app) => {
+    const tilt = app.state.scan3d.plan.manual_tilt ? null : angleField("pose-tilt");
     const yaw = angleField("pose-yaw");
     if (tilt === null && yaw === null) throw new Error("Enter a tilt, a yaw or both.");
     return post("module/pose", { tilt, yaw });
@@ -60,9 +60,29 @@ function angleField(id) {
   return value;
 }
 
-export function render({ s, mine, busy }) {
+/** Why a 3D control can't be used now, or "" if it can: shown when its greyed-out button is
+ * tapped. `needs` lists what the action needs beyond control of the module. */
+export function why({ s, mine, busy }, needs = {}) {
   const m = s.module;
-  const can = mine && m.connected && !busy;
+  if (!mine) return "Another device has control. Tap Take control first.";
+  if (!m.connected) return m.problem || "The scan module isn't connected.";
+  if (busy) return "Busy: wait for it to finish, or press Stop.";
+  if (needs.rail && !s.rail.homed) return "Home the rail first (Position, at the top of the Rig tab).";
+  if (needs.yaw && !m.yaw_homed) return "Home yaw first (Rig tab).";
+  if (needs.tilt && !m.tilt_homed && !s.scan3d.plan.manual_tilt) {
+    return "Home tilt first (Rig tab), or turn on manual tilt (System tab).";
+  }
+  if (needs.liveView && !(s.camera.connected && s.camera.live_view)) {
+    return "This needs the camera's live view: connect the camera.";
+  }
+  return "";
+}
+
+export function render(ctx) {
+  const { s, mine } = ctx;
+  const m = s.module;
+  const manual = s.scan3d.plan.manual_tilt;
+  const can = why(ctx);
   const badge = !m.connected ? "Offline" : m.tilt_homed && m.yaw_homed ? "Homed" : "Not homed";
   for (const id of ["module-badge", "module-system-badge"]) {
     setText(id, badge);
@@ -74,27 +94,30 @@ export function render({ s, mine, busy }) {
   setText("tilt-value", m.tilt_homed ? `${m.tilt_deg.toFixed(1)}°` : "–");
   setText("yaw-value", m.yaw_homed ? `${m.yaw_deg.toFixed(1)}°` : "–");
   // Redrawn only when what they show changes: state pushes arrive several times a second.
-  const gauges = JSON.stringify([m.tilt_homed && m.tilt_deg, m.tilt_min_deg, m.tilt_max_deg, m.yaw_homed && m.yaw_deg]);
+  const gauges = JSON.stringify([m.tilt_homed && m.tilt_deg, m.tilt_min_deg, m.tilt_max_deg, m.yaw_homed && m.yaw_deg, m.screw_x_yaw_deg]);
   if (gauges !== drawn) {
     drawn = gauges;
     drawTilt($("tilt-gauge"), m.tilt_homed ? m.tilt_deg : null, m.tilt_min_deg, m.tilt_max_deg);
-    drawYaw($("yaw-gauge"), m.yaw_homed ? m.yaw_deg : null);
+    drawYaw($("yaw-gauge"), m.yaw_homed ? m.yaw_deg : null, m.screw_x_yaw_deg);
   }
 
   for (const id of STEP_GROUPS) {
     setChecked($(id), "data-deg", stepDeg);
-    for (const button of $(id).children) button.disabled = !mine;
+    for (const button of $(id).children) enable(button, mine ? "" : "Another device has control. Tap Take control first.");
   }
-  for (const id of ["module-home", "module-home-tilt", "module-home-yaw"]) $(id).disabled = !can;
+  $("module-home").dataset.axes = manual ? "yaw" : "tilt,yaw";
+  for (const id of ["module-home", "module-home-tilt", "module-home-yaw"]) enable($(id), can);
   for (const button of document.querySelectorAll("[data-action=module-jog]")) {
     const tiltTooFar = button.dataset.axis === "tilt" && !m.tilt_homed && stepDeg > UNHOMED_TILT_JOG_DEG;
-    button.disabled = !can || tiltTooFar;
+    const limit = `Until tilt is homed it turns at most ${UNHOMED_TILT_JOG_DEG}° at a time: pick a smaller step.`;
+    enable(button, can || (tiltTooFar ? limit : ""));
   }
-  $("pose-go").disabled = !can || !(m.tilt_homed || m.yaw_homed);
+  const goNeeds = manual ? { yaw: true } : m.tilt_homed || m.yaw_homed ? {} : { yaw: true };
+  enable($("pose-go"), why(ctx, goNeeds));
   for (const id of ["pose-tilt", "pose-yaw"]) $(id).disabled = !mine;
   for (const button of document.querySelectorAll("[data-action=pose]")) {
-    const needs = button.dataset.tilt !== undefined ? m.tilt_homed : m.yaw_homed;
-    button.disabled = !can || !needs;
+    const needs = button.dataset.tilt !== undefined ? { tilt: true } : { yaw: true };
+    enable(button, why(ctx, needs));
   }
   setText(
     "tilt-range-note",
@@ -104,9 +127,8 @@ export function render({ s, mine, busy }) {
 
   renderSystemCard(m);
   renderTestCard(m);
-  $("calibrate-yaw").disabled = !can;
-  const liveView = s.camera.connected && s.camera.live_view;
-  $("calibrate-tilt").disabled = !can || !(m.tilt_homed && m.yaw_homed && s.rail.homed && liveView);
+  enable($("calibrate-yaw"), can);
+  enable($("calibrate-tilt"), why(ctx, { rail: true, yaw: true, tilt: true, liveView: true }));
 }
 
 function renderSystemCard(m) {
@@ -201,7 +223,7 @@ function drawTilt(svg, deg, minDeg, maxDeg) {
 }
 
 /** Top view, camera on the right: the head's two centring screws and its spring. */
-function drawYaw(svg, deg) {
+function drawYaw(svg, deg, screwX) {
   const c = 60;
   const r = 40;
   const parts = [svgEl("circle", { cx: c, cy: c, r, class: "gauge-ring" }), svgEl("path", { d: lensPath(), class: "gauge-lens" })];
@@ -215,9 +237,9 @@ function drawYaw(svg, deg) {
         svgEl("text", { x: tx, y: ty, class: "gauge-label" }, label),
       );
     };
-    mark(0, "X", "gauge-screw");
-    mark(90, "Y", "gauge-screw");
-    mark(225, "S", "gauge-spring");
+    mark(screwX, "X", "gauge-screw");
+    mark(screwX + 90, "Y", "gauge-screw");
+    mark(screwX + 225, "S", "gauge-spring");
   }
   parts.push(svgEl("circle", { cx: c, cy: c, r: 3.5, class: "gauge-hub" }));
   svg.replaceChildren(...parts);
