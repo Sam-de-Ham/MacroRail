@@ -6,6 +6,7 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,7 @@ from .conftest import SPEEDUP, idle, until
 CONFIG = ModuleConfig(port="sim")
 GEOMETRY = Geometry(
     half_steps_per_turn=NOMINAL_HALF_STEPS_PER_TURN,
+    tilt_half_steps_per_turn=NOMINAL_HALF_STEPS_PER_TURN,
     tilt_switch_deg=97.0,
     tilt_min_deg=-33.0,
     tilt_max_deg=90.0,
@@ -224,6 +226,23 @@ def test_port_finder_remembers_the_other_controller() -> None:
     probed.clear()
     assert finder.find("module") == "/b"
     assert probed == ["/b"]  # the rail's port isn't opened again
+
+
+def test_port_finder_follows_a_controller_that_moved() -> None:
+    # The rail was on /b and the module on /a; both were replugged and swapped ports.
+    roles = {"/a": "module", "/b": "rail"}
+    finder = PortFinder(candidates=lambda: ["/a", "/b"], probe_port=lambda port: roles[port])
+    assert finder.find("module") == "/a"
+    assert finder.find("rail") == "/b"
+    roles = {"/a": "rail", "/b": "module"}
+    assert finder.find("module") == "/b"  # it meets the rail on /a on the way...
+    assert finder.find("rail") == "/a"  # ...and the rail's search no longer skips /a
+
+
+def test_yaw_calibration_leaves_tilt_alone() -> None:
+    measured = replace(GEOMETRY, half_steps_per_turn=4083.0)
+    assert measured.tilt_steps(0.0) == GEOMETRY.tilt_steps(0.0)
+    assert measured.yaw_steps(90.0) != GEOMETRY.yaw_steps(90.0)
 
 
 def test_port_finder_respects_a_fixed_port() -> None:

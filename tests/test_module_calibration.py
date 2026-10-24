@@ -72,7 +72,26 @@ async def test_tilt_calibration_finds_the_switch_angle(machine: Machine) -> None
     machine.calibrate_tilt()
     await idle(machine, timeout=120)
     calibration = machine.module_settings
-    assert calibration.tilt_calibrated, machine.log.entries()[-1]
+    assert calibration.tilt_calibrated, machine.log.entries[-1]
     # Within the gearbox backlash (homing approaches the switch the other way round).
     assert calibration.tilt_switch_deg == pytest.approx(97.0, abs=0.5)
     assert abs(machine.module.tilt_deg()) < 0.2  # and it ends level
+
+
+async def test_failed_tilt_calibration_changes_nothing(machine: Machine) -> None:
+    await until(lambda: machine.module.state.connected and machine.camera.state.connected)
+    machine.home()
+    await idle(machine, timeout=30)
+    machine.home_module(("tilt", "yaw"))
+    await idle(machine, timeout=30)
+    start = round(10 * machine.axis.steps_per_mm)  # nowhere near the specimen's focus
+    machine.set_point("start", start)
+    machine.go_to("start")
+    await idle(machine, timeout=30)
+
+    machine.calibrate_tilt()
+    await idle(machine, timeout=120)
+    assert not machine.module_settings.tilt_calibrated
+    assert "Focus on it" in machine.log.entries[-1].message
+    assert machine.axis.state.position == start  # back where the user focused
+    assert abs(machine.module.tilt_deg()) < 0.2

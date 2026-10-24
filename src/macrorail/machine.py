@@ -11,10 +11,14 @@ import asyncio
 import contextlib
 import logging
 import math
+import shutil
 import time
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Literal
+
+from pydantic import ValidationError
 
 from . import __version__
 from .camera.base import Camera, CameraError
@@ -22,25 +26,53 @@ from .camera.liveview import LiveView
 from .config import Config
 from .control import ControlLease
 from .diagnostics import Diagnostics
-from .focus.analysis import AnalysisError
+from .focus.analysis import AnalysisError, RangeResult
 from .focus.scan import FocusScanner
 from .focus.scan import Motion as ScanMotion
+from .focus.sharpness import detail_centre
 from .log import ActivityLog
 from .motion.base import Axis, AxisError, MotionInterrupted
 from .motion.module import Geometry, Rotary, ScanModule
 from .optics import Optics
 from .review.store import ReviewError, ReviewStore
 from .scan import calibrate
-from .scan.measure import row_focus
+from .scan.centring import (
+    CentringError,
+    CentringFit,
+    Observation,
+    fit,
+    height_error,
+    screw_facing_yaw,
+    screw_turns,
+)
+from .scan.library import ScanLibrary
+from .scan.measure import best_focus, row_focus
+from .scan.plan import Pose, ScanPlanError, estimate, plan_poses
 from .scan.pose import Poser
-from .settings import ModuleSettings, ModuleStore, Settings, SettingsStore
+from .scan.runner import ScanRun, ScanSteps
+from .settings import (
+    NOMINAL_HALF_STEPS_PER_TURN,
+    ModuleSettings,
+    ModuleStore,
+    ScanPlanStore,
+    Settings,
+    SettingsStore,
+)
 from .stack.plan import PlanError, StackPlan, estimate_seconds, plan_count, plan_range
 from .stack.runner import StackRun
 
 log = logging.getLogger(__name__)
 
 Activity = Literal[
-    "idle", "homing", "moving", "previewing", "stacking", "capturing", "scanning", "rotating"
+    "idle",
+    "homing",
+    "moving",
+    "previewing",
+    "stacking",
+    "capturing",
+    "scanning",
+    "rotating",
+    "scanning_3d",
 ]
 Point = Literal["start", "end"]
 
@@ -50,6 +82,13 @@ MAX_UNHOMED_TILT_JOG_DEG = 10.0  # before homing the module can't tell where the
 NEEDLE_SPAN_MM = 2.0  # focus sweep around the needle when levelling tilt
 NEEDLE_TOP_ROWS = (0, 1)  # tile rows (of 6) that see the needle's top and bottom
 NEEDLE_BOTTOM_ROWS = (4, 5)
+CENTRING_YAWS = (0.0, 90.0, 180.0, 270.0)
+HEIGHT_TILT_DEG = 20.0  # inside the range even before tilt is calibrated
+HEIGHT_OK_MM = 0.1
+MAX_SWEEP_FRAMES = 40  # centring sweeps: coarse is enough, the image gives the precision
+RANGE_SCAN_S = 45.0  # a pose's focus scan, about, for the estimate
+TURN_S = 6.0  # turning to the next pose and settling, about
+DISK_MARGIN = 1.2  # free space wanted on the Pi beyond a scan's estimate
 SIM_BACKLASH_MM = 0.04  # a realistic lead-screw backlash for the simulator
 DEFAULT_CAPTURE_S = 1.5
 IDLE_CHECK_S = 1.0
@@ -69,6 +108,7 @@ class Machine:
         activity_log: ActivityLog,
         module: Callable[[Callable[[], Geometry]], ScanModule],
         module_store: ModuleStore,
+        plan_store: ScanPlanStore,
     ) -> None:
         self.config = config
         self.axis = axis
@@ -78,12 +118,18 @@ class Machine:
         self.settings = store.load()
         self._module_store = module_store
         self.module_settings = module_store.load()  # the scan module's calibration
+        self.centring: list[CentringFit] = []  # this specimen's rounds, newest last
+        self.height_mm: float | None = None  # this specimen's height above the tilt axis
+        self._plan_store = plan_store
+        self.scan_plan = plan_store.load()
+        self.scans = ScanLibrary(config.data_dir / "scans")
+        self.scan: ScanRun | None = None  # the running 3D scan, or the last one
+        self._scan_center: int | None = None  # where the last pose's subject was in focus
+        self._unfinished = self._find_unfinished()
         self.activity: Activity = "idle"
         self.stack: StackRun | None = None
         self.control = ControlLease(self.changed)
-        self.live_view = LiveView(
-            camera, config.camera.liveview_max_fps, paused=lambda: self.activity == "stacking"
-        )
+        self.live_view = LiveView(camera, config.camera.liveview_max_fps, paused=self._shooting)
         self.scanner = FocusScanner(axis, camera, self._approach, self._check_stop, self.changed)
         self.review = ReviewStore(config.data_dir / "stacks", activity_log, self.changed)
         self.diagnostics = Diagnostics(
@@ -135,6 +181,7 @@ class Machine:
                 "max": self.axis.max_position,
             },
             "module": self._module_snapshot(),
+            "scan3d": self._scan_snapshot(),
             "camera": asdict(camera),
             "live_view": {
                 "available": camera.connected and camera.live_view,
@@ -265,6 +312,13 @@ class Machine:
     async def stop(self) -> None:
         if self.activity == "stacking" and self.stack is not None:
             await self.stack.stop()
+        elif self.activity == "scanning_3d" and self.scan is not None and self.scan.shooting:
+            await self.scan.stop()  # the pose's stack stops and returns to its start
+        elif self.activity == "scanning_3d" and self.scan is not None:
+            self._stop_requested = True
+            await asyncio.gather(
+                self.scan.stop(), _quietly(self.axis.stop()), _quietly(self.module.stop())
+            )
         elif self.busy:
             self._stop_requested = True
             # Both at once: the module's stop mustn't wait on a slow rail link.
@@ -314,13 +368,337 @@ class Machine:
     def calibrate_tilt(self) -> None:
         """Measure where the tilt switch trips against level, from a straight needle on the
         holder, in focus at the current rail position."""
-        self._require_module()
-        self._require_homed()
-        self._require_live_view()
-        state = self.module.state
-        if not (state.tilt_homed and state.yaw_homed):
-            raise OperationError("Home the scan module first.")
+        self._require_rig()
         self._start("scanning", self._calibrate_tilt())
+
+    def measure_centring(self) -> None:
+        """Look at the specimen from four yaws and work out how far it sits off the yaw axis.
+        It should be in focus (roughly) at the current rail position."""
+        self._require_rig()
+        self._start("scanning", self._measure_centring())
+
+    def measure_height(self) -> None:
+        """How far the specimen sits above or below the tilt axis, from its focus at two
+        tilts. Needs the rail's direction, which the first centring round learns."""
+        self._require_rig()
+        if self.module_settings.rail_sign == 0:
+            raise OperationError("Centre with yaw first: that measures which way the rail moves.")
+        self._start("scanning", self._measure_height())
+
+    def new_specimen(self) -> None:
+        """Forget the last specimen's centring rounds and height."""
+        self._require_idle()
+        self.centring.clear()
+        self.height_mm = None
+        self.changed()
+
+    # -- 3D scans -----------------------------------------------------------------------------
+
+    def update_scan_plan(self, patch: dict[str, Any]) -> None:
+        if self.activity == "scanning_3d":
+            raise OperationError("The plan can't change while a scan runs.")
+        try:
+            self.scan_plan = self.scan_plan.merged(patch)
+        except ValueError as exc:
+            raise OperationError(f"Invalid scan plan: {exc}") from None
+        self._plan_store.save(self.scan_plan)
+        self.changed()
+
+    def start_scan(self, test: bool = False) -> None:
+        """Scan every pose of the plan, or (`test`) just the current pose, as a trial."""
+        self._require_idle()
+        if test:
+            state = self.module.state
+            if not (state.tilt_homed and state.yaw_homed):
+                raise OperationError("Home the scan module first.")
+            tilt = round(self.module.tilt_deg(), 1)
+            low, high = self.poser.tilt_range()
+            if not low <= tilt <= high:
+                raise OperationError(f"Turn to a tilt from {low:g}° to {high:g}° first.")
+            poses = [Pose(0, tilt, round(self.module.yaw_deg() % 360, 1))]
+        else:
+            poses = self._scan_poses()
+        blocking = [c for c in self._preflight(poses) if c["blocking"] and not c["ok"]]
+        if blocking:
+            raise OperationError(blocking[0]["text"])
+        started = time.time()
+        scan_id = self.scans.new_id(started)
+        plan = {
+            **self.scan_plan.model_dump(mode="json"),
+            "test": test,
+            "step": self.settings.stack.step,
+        }
+        self._begin_scan(
+            ScanRun(
+                scan_id,
+                self.scans.folder(scan_id),
+                poses,
+                plan,
+                self._scan_steps(scan_id),
+                self.log,
+                self.changed,
+            ),
+            rehome=not test,
+        )
+
+    def continue_scan(self, scan_id: str) -> None:
+        """Carry on with an unfinished scan (after a stop or a restart): the poses already done
+        are skipped. Yaw is homed again first, as at every scan's start."""
+        self._require_idle()
+        try:
+            record = self.scans.record(scan_id)
+        except KeyError:
+            record = None
+        if record is None:
+            raise OperationError("That scan's record can't be read.")
+        poses = [Pose(**p) for p in record["poses"]]
+        blocking = [c for c in self._preflight(poses) if c["blocking"] and not c["ok"]]
+        if blocking:
+            raise OperationError(blocking[0]["text"])
+        done = {
+            int(i): r for i, r in record.get("results", {}).items() if r.get("outcome") == "done"
+        }
+        run = ScanRun(
+            scan_id,
+            self.scans.folder(scan_id),
+            poses,
+            record["plan"],
+            self._scan_steps(scan_id),
+            self.log,
+            self.changed,
+            done=done,
+        )
+        run.started_at = record.get("started_at", run.started_at)
+        self._begin_scan(run, rehome=True)
+
+    def pause_scan(self) -> None:
+        if self.scan is None or not self.scan.active:
+            raise OperationError("No scan is running.")
+        self.scan.pause()
+
+    def resume_scan(self) -> None:
+        if self.scan is None or not self.scan.active:
+            raise OperationError("No scan is running.")
+        self.scan.resume()
+
+    def delete_scan(self, scan_id: str) -> None:
+        if self.scan is not None and self.scan.active and self.scan.id == scan_id:
+            raise OperationError("That scan is running.")
+        try:
+            stacks = self.scans.delete(scan_id)
+        except (KeyError, OSError) as exc:
+            raise OperationError(f"Could not delete the scan ({exc}).") from None
+        for stack_id in {*stacks, *self.review.stacks_of_scan(scan_id)}:
+            with contextlib.suppress(ReviewError, OSError):
+                self.review.delete(stack_id)
+        self._unfinished = self._find_unfinished()
+        self.changed()
+
+    def _begin_scan(self, run: ScanRun, rehome: bool) -> None:
+        self.scan = run
+        self._scan_center = None
+        self._start("scanning_3d", self._run_scan(run, rehome))
+
+    async def _run_scan(self, run: ScanRun, rehome: bool) -> None:
+        try:
+            await self._prepare_motion()
+            if rehome:
+                # Yaw only ever turns forwards during a scan; homing first starts its count
+                # from zero again, so it never runs out of range over many scans.
+                self.log.info("Homing yaw before the scan…")
+                await self.module.home_yaw()
+            await run.run(self._check_stop)
+        finally:
+            self.stack = None
+            self._unfinished = self._find_unfinished()
+
+    def _scan_steps(self, scan_id: str) -> ScanSteps:
+        async def go(pose: Pose) -> None:
+            self._check_stop()
+            await self.poser.go(pose.tilt_deg, pose.yaw_deg)
+            await asyncio.sleep(self.scan_plan.settle_s)
+
+        async def find_range() -> RangeResult:
+            center = (
+                self._scan_center if self._scan_center is not None else self.axis.state.position
+            )
+            span = self._steps(self.settings.scan.span_mm)
+            result = await self.scanner.find_range(
+                center, span, self._dof_steps(), self._scan_motion()
+            )
+            self._scan_center = (result.start + result.end) // 2
+            return result
+
+        def stack(found: RangeResult, pose: Pose, name: str) -> StackRun:
+            plan = plan_range(
+                found.start,
+                found.end,
+                self.settings.stack.step,
+                self.axis.min_position,
+                self.axis.max_position,
+            )
+            speed, accel = self._profile(self.settings.motion.stack_speed_mm_s)
+            self.stack = StackRun(
+                plan,
+                axis=self.axis,
+                camera=self.camera,
+                approach=self._approach,
+                speed=speed,
+                accel=accel,
+                settle_s=self.settings.stack.settle_s,
+                log=self.log,
+                on_change=self.changed,
+                store=self.review,
+                name=name,
+                download_previews=True,
+                tags={
+                    "scan": scan_id,
+                    "pose": pose.index,
+                    "tilt_deg": pose.tilt_deg,
+                    "yaw_deg": pose.yaw_deg,
+                },
+            )
+            return self.stack
+
+        return ScanSteps(
+            go=go, find_range=find_range, stack=stack, keep_frames=self.review.keep_frames
+        )
+
+    def _scan_poses(self) -> list[Pose]:
+        try:
+            return plan_poses(
+                list(self.scan_plan.tilts), self.scan_plan.yaw_step_deg, self.poser.tilt_range()
+            )
+        except ScanPlanError as exc:
+            raise OperationError(str(exc)) from None
+
+    def _shooting(self) -> bool:
+        """Whether a stack is shooting: live view is off then (the camera can't do both)."""
+        if self.activity == "stacking":
+            return True
+        return self.activity == "scanning_3d" and self.scan is not None and self.scan.shooting
+
+    def _shots_per_pose(self) -> int | None:
+        step = self.settings.stack.step
+        found = self.scanner.range
+        if found is not None:
+            return math.ceil(abs(found.end - found.start) / step) + 1
+        try:
+            return self._planned().count
+        except PlanError:
+            return None
+
+    def _scan_estimate(self, poses: int) -> dict[str, Any] | None:
+        shots = self._shots_per_pose()
+        if shots is None:
+            return None
+        last = self.stack.shots if self.stack else []
+        capture_s = sum(s.capture_s for s in last) / len(last) if last else DEFAULT_CAPTURE_S
+        step_s = (
+            self.settings.stack.step
+            / self.axis.steps_per_mm
+            / self.settings.motion.stack_speed_mm_s
+        )
+        per_pose = (
+            RANGE_SCAN_S
+            + TURN_S
+            + self.scan_plan.settle_s
+            + shots * (capture_s + self.settings.stack.settle_s + step_s)
+        )
+        e = estimate(poses, shots, per_pose, self.scan_plan.keep_every)
+        return {
+            "shots_per_pose": shots,
+            "shots": e.shots,
+            "seconds": round(e.seconds),
+            "pi_bytes": e.pi_bytes,
+            "card_bytes": e.card_bytes,
+        }
+
+    def _preflight(self, poses: list[Pose]) -> list[dict[str, Any]]:
+        """What a scan needs, checked before it starts: blocking problems stop it, the rest
+        are reminders."""
+        rail, module, camera = self.axis.state, self.module.state, self.camera.state
+        checks = [
+            (rail.homed, True, "Rail homed", "Home the rail first."),
+            (
+                module.tilt_homed and module.yaw_homed,
+                True,
+                "Scan module homed",
+                "Home the scan module first.",
+            ),
+            (camera.connected, True, "Camera connected", camera.problem or "Connect the camera."),
+            (
+                camera.connected and camera.live_view,
+                True,
+                "Live view (for the focus scans)",
+                "The focus scans need live view.",
+            ),
+        ]
+        last = self.centring[-1] if self.centring else None
+        checks.append(
+            (
+                bool(last and last.centred),
+                False,
+                "Specimen centred",
+                "Not centred yet: see the Centre tab.",
+            )
+        )
+        e = self._scan_estimate(len(poses))
+        if e is not None:
+            free = shutil.disk_usage(
+                self.config.data_dir if self.config.data_dir.exists() else Path.home()
+            ).free
+            room = free >= e["pi_bytes"] * DISK_MARGIN
+            checks.append(
+                (
+                    room,
+                    True,
+                    "Room on the Pi",
+                    f"The Pi needs about {e['pi_bytes'] / 1e9:.1f} GB free for this scan.",
+                )
+            )
+            long = e["seconds"] > 3600
+            checks.append(
+                (
+                    not long,
+                    False,
+                    "Camera power",
+                    "A long scan: run the camera from a dummy battery.",
+                )
+            )
+        return [
+            {"ok": ok, "blocking": blocking, "text": label if ok else problem}
+            for ok, blocking, label, problem in checks
+        ]
+
+    def _find_unfinished(self) -> list[dict[str, Any]]:
+        return [
+            s
+            for s in self.scans.scans()
+            if s["outcome"] != "done" and not s["test"] and s["done"] < s["total"]
+        ][:5]
+
+    def _scan_snapshot(self) -> dict[str, Any]:
+        try:
+            poses = plan_poses(
+                list(self.scan_plan.tilts), self.scan_plan.yaw_step_deg, self.poser.tilt_range()
+            )
+            error = None
+        except ScanPlanError as exc:
+            poses, error = [], str(exc)
+        return {
+            "plan": self.scan_plan.model_dump(mode="json"),
+            "poses": [[p.tilt_deg, p.yaw_deg] for p in poses],
+            "error": error,
+            "estimate": self._scan_estimate(len(poses)) if poses else None,
+            "preflight": self._preflight(poses) if poses else [],
+            "run": self.scan.snapshot() if self.scan else None,
+            "unfinished": [
+                s
+                for s in self._unfinished
+                if not (self.scan and self.scan.active and self.scan.id == s["id"])
+            ],
+        }
 
     async def set_camera_setting(self, key: str, value: str) -> None:
         self._require_camera()
@@ -542,7 +920,7 @@ class Machine:
             found, calibrate.YAW_TURNS, previous.half_steps_per_turn
         )
         await self._save_module(
-            previous.model_copy(update={"half_steps_per_turn": turn, "yaw_calibrated": True})
+            _calibrated(previous, half_steps_per_turn=turn, yaw_calibrated=True)
         )
         # The second homing set yaw 0 on the magnet again, so poses need nothing redone.
         self.log.info(
@@ -556,32 +934,145 @@ class Machine:
         probe = calibrate.TILT_PROBE_DEG
         dof = self._dof_steps()
         span = self._steps(NEEDLE_SPAN_MM)
-        center = self.axis.state.position
+        start = center = self.axis.state.position
         rises: dict[float, list[float]] = {probe: [], -probe: []}
-        for tilt in (probe, -probe):
-            for yaw in (0.0, 180.0):
-                await self.poser.go(tilt, yaw)
-                samples = await self.scanner.sweep(
-                    "tilt level", center, span, dof, self._scan_motion()
-                )
-                top = row_focus(samples, NEEDLE_TOP_ROWS)
-                bottom = row_focus(samples, NEEDLE_BOTTOM_ROWS)
-                rises[tilt].append(top - bottom)
-                center = round((top + bottom) / 2)  # follow the needle if it is off the axis
-        up, down = (sum(r) / len(r) for r in (rises[probe], rises[-probe]))
-        error = calibrate.tilt_error_deg(up, down, probe, least=2 * dof)
         previous = self.module_settings
-        switch = previous.tilt_switch_deg + error
-        await self._save_module(
-            previous.model_copy(
-                update={"tilt_switch_deg": round(switch, 2), "tilt_calibrated": True}
+        try:
+            for tilt in (probe, -probe):
+                for yaw in (0.0, 180.0):
+                    await self.poser.go(tilt, yaw)
+                    samples = await self.scanner.sweep(
+                        "tilt level", center, span, dof, self._scan_motion()
+                    )
+                    top = row_focus(samples, NEEDLE_TOP_ROWS)
+                    bottom = row_focus(samples, NEEDLE_BOTTOM_ROWS)
+                    rises[tilt].append(top - bottom)
+                    center = round((top + bottom) / 2)  # follow the needle off the axis
+            up, down = (sum(r) / len(r) for r in (rises[probe], rises[-probe]))
+            error = calibrate.tilt_error_deg(up, down, probe, least=2 * dof)
+            switch = previous.tilt_switch_deg + error
+            calibration = _calibrated(
+                previous, tilt_switch_deg=round(switch, 2), tilt_calibrated=True
             )
-        )
+        except AnalysisError:
+            await self._recover(start, (0.0, 0.0))
+            raise
+        await self._save_module(calibration)
         await self.poser.go(0.0, None)
         self.log.info(
             f"Tilt calibrated: the switch trips at {switch:.2f}° (was "
             f"{previous.tilt_switch_deg:.2f}°). Tilt is now level."
         )
+
+    async def _focus_here(self, center: int, task: str) -> int:
+        """Sweep around `center` and arrive (from below) where the whole frame is sharpest."""
+        span = self._steps(self.settings.scan.span_mm)
+        step = max(self._dof_steps(), span // MAX_SWEEP_FRAMES)
+        samples = await self.scanner.sweep(task, center, span, step, self._scan_motion())
+        focus = round(best_focus(samples))
+        await self._approach(focus, 1)
+        return focus
+
+    async def _measure_centring(self) -> None:
+        await self._prepare_motion()
+        n = len(self.centring) + 1
+        self.log.info(f"Centring, round {n}: looking from four sides…")
+        start = center = self.axis.state.position
+        observations = []
+        try:
+            for yaw in CENTRING_YAWS:
+                await self.poser.go(0.0, yaw)
+                center = await self._focus_here(center, "centring")
+                frame = await self.camera.preview()
+                detail = await asyncio.to_thread(detail_centre, frame)
+                if detail is None:
+                    raise CentringError("The specimen shows no detail. Focus on it first.")
+                sideways = (detail.u / detail.width - 0.5) * self._live_field_mm()
+                observations.append(Observation(yaw, sideways, center / self.axis.steps_per_mm))
+            result = fit(observations)
+        except AnalysisError:
+            await self._recover(start, (0.0, 0.0))
+            raise
+        self.centring.append(result)
+        update: dict[str, object] = {
+            "axis_image_x": 0.5 + result.axis_sideways_mm / self._live_field_mm(),
+        }
+        if result.rail_sign:
+            update["rail_sign"] = result.rail_sign
+        self._save_module_quietly(_calibrated(self.module_settings, **update))
+        # Back at yaw 0 and in focus, ready for the screws to be turned.
+        await self.poser.go(0.0, 0.0)
+        await self._approach(round(observations[0].focus_mm * self.axis.steps_per_mm), 1)
+        if result.centred:
+            self.log.info(f"Centred: {result.distance_mm * 1000:.0f} µm off the yaw axis.")
+        else:
+            advice = ", ".join(
+                f"screw {t.screw.upper()} {abs(t.turns):g} turn {'in' if t.turns > 0 else 'out'}"
+                for t in screw_turns(result)
+            )
+            self.log.info(f"{result.distance_mm:.2f} mm off the yaw axis: turn {advice}.")
+
+    async def _recover(self, rail: int, pose: tuple[float, float]) -> None:
+        """After a measurement found nothing: back to where the user focused, as every scan
+        does, and the module to `pose`. A failure here mustn't hide the original error."""
+        with contextlib.suppress(AxisError):
+            await self._approach(rail, 1)
+            await self.poser.go(*pose)
+
+    def _live_field_mm(self) -> float:
+        """How wide live view's field is at the specimen."""
+        return self.config.camera.sensor_width_mm / self.settings.optics.magnification
+
+    async def _measure_height(self) -> None:
+        await self._prepare_motion()
+        self.log.info("Measuring the height: focusing at two tilts…")
+        start = center = self.axis.state.position
+        focus: dict[float, float] = {}
+        try:
+            for tilt in (HEIGHT_TILT_DEG, -HEIGHT_TILT_DEG):
+                await self.poser.go(tilt, 0.0)
+                center = await self._focus_here(center, "height")
+                focus[tilt] = center / self.axis.steps_per_mm
+            height = height_error(focus, self.module_settings.rail_sign)
+        except AnalysisError:
+            await self._recover(start, (0.0, 0.0))
+            raise
+        await self.poser.go(0.0, 0.0)
+        self.height_mm = height
+        if abs(height) <= HEIGHT_OK_MM:
+            self.log.info(f"Height: {height * 1000:+.0f} µm from the tilt axis. Good.")
+        else:
+            way = "lower" if height > 0 else "raise"
+            self.log.info(
+                f"Height: {height:+.2f} mm from the tilt axis: {way} the pin by that much."
+            )
+        self.changed()
+
+    def _centring_snapshot(self) -> dict[str, Any]:
+        rounds = [
+            {
+                "offset_x_mm": round(r.offset_x_mm, 4),
+                "offset_y_mm": round(r.offset_y_mm, 4),
+                "distance_mm": round(r.distance_mm, 4),
+                "centred": r.centred,
+                "sideways_rms_mm": round(r.sideways_rms_mm, 4),
+                "depth_agreement_mm": round(r.depth_agreement_mm, 4),
+            }
+            for r in self.centring
+        ]
+        last = self.centring[-1] if self.centring else None
+        return {
+            "rounds": rounds,
+            "turns": [
+                {"screw": t.screw, "turns": t.turns, "facing_yaw": screw_facing_yaw(t.screw)}
+                for t in (screw_turns(last) if last else [])
+            ],
+            "height_mm": None if self.height_mm is None else round(self.height_mm, 4),
+            "height_ok_mm": HEIGHT_OK_MM,
+            "rail_sign": self.module_settings.rail_sign,
+            "axis_image_x": self.module_settings.axis_image_x,
+            "task": self.scanner.task,
+        }
 
     async def _run_stack(self, run: StackRun) -> None:
         await self._prepare_motion()
@@ -636,6 +1127,15 @@ class Machine:
 
     # -- guards -------------------------------------------------------------------------------
 
+    def _require_rig(self) -> None:
+        """Rail homed, live view, module homed: what the 3D measurements need."""
+        self._require_module()
+        self._require_homed()
+        self._require_live_view()
+        state = self.module.state
+        if not (state.tilt_homed and state.yaw_homed):
+            raise OperationError("Home the scan module first.")
+
     def _require_module(self) -> None:
         state = self.module.state
         if not state.connected:
@@ -646,14 +1146,23 @@ class Machine:
         low = c.tilt_min_deg
         if not calibration.tilt_calibrated:
             low = max(low, c.tilt_min_uncalibrated_deg)
+        clearance = c.tilt_homing_clearance_deg
         return Geometry(
             half_steps_per_turn=calibration.half_steps_per_turn,
+            tilt_half_steps_per_turn=NOMINAL_HALF_STEPS_PER_TURN,
             tilt_switch_deg=calibration.tilt_switch_deg,
             tilt_min_deg=low,
-            tilt_max_deg=c.tilt_max_deg,
+            # Never closer to the switch than homing parks.
+            tilt_max_deg=min(c.tilt_max_deg, calibration.tilt_switch_deg - clearance),
             takeup_deg=c.takeup_deg,
             switch_clearance_deg=c.tilt_homing_clearance_deg,
         )
+
+    def _save_module_quietly(self, calibration: ModuleSettings) -> None:
+        """Store learnt facts that don't change the controller's limits."""
+        self.module_settings = calibration
+        self._module_store.save(calibration)
+        self.changed()
 
     async def _save_module(self, calibration: ModuleSettings) -> None:
         """Store a new calibration and send the controller its new tilt limits. Only called
@@ -673,6 +1182,7 @@ class Machine:
             "tilt_min_deg": geometry.tilt_min_deg,
             "tilt_max_deg": geometry.tilt_max_deg,
             "calibration": self.module_settings.model_dump(),
+            "centring": self._centring_snapshot(),
             "link": self.module.diagnostics(),
         }
 
@@ -716,6 +1226,18 @@ class Machine:
         self.settings = settings
         self._store.save(settings)
         self.changed()
+
+
+def _calibrated(previous: ModuleSettings, **changes: object) -> ModuleSettings:
+    """`previous` with a calibration's results, validated: a result outside the allowed
+    ranges would otherwise be stored and then make the whole file unreadable."""
+    try:
+        return ModuleSettings.model_validate({**previous.model_dump(), **changes})
+    except ValidationError:
+        raise AnalysisError(
+            f"The calibration gave an implausible result ({changes}). Check the setup and "
+            "measure again."
+        ) from None
 
 
 async def _quietly(stop: Awaitable[None]) -> None:
@@ -777,5 +1299,6 @@ def build_machine(config: Config, *, sim: bool = False, sim_speedup: float = 1.0
             return ScanModule(config.module, port, geometry, activity_log, changed)
 
     module_store = ModuleStore(config.data_dir / "module.json")
-    machine = Machine(config, axis, camera, store, activity_log, module, module_store)
+    plan_store = ScanPlanStore(config.data_dir / "scan-plan.json")
+    machine = Machine(config, axis, camera, store, activity_log, module, module_store, plan_store)
     return machine

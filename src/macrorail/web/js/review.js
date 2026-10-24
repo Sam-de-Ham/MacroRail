@@ -1,6 +1,7 @@
 // The Review tab: finished stacks, each with its quick preview stack, its depth map (flat in
-// false colour, or as a 3D relief) and a frame scrubber.
-// The list is fetched when the server's review revision changes (pushed in the state).
+// false colour, or as a 3D relief) and a frame scrubber. In the 3D workspace it lists scans
+// instead: a scan shows its poses as thumbnails, and each pose opens in the same viewer.
+// Lists are fetched when the server's review revision changes (pushed in the state).
 
 import { getJson, post, remove } from "./api.js";
 import { $, el, setChecked, setText } from "./dom.js";
@@ -11,6 +12,10 @@ import { showToast } from "./toast.js";
 let stacks = [];
 let loadedRevision = -1;
 let loading = false;
+let scans = [];
+let scansKey = null; // what the scan list was loaded for
+let scan = null; // the open scan: { id, record, stacks }
+let scanKey = null;
 let selected = null; // stack id shown in the viewer
 let mode = "preview"; // or "depth", "relief", "frames"
 let frame = 0; // index into the selected stack's frames
@@ -19,6 +24,7 @@ let reliefHeight = readPref("reliefHeight", 0.3);
 let reliefFlipped = readPref("reliefFlipped", false);
 
 const OUTCOME = { done: "Complete", stopped: "Stopped", failed: "Failed" };
+const SCAN_OUTCOME = { ...OUTCOME, running: "Running", pausing: "Running", paused: "Paused", stopping: "Stopping" };
 
 export const actions = {
   "open-stack": (button, app) => {
@@ -31,6 +37,29 @@ export const actions = {
   },
   "close-viewer": (_el, app) => {
     selected = null;
+    app.render();
+  },
+  "open-scan": (button, app) => {
+    scan = { id: button.dataset.id, record: null, stacks: [] };
+    scanKey = null;
+    app.render();
+  },
+  "close-scan": (_el, app) => {
+    scan = null;
+    app.render();
+  },
+  "open-pose": (button, app) => {
+    selected = button.dataset.id;
+    const stack = scan?.stacks.find((x) => x.id === selected);
+    mode = stack?.preview ? "preview" : "frames";
+    frame = 0;
+    app.render();
+  },
+  "delete-scan": async (_el, app) => {
+    if (!scan || !confirm("Delete this scan and all its poses' previews from the Pi? The camera's own files are kept.")) return;
+    await remove(`scans/${scan.id}`);
+    scan = null;
+    scansKey = null;
     app.render();
   },
   "viewer-mode": (button, app) => {
@@ -69,9 +98,115 @@ let lastCtx = null;
 export function render(ctx) {
   lastCtx = ctx;
   const revision = ctx.s.review.revision;
-  if (ctx.tab === "review" && revision !== loadedRevision && !loading) load(revision, ctx);
-  renderList();
+  if (ctx.workspace === "3d") {
+    // Scans change as their poses finish: each pose's stack bumps the revision.
+    const run = ctx.s.scan3d.run;
+    const key = `${revision}:${run ? `${run.id}:${run.done}:${run.phase}` : ""}`;
+    if (ctx.tab === "review" && !loading) {
+      if (key !== scansKey) loadScans(key, ctx);
+      else if (scan && key !== scanKey) loadScan(key, ctx);
+    }
+    renderScanList();
+    renderScanView(ctx);
+  } else {
+    if (ctx.tab === "review" && revision !== loadedRevision && !loading) load(revision, ctx);
+    renderList();
+  }
   renderViewer(ctx);
+}
+
+async function loadScans(key, ctx) {
+  loading = true;
+  try {
+    scans = await getJson("scans");
+    scansKey = key;
+    if (scan && !scans.some((x) => x.id === scan.id)) scan = null;
+  } catch (error) {
+    showToast(`Could not load scans: ${error.message}`, "error");
+  } finally {
+    loading = false;
+    ctx.render();
+  }
+}
+
+async function loadScan(key, ctx) {
+  loading = true;
+  const id = scan.id;
+  try {
+    const [record, poseStacks] = await Promise.all([getJson(`scans/${id}`), getJson(`scans/${id}/stacks`)]);
+    if (scan?.id === id) scan = { id, record, stacks: poseStacks };
+    scanKey = key;
+  } catch (error) {
+    showToast(`Could not load the scan: ${error.message}`, "error");
+    scan = null;
+  } finally {
+    loading = false;
+    ctx.render();
+  }
+}
+
+function scanTitle(x) {
+  return (x.name || x.plan?.name || "Untitled scan") + (x.test || x.plan?.test ? " (test pose)" : "");
+}
+
+function renderScanList() {
+  const list = $("scan-list");
+  const key = JSON.stringify(scans);
+  if (list.dataset.key !== key) {
+    list.dataset.key = key;
+    list.replaceChildren(
+      ...scans.map((x) =>
+        el(
+          "li",
+          {},
+          el(
+            "button",
+            { class: "stack-item no-image", "data-action": "open-scan", "data-id": x.id },
+            el("span", { class: "stack-text" }, el("strong", {}, scanTitle(x)), el("span", { class: "muted small-text" }, when(x)), el("span", { class: "muted small-text" }, `${x.done} of ${x.total} poses`)),
+            el("span", { class: `badge ${x.outcome === "done" ? "ok" : ""}` }, SCAN_OUTCOME[x.outcome] || "Running"),
+          ),
+        ),
+      ),
+    );
+  }
+  $("scan-list-empty").hidden = scans.length > 0;
+  $("scan-list-card").hidden = Boolean(scan) || Boolean(selected);
+}
+
+function renderScanView(ctx) {
+  const card = $("scan-view");
+  card.hidden = !scan || Boolean(selected);
+  if (!scan || !scan.record) return;
+  const record = scan.record;
+  setText("scan-view-title", scanTitle(record));
+  const results = record.results || {};
+  const done = Object.values(results).filter((r) => r.outcome === "done").length;
+  setText("scan-view-meta", `${when(record)} · ${done} of ${record.poses.length} poses · ${SCAN_OUTCOME[record.outcome] || "Running"}`);
+  const byId = new Map(scan.stacks.map((x) => [x.id, x]));
+  const grid = $("pose-grid");
+  const key = JSON.stringify([results, scan.stacks.map((x) => [x.id, x.made_at])]);
+  if (grid.dataset.key !== key) {
+    grid.dataset.key = key;
+    grid.replaceChildren(
+      ...record.poses.map((pose) => {
+        const result = results[String(pose.index)];
+        const stack = result ? byId.get(result.stack) : null;
+        const src = stack ? thumb(stack) : null;
+        const image = src ? el("img", { src, alt: "", loading: "lazy" }) : el("span", { class: "no-thumb" }, result ? result.outcome : "–");
+        return el(
+          "button",
+          { class: "pose-tile", "data-action": "open-pose", "data-id": stack?.id || "", disabled: !stack, title: `Pose ${pose.index + 1}: tilt ${pose.tilt_deg}°, yaw ${pose.yaw_deg}°` },
+          image,
+          el("span", {}, `${pose.tilt_deg > 0 ? "+" : ""}${pose.tilt_deg}° · ${pose.yaw_deg}°`),
+        );
+      }),
+    );
+  }
+  const download = $("download-scan");
+  download.href = `/api/scans/${scan.id}/zip`;
+  download.hidden = done === 0;
+  const running = ctx.s.scan3d.run && ctx.s.scan3d.run.id === scan.id && ["running", "pausing", "paused", "stopping"].includes(ctx.s.scan3d.run.phase);
+  $("delete-scan").disabled = !ctx.mine || running;
 }
 
 async function load(revision, ctx) {
@@ -91,6 +226,7 @@ async function load(revision, ctx) {
 function title(stack) {
   return stack.name || "Untitled stack";
 }
+
 
 function when(stack) {
   const started = stack.started_at ? new Date(stack.started_at * 1000) : null;
@@ -133,12 +269,13 @@ function renderList() {
 function renderViewer(ctx) {
   if (!ctx) return;
   const { s, mine } = ctx;
-  const stack = stacks.find((x) => x.id === selected);
+  const pose = ctx.workspace === "3d";
+  const stack = (pose ? scan?.stacks || [] : stacks).find((x) => x.id === selected);
   $("review-viewer").hidden = !stack;
   $("review-list-card").hidden = Boolean(stack);
   if (!stack) return;
 
-  setText("viewer-title", title(stack));
+  setText("viewer-title", pose ? `${scanTitle(scan.record)}: ${title(stack)}` : title(stack));
   const previews = stack.frames.length ? `${stack.frames.length} previews` : "no previews downloaded";
   setText("viewer-meta", `${when(stack)} · ${stack.shots} shots · ${previews}`);
   setChecked($("viewer-mode"), "data-mode", mode);
@@ -192,6 +329,8 @@ function renderViewer(ctx) {
   button.disabled = !mine || stack.frames.length < 2 || s.review.building !== null;
   button.textContent = building ? "Making preview stack…" : stack.preview ? "Remake preview stack" : "Make preview stack";
   $("delete-stack").disabled = !mine || (s.stack?.id === stack.id && !["done", "stopped", "failed"].includes(s.stack.phase));
+  $("delete-stack").hidden = pose; // a pose goes with its scan
+  button.hidden = pose; // its preview used every frame; only some are kept, so don't remake it
 }
 
 function showRelief(stack, version) {

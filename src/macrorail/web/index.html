@@ -41,6 +41,7 @@
         <img id="liveview-image" alt="Live view from the camera">
         <figcaption class="liveview-message" id="liveview-message">Live view unavailable</figcaption>
         <div class="liveview-shot" id="liveview-shot" hidden></div>
+        <div class="liveview-axis" id="liveview-axis" hidden title="The yaw axis"></div>
         <div class="liveview-position" id="liveview-position">–</div>
         <div class="liveview-hint" id="liveview-hint">Tap to zoom</div>
         <button class="liveview-toggle" data-action="toggle-liveview" id="liveview-toggle"
@@ -56,8 +57,10 @@
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button role="tab" data-tab="shoot" data-only="2d">Shoot</button>
         <button role="tab" data-tab="rig" data-only="3d">Rig</button>
+        <button role="tab" data-tab="centre" data-only="3d">Centre</button>
+        <button role="tab" data-tab="scan" data-only="3d">Scan</button>
         <button role="tab" data-tab="camera">Camera</button>
-        <button role="tab" data-tab="review" data-only="2d">Review</button>
+        <button role="tab" data-tab="review">Review</button>
         <button role="tab" data-tab="system">System</button>
       </nav>
 
@@ -236,6 +239,79 @@
         </article>
       </div>
 
+      <div class="tab-panel" data-panel="centre" hidden>
+        <article class="card">
+          <header class="card-header">
+            <h2>Centring</h2>
+            <span class="badge" id="centring-badge">Not measured</span>
+          </header>
+          <ol class="steps-list muted small-text">
+            <li>Clamp the insect's pin in the holder, roughly in the middle of live view. Once measured, a dashed line there marks the yaw axis.</li>
+            <li>Home the rail and the module, and focus on the insect.</li>
+            <li>Measure: the module turns the insect to four sides and works out how far it sits off the yaw axis.</li>
+            <li>Turn the screws as shown, then measure again until it is centred.</li>
+          </ol>
+          <figure class="centring-plot">
+            <svg id="centring-plot" viewBox="-10 -16 220 220" role="img" aria-label="Offset from the yaw axis per round, screw X to the right, screw Y up"></svg>
+            <figcaption class="muted small-text" id="centring-caption"></figcaption>
+          </figure>
+          <div class="screw-turns" id="screw-turns"></div>
+          <div class="button-row">
+            <button class="button primary grow" data-action="measure-centring" id="measure-centring">Measure</button>
+            <button class="button small" data-action="new-specimen" id="new-specimen">New specimen</button>
+          </div>
+          <p class="muted small-text" id="centring-progress"></p>
+        </article>
+
+        <article class="card">
+          <header class="card-header">
+            <h2>Height</h2>
+            <span class="badge" id="height-badge">–</span>
+          </header>
+          <p class="muted small-text">Once centred, this tilts the insect 20° each way. If it sits above or below the tilt axis, its focus moves with the tilt; slide the pin in its clamp by the amount shown.</p>
+          <p id="height-text"></p>
+          <button class="button" data-action="measure-height" id="measure-height">Measure height</button>
+        </article>
+      </div>
+
+      <div class="tab-panel" data-panel="scan" hidden>
+        <article class="card">
+          <h2>Scan plan</h2>
+          <div class="fields">
+            <label class="field-group wide"><span>Tilt rings</span><span class="field-with-unit"><input class="field" type="text" data-plan="tilts" inputmode="text" aria-label="Tilt rings, in degrees, separated by commas"><span class="unit">°</span></span></label>
+            <label class="field-group"><span>Yaw step</span><span class="field-with-unit"><input class="field" type="number" step="1" data-plan="yaw_step_deg"><span class="unit">°</span></span></label>
+            <label class="field-group"><span>Settle after turning</span><span class="field-with-unit"><input class="field" type="number" step="0.5" data-plan="settle_s"><span class="unit">s</span></span></label>
+            <label class="field-group"><span>Keep one frame in</span><span class="field-with-unit"><input class="field" type="number" step="1" data-plan="keep_every"><span class="unit">frames</span></span></label>
+            <label class="field-group"><span>Name</span><input class="field" type="text" data-plan="name" maxlength="60" placeholder="Optional"></label>
+          </div>
+          <p class="muted small-text">Each pose gets its own focus scan and a stack with the step from the Shoot tab. Every frame goes into the pose's preview; the Pi keeps one in so many. The full-size files stay on the camera's card.</p>
+          <p class="warning-text small-text" id="scan-plan-error" hidden></p>
+          <svg class="pose-map" id="pose-map" role="img" aria-label="Poses: yaw across, tilt rings down"></svg>
+          <p class="small-text" id="scan-summary"></p>
+        </article>
+
+        <article class="card">
+          <h2>Run</h2>
+          <ul class="preflight" id="scan-preflight"></ul>
+          <div class="button-row" id="scan-idle-buttons">
+            <button class="button primary grow" data-action="scan-start" id="scan-start">Start scan</button>
+            <button class="button" data-action="scan-test" id="scan-test" title="Find the range and shoot one stack at the pose the module is at now">Test this pose</button>
+          </div>
+          <div class="button-row" id="scan-controls" hidden>
+            <button class="button grow" data-action="scan-pause" id="scan-pause">Pause</button>
+            <button class="button primary grow" data-action="scan-resume" id="scan-resume">Resume</button>
+          </div>
+          <div class="progress-bar" id="scan-bar" hidden><div id="scan-fill"></div></div>
+          <p class="small-text" id="scan-progress" hidden></p>
+        </article>
+
+        <article class="card" id="scan-unfinished-card" hidden>
+          <h2>Unfinished scans</h2>
+          <p class="muted small-text">Stopped, or cut short by a restart. Continuing homes yaw, then shoots the poses not done yet.</p>
+          <ul class="unfinished-list" id="scan-unfinished"></ul>
+        </article>
+      </div>
+
       <div class="tab-panel" data-panel="camera" hidden>
         <article class="card">
           <header class="card-header">
@@ -303,7 +379,26 @@
             <button class="button danger" data-action="delete-stack" id="delete-stack">Delete</button>
           </div>
         </article>
-        <article class="card" id="review-list-card">
+        <article class="card" id="scan-view" data-only="3d" hidden>
+          <header class="card-header">
+            <h2 id="scan-view-title"></h2>
+            <button class="icon-button" data-action="close-scan" aria-label="Back to the scans" title="Back to the scans">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"/></svg>
+            </button>
+          </header>
+          <p class="muted small-text" id="scan-view-meta"></p>
+          <div class="pose-grid" id="pose-grid"></div>
+          <div class="button-row">
+            <a class="button grow" id="download-scan" download title="One all-in-focus image per pose, named by angle, with depth maps and a pose table: ready for COLMAP or Meshroom">Download for 3D</a>
+            <button class="button danger" data-action="delete-scan" id="delete-scan">Delete</button>
+          </div>
+        </article>
+        <article class="card" id="scan-list-card" data-only="3d">
+          <h2>Scans</h2>
+          <ol class="stack-list" id="scan-list"></ol>
+          <p class="muted" id="scan-list-empty">No scans yet. Scans appear here as they run.</p>
+        </article>
+        <article class="card" id="review-list-card" data-only="2d">
           <h2>Stacks</h2>
           <ol class="stack-list" id="stack-list"></ol>
           <p class="muted" id="stack-list-empty">No stacks yet. Finished stacks appear here.</p>
@@ -348,7 +443,7 @@
           <p class="muted small-text">With no magnet near, the sensor reads about 512. Turn the head slowly by hand: near the magnet the reading moves well away from that.</p>
           <h3>Calibration</h3>
           <div class="calibration-step">
-            <p class="muted small-text"><strong>Yaw turn.</strong> Homes yaw, turns three times and homes again, to measure exactly how many steps make a turn. Nothing needs to be on the holder. About a minute.</p>
+            <p class="muted small-text"><strong>Yaw turn.</strong> Homes yaw, turns three times and homes again, to measure exactly how many steps make a turn. Nothing needs to be on the holder. About two minutes.</p>
             <button class="button" data-action="calibrate-yaw" id="calibrate-yaw">Measure yaw turn</button>
           </div>
           <div class="calibration-step">

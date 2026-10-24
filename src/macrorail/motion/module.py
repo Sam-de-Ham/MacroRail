@@ -52,7 +52,10 @@ _ERRORS = {
 class Geometry:
     """Converts between the controller's half-steps and degrees, from the calibration."""
 
-    half_steps_per_turn: float
+    half_steps_per_turn: float  # yaw's, as calibrated
+    # Tilt's own motor: its gearbox may differ, and the tilt calibration measures only the
+    # switch's angle, so it keeps the nominal ratio rather than borrowing yaw's.
+    tilt_half_steps_per_turn: float
     tilt_switch_deg: float  # where the switch trips, i.e. tilt half-step 0
     tilt_min_deg: float  # the safe range, already narrowed if tilt isn't calibrated yet
     tilt_max_deg: float
@@ -61,21 +64,21 @@ class Geometry:
     takeup_deg: float = 0.0
     switch_clearance_deg: float = 0.0
 
-    @property
-    def per_deg(self) -> float:
-        return self.half_steps_per_turn / 360.0
+    def per_deg(self, axis: Rotary) -> float:
+        turn = self.tilt_half_steps_per_turn if axis == "tilt" else self.half_steps_per_turn
+        return turn / 360.0
 
     def tilt_deg(self, steps: int) -> float:
-        return self.tilt_switch_deg - steps / self.per_deg
+        return self.tilt_switch_deg - steps / self.per_deg("tilt")
 
     def tilt_steps(self, deg: float) -> int:
-        return round((self.tilt_switch_deg - deg) * self.per_deg)
+        return round((self.tilt_switch_deg - deg) * self.per_deg("tilt"))
 
     def yaw_deg(self, steps: int) -> float:
-        return steps / self.per_deg
+        return steps / self.per_deg("yaw")
 
     def yaw_steps(self, deg: float) -> int:
-        return round(deg * self.per_deg)
+        return round(deg * self.per_deg("yaw"))
 
     @property
     def tilt_top_deg(self) -> float:
@@ -313,12 +316,13 @@ class ScanModule:
     async def home_tilt(self, check_stop: Callable[[], None]) -> float:
         """Find the tilt switch, then park clear of it (unless stopped in between). Returns
         the switch's hysteresis in degrees (how far past its trip point it releases)."""
-        c, per_deg = self._config, self.geometry.per_deg
+        c, per_deg = self._config, self.geometry.per_deg("tilt")
         fast = _rate(c.tilt_homing_speed_deg_s * per_deg)
         slow = _rate(c.tilt_homing_probe_speed_deg_s * per_deg)
         accel = _accel(c.accel_deg_s2 * per_deg)
         clearance = round(c.tilt_homing_clearance_deg * per_deg)
-        release_max = round(c.tilt_homing_release_max_deg * per_deg)
+        # The controller needs release_max > clearance, also after rounding to half-steps.
+        release_max = max(round(c.tilt_homing_release_max_deg * per_deg), clearance + 1)
         max_steps = round(c.tilt_homing_max_deg * per_deg)
         # Starting on the pressed switch it backs off first, then seeks, backs off and probes.
         timeout = (
@@ -326,6 +330,7 @@ class ScanModule:
             + 2 * motion_time(release_max, fast, accel)
             + motion_time(release_max + 2 * clearance, slow, accel)
         )
+        self._update(tilt_homed=False)  # as the controller does when homing starts
         reply = await self._motion(
             "tilt",
             "HOME",
@@ -349,12 +354,13 @@ class ScanModule:
 
     async def home_yaw(self) -> YawHome:
         """Find the magnet's field peak, approached from one side: that is yaw 0."""
-        c, per_deg = self._config, self.geometry.per_deg
+        c, per_deg = self._config, self.geometry.per_deg("yaw")
         speed = _rate(c.yaw_homing_speed_deg_s * per_deg)
         accel = _accel(c.accel_deg_s2 * per_deg)
         sweep = min(round(c.yaw_homing_turns * self.geometry.half_steps_per_turn), YAW_SWEEP_MAX)
         takeup = round(c.takeup_deg * per_deg)
         timeout = motion_time(sweep + 3 * takeup, speed, accel) + motion_time(sweep, speed, accel)
+        self._update(yaw_homed=False)
         reply = await self._motion(
             "yaw", "HOME", "YAW", speed, accel, sweep, takeup, timeout=timeout
         )

@@ -192,7 +192,7 @@ function lensPath() {
   return "M112,52 L104,52 L100,56 L100,64 L104,68 L112,68 Z";
 }
 
-function svgEl(tag, attributes, text) {
+export function svgEl(tag, attributes, text) {
   const node = document.createElementNS(SVG, tag);
   for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
   if (text !== undefined) node.textContent = text;

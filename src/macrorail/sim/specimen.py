@@ -32,7 +32,7 @@ from PIL import Image, ImageFilter
 
 from .camera import HEIGHT, WIDTH
 
-FIELD_MM = 5.5  # field width at 4.27x on the A6400 (the height follows from the pixel size)
+FIELD_MM = 23.5 / 4.0  # the A6400's sensor width at the default 4x (height from the pixels)
 PIXEL_MM = FIELD_MM / WIDTH
 BLUR_RADII = tuple(0.8 * level for level in range(16))  # px, one blur level per half DOF
 BACKGROUND = (14, 16, 20)

@@ -50,18 +50,24 @@ class Poser:
     async def measure_turn(self, turns: int) -> int:
         """Home yaw, turn `turns` turns (by the current calibration) and home again. Returns
         where the second homing found the magnet, counted from the first."""
-        await self.home(("yaw",))
-        turn = self._module.geometry.half_steps_per_turn
-        # Stop a little short, so the second homing's sweep meets the magnet early on.
         self._check_stop()
-        await self._module.move("yaw", round((turns - 0.1) * turn), *self._profile("yaw"))
+        self._log.info("Homing yaw…")
+        first = await self._module.home_yaw()
+        geometry = self._module.geometry
+        turn = geometry.half_steps_per_turn
+        # Stop short of the magnet by more than its field is wide, so the second homing's
+        # sweep starts clear of the field and meets it early on.
+        takeup = round(self._config.takeup_deg * geometry.per_deg("yaw"))
+        lead = min(max(round(0.1 * turn), first.width + takeup), round(0.5 * turn))
+        self._check_stop()
+        await self._module.move("yaw", round(turns * turn) - lead, *self._profile("yaw"))
         self._check_stop()
         return (await self._module.home_yaw()).previous_position
 
     async def jog(self, axis: Rotary, delta_deg: float) -> None:
         self._check_stop()
         geometry = self._module.geometry
-        delta = round(delta_deg * geometry.per_deg)
+        delta = round(delta_deg * geometry.per_deg(axis))
         if axis == "tilt":
             delta = -delta  # the controller counts tilt up as the angle goes down
         await self._module.jog(axis, delta, *self._profile(axis))
@@ -79,7 +85,7 @@ class Poser:
             raise AxisError(f"Tilt goes from {low:g}° to {high:g}°.")
         geometry = self._module.geometry
         target = geometry.tilt_steps(deg)
-        takeup = round(self._config.takeup_deg * geometry.per_deg)
+        takeup = round(self._config.takeup_deg * geometry.per_deg("tilt"))
         # The soft limits leave room for the take-up above the safe range; only a switch
         # calibrated unusually low narrows it.
         top = geometry.tilt_limits()[0]
@@ -90,10 +96,10 @@ class Poser:
         geometry = self._module.geometry
         current = self._module.state.yaw_steps
         turn = geometry.half_steps_per_turn
-        wanted = (deg % 360.0) * geometry.per_deg
+        wanted = (deg % 360.0) * geometry.per_deg("yaw")
         # The equivalent of `deg` nearest the current position, so a short move stays short.
         target = round(wanted + turn * round((current - wanted) / turn))
-        takeup = round(self._config.takeup_deg * geometry.per_deg)
+        takeup = round(self._config.takeup_deg * geometry.per_deg("yaw"))
         await self._arrive("yaw", target, target - takeup)
 
     async def _arrive(self, axis: Rotary, target: int, before: int) -> None:
@@ -109,6 +115,6 @@ class Poser:
         await self._module.move(axis, target, *profile)
 
     def _profile(self, axis: Rotary) -> tuple[float, float]:
-        per_deg = self._module.geometry.per_deg
+        per_deg = self._module.geometry.per_deg(axis)
         speed = self._config.tilt_speed_deg_s if axis == "tilt" else self._config.yaw_speed_deg_s
         return speed * per_deg, self._config.accel_deg_s2 * per_deg

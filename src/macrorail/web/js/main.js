@@ -10,20 +10,29 @@
 import { connectUpdates, patch, post } from "./api.js";
 import * as alerts from "./alerts.js";
 import * as camera from "./camera.js";
+import * as centre from "./centre.js";
 import { $, setChecked, setField, setText } from "./dom.js";
 import * as fmt from "./format.js";
 import * as liveview from "./liveview.js";
 import { readPref, writePref } from "./prefs.js";
 import * as review from "./review.js";
 import * as rig from "./rig.js";
+import * as scan from "./scan.js";
 import * as shoot from "./shoot.js";
 import * as system from "./system.js";
 import { showToast } from "./toast.js";
 
-const PANELS = [liveview, shoot, rig, camera, review, system, alerts];
-const TABS = { "2d": ["shoot", "camera", "review", "system"], "3d": ["rig", "camera", "system"] };
+const PANELS = [liveview, shoot, rig, centre, scan, camera, review, system, alerts];
+const TABS = { "2d": ["shoot", "camera", "review", "system"], "3d": ["rig", "centre", "scan", "camera", "review", "system"] };
 const TAB_PREF = { "2d": "tab", "3d": "tab-3d" };
 const LOG_LIMIT = 200;
+const SCAN_TASKS = {
+  range: "Finding the focus range…",
+  backlash: "Measuring backlash…",
+  "tilt level": "Levelling tilt…",
+  centring: "Centring: looking from four sides…",
+  height: "Measuring the height…",
+};
 
 const app = {
   state: null,
@@ -69,6 +78,15 @@ document.addEventListener("change", async (event) => {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || !app.state) return;
   const handler = fieldHandlers[input.id];
+  if (input.dataset.plan) {
+    try {
+      await patch("scan3d/plan", scan.planPatch(input));
+    } catch (error) {
+      showToast(error.message, "error");
+      render(true);
+    }
+    return;
+  }
   if (!input.dataset.setting && !handler) return;
   try {
     let body;
@@ -182,8 +200,8 @@ function renderStatus(s) {
     text = `Stack: ${shoot.phaseText(stack)}`;
     detail = `${stack.taken} / ${stack.total}${stack.remaining_s !== null ? ` · ${fmt.duration(stack.remaining_s)} left` : ""}`;
     progress = stack.taken / stack.total;
-  } else if (s.activity === "scanning" && s.scan.task) {
-    text = s.scan.task === "range" ? "Finding the focus range…" : "Measuring backlash…";
+  } else if ((s.activity === "scanning" || s.activity === "scanning_3d") && s.scan.task) {
+    text = SCAN_TASKS[s.scan.task] || "Scanning…";
     detail = `${s.scan.done} / ${s.scan.total}`;
     progress = s.scan.total ? s.scan.done / s.scan.total : 0;
   } else if (s.activity !== "idle") {
@@ -245,8 +263,11 @@ placeWorkspace();
 renderTabs();
 connectUpdates({
   onState(next) {
+    const first = app.state === null;
     app.state = next;
-    render();
+    // A 3D scan runs for hours: whoever opens the app then wants to see it.
+    if (first && next.activity === "scanning_3d" && app.workspace !== "3d") showWorkspace("3d");
+    else render();
   },
   onLog: addLog,
   onConnection(isConnected) {

@@ -59,6 +59,11 @@ export function render({ s, connected, workspace }) {
       ? ` · T ${m.tilt_homed ? `${m.tilt_deg.toFixed(1)}°` : "–"} · Y ${m.yaw_homed ? `${m.yaw_deg.toFixed(1)}°` : "–"}`
       : "";
   $("liveview-position").textContent = rail + pose;
+  // Where the yaw axis appears (learnt by centring): the insect should sit on this line.
+  const axis = m.centring.axis_image_x;
+  const showAxis = workspace === "3d" && axis !== null && !shot;
+  $("liveview-axis").hidden = !showAxis;
+  if (showAxis) $("liveview-axis").style.left = `${(axis * 100).toFixed(2)}%`;
 }
 
 /** The newest shot of the running stack, or the one held while paused. */

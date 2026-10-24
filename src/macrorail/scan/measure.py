@@ -21,7 +21,10 @@ def peak(positions: Sequence[float], values: Sequence[float]) -> float:
         raise MeasureError("A focus sweep needs at least three frames.")
     best = int(np.argmax(values))
     if best in (0, len(values) - 1):
-        raise MeasureError("The sharpest frame was at the end of the sweep: focus nearer first.")
+        raise MeasureError(
+            "The subject came into focus at the end of the scan, or not at all. Focus on it "
+            "with the rail first, then try again."
+        )
     x0, x1, x2 = positions[best - 1 : best + 2]
     y0, y1, y2 = values[best - 1 : best + 2]
     if not x0 < x1 < x2:
