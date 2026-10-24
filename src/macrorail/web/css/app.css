@@ -153,6 +153,10 @@ body[data-workspace="3d"] .tabs {
   scrollbar-width: none;
 }
 body[data-workspace="3d"] .tabs button { font-size: 13px; padding: 0 6px; }
+@media (max-width: 480px) {
+  /* On a phone, two rows of three rather than a strip that hides the last tabs. */
+  body[data-workspace="3d"] .tabs { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); overflow-x: visible; }
+}
 
 .status-strip {
   display: grid;
@@ -616,8 +620,8 @@ body[data-workspace="3d"] [data-only="2d"] { display: none !important; }
 .map-done { fill: var(--ok); }
 .map-failed { fill: var(--danger); }
 .map-current { fill: var(--accent); stroke: rgb(242 163 58 / 0.35); stroke-width: 6; }
-.map-clickable { cursor: pointer; }
-.map-clickable:hover { stroke: var(--accent); }
+.map-target { fill: transparent; cursor: pointer; }
+.map-target:hover { stroke: var(--accent); stroke-width: 1.5; }
 .preflight { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
 .preflight li::before { display: inline-block; width: 1.4em; font-weight: 700; }
 .preflight li.ok::before { content: "✓"; color: var(--ok); }

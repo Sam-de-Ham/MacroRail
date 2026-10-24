@@ -112,6 +112,30 @@ still chime, vibrate and mark the tab title.
 Once per setup, **System → Measure backlash** (with a sharp detail in focus) measures the
 lead screw's play and offers the matching take-up distance.
 
+## 3D scanning
+
+A tilt-and-yaw module on the carriage turns the insect, so the camera can stack it from every
+side. It has its own Nano ([wiring guide](docs/module-guide/MacroRail-module-wiring-guide.pdf),
+[hardware](hardware/scan-module/README.md)), and the app gains a **2D / 3D** switch in the top
+bar; 2D stays exactly as described above.
+
+1. **System → Scan module:** check the connection, then calibrate once: **Measure yaw turn**
+   (nothing on the holder) and **Level tilt** (a straight pin upright in the holder, in focus).
+2. **Rig:** home the module; jog tilt and yaw, or go to an angle or a quick pose.
+3. **Centre:** mount the insect, focus on it, press **Measure**. The module looks from four
+   sides and says which centring screw to turn and how far (with a dial); repeat until it is
+   centred. **Measure height** then says how far to slide the pin.
+4. **Scan:** set the tilt rings and yaw step (default −30°, 0°, 30°, 60° every 36°), check the
+   estimate and the pre-flight list, try **Test this pose**, then **Start scan**. Each pose
+   gets its own focus range and stack. Pause, resume and Stop work as for a stack, and a
+   stopped scan (or one cut short by a restart) can be continued.
+5. **Review:** each scan's poses as thumbnails, opening into the usual viewer.
+   **Download for 3D** gives one all-in-focus image per pose, named by its angles, with
+   depth maps and a pose table, ready for COLMAP or Meshroom.
+
+Details: [`docs/3d-software-plan.md`](docs/3d-software-plan.md) and
+[`docs/protocol-module.md`](docs/protocol-module.md).
+
 ## Development
 
 ```bash
@@ -120,6 +144,7 @@ uv run pytest                   # tests (run against the simulator)
 uv run ruff check src tests && uv run ruff format --check src tests
 uv run mypy src                 # strict type checking
 pio run -d firmware             # build the Nano firmware
+pio run -d firmware-module      # build the 3D scan module's firmware
 scripts/deploy-dev.sh pi        # copy HEAD to the Pi over SSH and reinstall
 ```
 

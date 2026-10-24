@@ -154,6 +154,15 @@ If a 3D scan is running, opening the app goes to 3D.
 | **Review** | Scans: pose map with thumbnails, each pose's preview and depth map (today's viewer), export. Plain stacks stay in the 2D Review. |
 | **System** | The same as 2D, plus a **Scan module** card: connection, diagnostics (hall signal, switch), calibration. |
 
+**As built (2026-10-24), where it differs from the table:** jog steps are 1°, 5°, 15° and
+45° (tilt capped at 10° before homing); quick poses are Level, Top view, Belly view (the
+lowest allowed tilt), Screw X / Y to you and Yaw zero (no separate Mount pose: the screws'
+poses and Level cover it); the live-view corner shows the angles as text beside the rail
+position; Review shows a scan's poses as a thumbnail grid (each opens the stack viewer)
+rather than a hover map; the top bar's Stop stops a scan, as it does a stack; during a scan
+the alerts are the scan's (complete, stopped, failed, paused for the user) plus any camera
+problem, not each pose's stack. On phones the six 3D tabs sit in two rows.
+
 **Visualisations:**
 
 - **Pose gauges** (Rig tab, and small in the live-view corner like the rail position): a
@@ -208,8 +217,9 @@ All five are built and tested in the simulator (2026-10-24); none on the rig yet
    (needed for the height) and where the yaw axis appears (the dashed live-view line).
    Height: focus at tilt ±20° (inside the uncalibrated range), then "push/pull the pin".
 4. **Scans.** As built: tilt rings top down, yaw always forwards; yaw is homed at each scan's
-   start (so its count never runs out); per pose: turn → settle → auto range (falls back to
-   the last range; with none, it pauses for the user) → stack with the 2D step → preview
+   start (so its count never runs out); the step, stack settle and focus span are fixed in
+   the scan's record, and those settings can't change mid-scan; per pose: turn → settle → auto range (falls back to
+   the last range; with none, the scan stops so the user can focus, then Continue) → stack with the 2D step → preview
    and depth map → keep one frame in n. `scan.json` after every pose; Continue skips the
    poses done. "Test this pose" runs one pose at the module's current angle.
 5. **Review and export.** As built: scans list in the 3D Review tab, pose thumbnails open

@@ -47,6 +47,7 @@ Keep it current: update it after every chunk of work, and prune instead of appen
 | `docs/wiring.md` | Pin map, home switch wiring, first power-up checks, TMC2209 notes. |
 | `reference-images/` | The user's photos of the rig, objective, LEDs and lights (3D-scanning work). |
 | `docs/3d-software-plan.md` | The agreed 3D software plan (2026-10-24): UI, calibration, centring, scans, milestones, decisions. |
+| `docs/3d-rig-checklist.md` | What the user tests on the rig for each 3D milestone, in order. |
 | `docs/protocol-module.md` | The Pi ↔ module Nano protocol (v1): commands, homing (switch and hall peak), errors. |
 | `docs/module-guide/` | Illustrated wiring guide for the module's Nano (PDF), built by `build_html.py`. |
 | `firmware-module/` | The module Nano's firmware (PlatformIO, AccelStepper); pins in `src/config.h`. |
@@ -373,9 +374,9 @@ Browser ──REST (commands)──▶ FastAPI ──▶ Machine (orchestrator, 
    - Date the CHANGELOG.
    - Tag, push, and make a GitHub release.
 3. README screenshots and photos of the real setup (the user supplies them), and a sample stack.
-4. **3D scanning on the rig** (branch `3d-scanning`): the user wires the module
-   (`docs/module-guide/`, and first set `[rail] port = "auto"` on the Pi), flashes
-   `firmware-module/`, then tests M1 → M5 in order. Fix what they find.
+4. **3D scanning on the rig** (branch `3d-scanning`): the user works through
+   `docs/3d-rig-checklist.md` (config first, then wiring, flashing, M1 → M5). Fix what they
+   find. Not deployed to the Pi yet.
 5. Otherwise the user picks the next work from **Candidate ideas**.
 
 ## Lessons learned

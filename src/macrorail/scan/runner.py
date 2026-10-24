@@ -42,10 +42,11 @@ ACTIVE: frozenset[Phase] = frozenset({"running", "pausing", "paused", "stopping"
 class ScanSteps:
     """What the scan needs from the machine, one call per step of a pose."""
 
+    begin: Callable[[], Awaitable[None]]  # get the rig ready (motor current, yaw homed)
     go: Callable[[Pose], Awaitable[None]]  # turn the module to the pose and let it settle
     find_range: Callable[[], Awaitable[RangeResult]]  # where the subject is in focus
     stack: Callable[[RangeResult, Pose, str], StackRun]  # a stack through the range
-    keep_frames: Callable[[str, int], None]  # thin a finished stack's frames to every n-th
+    keep_frames: Callable[[str, int], Awaitable[None]]  # thin a finished stack's frames
 
 
 class ScanRun:
@@ -74,7 +75,12 @@ class ScanRun:
         self.stack: StackRun | None = None
         self.error: str | None = None
         self.started_at = time.time()
+        # Continuing a scan: the newest range found before is the fallback for the next pose.
         self._last_range: RangeResult | None = None
+        for _, result in sorted(self.results.items()):
+            if result.get("range"):
+                start, end = result["range"]
+                self._last_range = RangeResult(int(start), int(end), (), (), clipped=False)
         self._resume = asyncio.Event()
         self._pause_requested = False
         self._stop_requested = False
@@ -125,6 +131,7 @@ class ScanRun:
         self._write_record()
         outcome: Phase = "done"
         try:
+            await self._steps.begin()
             for pose in self.poses:
                 if pose.index in self.results and self.results[pose.index]["outcome"] == "done":
                     continue
@@ -133,8 +140,10 @@ class ScanRun:
                 await self._pose(pose)
         except (MotionInterrupted, _Stopped):
             outcome = "stopped"
-        except AxisError as exc:
-            self.error = str(exc)
+        except Exception as exc:  # anything else: the scan must still end, recorded
+            if not isinstance(exc, AxisError):
+                logger.exception("scan failed")
+            self.error = str(exc) or type(exc).__name__
             outcome = "failed"
         self.current = None
         self.stage = ""
@@ -160,13 +169,10 @@ class ScanRun:
         await self._steps.go(pose)
         self._stage("finding the range")
         found = await self._range(pose)
-        while found is None:  # nothing to fall back on: the user has to help
-            self.error = "The specimen wasn't found. Focus on it, then resume."
+        if found is None:  # nothing to fall back on: the user has to focus, which needs the rig
+            self.error = "The specimen wasn't found. Focus on it, then continue the scan."
             self._log.warning(f"{label}: {self.error}")
-            self._pause_requested = True
-            await self._checkpoint()
-            self.error = None
-            found = await self._range(pose)
+            raise _Stopped
         self._stage("shooting")
         try:
             stack = self._steps.stack(found, pose, f"Pose {pose.index + 1}")
@@ -186,8 +192,7 @@ class ScanRun:
                 raise _Stopped
             raise AxisError(stack.error or f"the stack ended {stack.phase}")
         self._stage("saving")
-        keep = int(self.plan.get("keep_every", 1))
-        await asyncio.to_thread(self._steps.keep_frames, stack.id, keep)
+        await self._steps.keep_frames(stack.id, int(self.plan.get("keep_every", 1)))
         self.results[pose.index] = {
             "outcome": "done",
             "stack": stack.id,

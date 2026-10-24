@@ -25,6 +25,7 @@ let reliefFlipped = readPref("reliefFlipped", false);
 
 const OUTCOME = { done: "Complete", stopped: "Stopped", failed: "Failed" };
 const SCAN_OUTCOME = { ...OUTCOME, running: "Running", pausing: "Running", paused: "Paused", stopping: "Stopping" };
+const RUNNING = new Set(["running", "pausing", "paused", "stopping"]);
 
 export const actions = {
   "open-stack": (button, app) => {
@@ -42,6 +43,9 @@ export const actions = {
   "open-scan": (button, app) => {
     scan = { id: button.dataset.id, record: null, stacks: [] };
     scanKey = null;
+    selected = null;
+    $("pose-grid").replaceChildren();
+    delete $("pose-grid").dataset.key;
     app.render();
   },
   "close-scan": (_el, app) => {
@@ -106,9 +110,13 @@ export function render(ctx) {
       if (key !== scansKey) loadScans(key, ctx);
       else if (scan && key !== scanKey) loadScan(key, ctx);
     }
-    renderScanList();
+    // A stack chosen elsewhere (2D, or another scan) isn't shown here.
+    if (selected && scan?.record && !scan.stacks.some((x) => x.id === selected)) selected = null;
+    if (selected && !scan) selected = null;
+    renderScanList(ctx);
     renderScanView(ctx);
   } else {
+    if (selected && loadedRevision >= 0 && !stacks.some((x) => x.id === selected)) selected = null;
     if (ctx.tab === "review" && revision !== loadedRevision && !loading) load(revision, ctx);
     renderList();
   }
@@ -134,8 +142,10 @@ async function loadScan(key, ctx) {
   const id = scan.id;
   try {
     const [record, poseStacks] = await Promise.all([getJson(`scans/${id}`), getJson(`scans/${id}/stacks`)]);
-    if (scan?.id === id) scan = { id, record, stacks: poseStacks };
-    scanKey = key;
+    if (scan?.id === id) {
+      scan = { id, record, stacks: poseStacks };
+      scanKey = key;
+    }
   } catch (error) {
     showToast(`Could not load the scan: ${error.message}`, "error");
     scan = null;
@@ -149,9 +159,17 @@ function scanTitle(x) {
   return (x.name || x.plan?.name || "Untitled scan") + (x.test || x.plan?.test ? " (test pose)" : "");
 }
 
-function renderScanList() {
+/** What a scan's record says, except that one left "running" by a restart was interrupted. */
+function scanOutcome(x, ctx) {
+  const outcome = x.outcome ?? x.phase;
+  const live = ctx.s.scan3d.run;
+  if (RUNNING.has(outcome) && !(live && live.id === x.id && RUNNING.has(live.phase))) return "Interrupted";
+  return SCAN_OUTCOME[outcome] || "Running";
+}
+
+function renderScanList(ctx) {
   const list = $("scan-list");
-  const key = JSON.stringify(scans);
+  const key = JSON.stringify([scans, ctx.s.scan3d.run?.phase]);
   if (list.dataset.key !== key) {
     list.dataset.key = key;
     list.replaceChildren(
@@ -163,7 +181,7 @@ function renderScanList() {
             "button",
             { class: "stack-item no-image", "data-action": "open-scan", "data-id": x.id },
             el("span", { class: "stack-text" }, el("strong", {}, scanTitle(x)), el("span", { class: "muted small-text" }, when(x)), el("span", { class: "muted small-text" }, `${x.done} of ${x.total} poses`)),
-            el("span", { class: `badge ${x.outcome === "done" ? "ok" : ""}` }, SCAN_OUTCOME[x.outcome] || "Running"),
+            el("span", { class: `badge ${x.outcome === "done" ? "ok" : ""}` }, scanOutcome(x, ctx)),
           ),
         ),
       ),
@@ -175,13 +193,13 @@ function renderScanList() {
 
 function renderScanView(ctx) {
   const card = $("scan-view");
-  card.hidden = !scan || Boolean(selected);
+  card.hidden = !scan || !scan.record || Boolean(selected); // hidden until the record arrives
   if (!scan || !scan.record) return;
   const record = scan.record;
   setText("scan-view-title", scanTitle(record));
   const results = record.results || {};
   const done = Object.values(results).filter((r) => r.outcome === "done").length;
-  setText("scan-view-meta", `${when(record)} · ${done} of ${record.poses.length} poses · ${SCAN_OUTCOME[record.outcome] || "Running"}`);
+  setText("scan-view-meta", `${when(record)} · ${done} of ${record.poses.length} poses · ${scanOutcome(record, ctx)}`);
   const byId = new Map(scan.stacks.map((x) => [x.id, x]));
   const grid = $("pose-grid");
   const key = JSON.stringify([results, scan.stacks.map((x) => [x.id, x.made_at])]);
@@ -288,7 +306,8 @@ function renderViewer(ctx) {
   const stacked = mode === "preview" ? stack.preview : stack.depth;
   if (mode !== "frames" && !stacked) {
     const what = mode === "preview" ? "preview stack" : "depth map";
-    empty = building ? `Making the ${what}…` : stack.preview ? "No depth map yet: remake the preview stack." : `No ${what} yet.`;
+    const remake = pose ? "" : ": remake the preview stack";
+    empty = building ? `Making the ${what}…` : stack.preview ? `No depth map yet${remake}.` : `No ${what} yet.`;
   } else if (mode === "preview") {
     src = `/api/stacks/${stack.id}/preview?${version}`;
   } else if (mode === "depth") {

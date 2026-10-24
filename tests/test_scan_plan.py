@@ -77,7 +77,11 @@ def found(start: int = 100, end: int = 200) -> RangeResult:
 
 
 def runner(
-    tmp_path: Path, ranges: list[Any], poses: int = 3, fail_at: int | None = None
+    tmp_path: Path,
+    ranges: list[Any],
+    poses: int = 3,
+    fail_at: int | None = None,
+    done: dict[int, dict[str, Any]] | None = None,
 ) -> tuple[ScanRun, list[str]]:
     calls: list[str] = []
     queue = list(ranges)
@@ -95,17 +99,21 @@ def runner(
         calls.append(f"stack {pose.index} {rng.start}-{rng.end}")
         return FakeStack(f"s{pose.index}", fail=pose.index == fail_at)
 
-    def keep(stack_id: str, every: int) -> None:
+    async def keep(stack_id: str, every: int) -> None:
         calls.append(f"keep {stack_id} {every}")
+
+    async def begin() -> None:
+        calls.append("begin")
 
     run = ScanRun(
         "20261024-120000",
         tmp_path / "scan",
         plan_poses([0.0], 360.0 / poses, RANGE),
         {"keep_every": 10},
-        ScanSteps(go=go, find_range=find_range, stack=stack, keep_frames=keep),
+        ScanSteps(begin=begin, go=go, find_range=find_range, stack=stack, keep_frames=keep),
         ActivityLog(),
         lambda: None,
+        done=done,
     )
     return run, calls
 
@@ -114,7 +122,7 @@ async def test_every_pose_is_shot_and_recorded(tmp_path: Path) -> None:
     run, calls = runner(tmp_path, [found(), found(110, 210), found(120, 220)])
     await run.run(lambda: None)
     assert run.phase == "done"
-    assert calls[:3] == ["go 0", "stack 0 100-200", "keep s0 10"]
+    assert calls[:4] == ["begin", "go 0", "stack 0 100-200", "keep s0 10"]
     record = read_record(tmp_path / "scan")
     assert record is not None
     assert record["outcome"] == "done"
@@ -131,24 +139,38 @@ async def test_a_lost_range_falls_back_to_the_last_one(tmp_path: Path) -> None:
     assert "stack 1 100-200" in calls
 
 
-async def test_no_range_at_the_first_pose_waits_for_the_user(tmp_path: Path) -> None:
-    run, _calls = runner(tmp_path, [AnalysisError("nothing"), found(), found(), found()])
-    task = asyncio.create_task(run.run(lambda: None))
-    for _ in range(50):
-        await asyncio.sleep(0)
-    assert run.phase == "paused"
+async def test_no_range_at_the_first_pose_stops_for_the_user(tmp_path: Path) -> None:
+    # Focusing needs the rail, which only moves once the scan has stopped; Continue then
+    # picks up at this pose.
+    run, calls = runner(tmp_path, [AnalysisError("nothing")])
+    await run.run(lambda: None)
+    assert run.phase == "stopped"
     assert run.error
     assert "Focus on it" in run.error
-    run.resume()
-    await task
+    assert not any(c.startswith("stack") for c in calls)
+
+
+async def test_continuing_skips_the_poses_done_and_keeps_their_range(tmp_path: Path) -> None:
+    done = {
+        0: {"outcome": "done", "range": [100, 200]},
+        1: {"outcome": "done", "range": [140, 240]},
+    }
+    run, calls = runner(tmp_path, [AnalysisError("nothing")], poses=3, done=done)
+    await run.run(lambda: None)
+    assert [c for c in calls if c.startswith("go")] == ["go 2"]
+    assert "stack 2 140-240" in calls  # the last range found before falls in
     assert run.phase == "done"
 
 
-async def test_resume_skips_the_poses_done(tmp_path: Path) -> None:
-    run, calls = runner(tmp_path, [found()], poses=3)
-    run.results = {0: {"outcome": "done"}, 1: {"outcome": "done"}}
+async def test_an_unexpected_error_still_ends_the_scan(tmp_path: Path) -> None:
+    run, _ = runner(tmp_path, [OSError("card full")])
     await run.run(lambda: None)
-    assert [c for c in calls if c.startswith("go")] == ["go 2"]
+    assert run.phase == "failed"
+    assert not run.active
+    assert run.error == "card full"
+    record = read_record(tmp_path / "scan")
+    assert record is not None
+    assert record["outcome"] == "failed"
 
 
 async def test_a_failed_stack_fails_the_scan(tmp_path: Path) -> None:
