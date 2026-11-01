@@ -12,3 +12,7 @@ docs/setup-guide/setup-guide.html
 docs/module-guide/module-guide.html
 hardware/scan-module/guide/scan-module-guide.html
 hardware/scan-module/fusion/verify.log
+
+# Working notes kept out of the repository
+agents.md
+notes/
