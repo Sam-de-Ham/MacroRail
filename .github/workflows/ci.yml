@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0  # no floating v10 tag is published
+      - uses: astral-sh/setup-uv@v10.3.3  # no floating v10 tag is published
       - run: uv sync --frozen
       - run: uv run ruff check
       - run: uv run ruff format --check
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0  # no floating v10 tag is published
+      - uses: astral-sh/setup-uv@v10.3.3  # no floating v10 tag is published
       - run: uv tool install platformio
       - run: pio run -d firmware
       - run: pio run -d firmware-module
