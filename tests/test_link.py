@@ -9,6 +9,8 @@ from macrorail.motion.link import DeviceError, Link, LinkError
 from macrorail.motion.protocol import Event
 from macrorail.sim.firmware import SimRail
 
+from .conftest import until
+
 
 class ScriptedTransport:
     """A transport whose replies the test writes by hand."""
@@ -46,11 +48,12 @@ async def test_requests_take_turns_on_the_line() -> None:
     link, transport, _ = await open_scripted()
     first = asyncio.create_task(link.request("STATUS"))
     second = asyncio.create_task(link.request("INFO"))
+    await until(lambda: bool(transport.sent))
     await asyncio.sleep(0.05)
     assert transport.sent == ["1 STATUS"]  # INFO waits: the controller may be busy answering
     transport.incoming.put("1 OK pos=5")
     assert await first == {"pos": "5"}
-    await asyncio.sleep(0.05)
+    await until(lambda: len(transport.sent) == 2)
     assert transport.sent == ["1 STATUS", "2 INFO"]
     transport.incoming.put("2 OK fw=x")
     assert await second == {"fw": "x"}
@@ -59,10 +62,10 @@ async def test_requests_take_turns_on_the_line() -> None:
 
 async def test_motion_frees_the_line_and_replies_match_by_id() -> None:
     link, transport, _ = await open_scripted()
-    move = asyncio.create_task(link.request("MOVE", 100, 400, 4000, timeout=5, motion=True))
-    await asyncio.sleep(0.05)
+    move = asyncio.create_task(link.request("MOVE", 100, 400, 4000, timeout=60, motion=True))
+    await until(lambda: len(transport.sent) == 1)
     status = asyncio.create_task(link.request("STATUS"))
-    await asyncio.sleep(0.05)
+    await until(lambda: len(transport.sent) == 2)
     assert transport.sent == ["1 MOVE 100 400 4000", "2 STATUS"]
     transport.incoming.put("2 OK pos=50")
     transport.incoming.put("1 OK pos=100")
@@ -74,7 +77,7 @@ async def test_motion_frees_the_line_and_replies_match_by_id() -> None:
 async def test_error_reply_raises_device_error() -> None:
     link, transport, _ = await open_scripted()
     request = asyncio.create_task(link.request("MOVE", 1, 2, 3))
-    await asyncio.sleep(0.05)
+    await until(lambda: bool(transport.sent))
     transport.incoming.put("1 ERR NOT_HOMED")
     with pytest.raises(DeviceError) as error:
         await request
@@ -95,7 +98,7 @@ async def test_missing_reply_closes_the_link() -> None:
 async def test_events_are_delivered() -> None:
     link, transport, events = await open_scripted()
     transport.incoming.put("! POS pos=42")
-    await asyncio.sleep(0.1)
+    await until(lambda: bool(events))
     assert events == [Event("POS", {"pos": "42"})]
     await link.close()
 
@@ -112,7 +115,7 @@ async def test_controller_stops_motion_when_the_host_goes_quiet() -> None:
     link, _ = await Link.open(rail.open, lambda _: None)
     await link.request("ENABLE")
     with pytest.raises(DeviceError) as error:  # no STATUS polling, so the watchdog fires
-        await link.request("HOME", 800, 80, 200, 60000, 2000, 4000, timeout=10)
+        await link.request("HOME", 800, 80, 200, 60000, 2000, 4000, timeout=60)
     assert error.value.code == "LINK"
     await link.close()
 
@@ -138,7 +141,7 @@ async def test_a_controller_that_kept_running_is_asked_instead() -> None:
 async def test_a_reset_controller_still_says_ready_first() -> None:
     transport = RunningTransport()
     transport.incoming.put("! READY fw=1.0.0 proto=1 role=module")
-    link, ready = await Link.open(lambda: transport, lambda event: None, ask_after=1.0)
+    link, ready = await Link.open(lambda: transport, lambda event: None, ask_after=30.0)
     assert ready.data["role"] == "module"
     assert transport.sent == []  # no need to ask
     await link.close()

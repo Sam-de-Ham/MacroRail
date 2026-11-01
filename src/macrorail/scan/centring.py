@@ -30,8 +30,8 @@ from ..focus.analysis import AnalysisError
 M3_PITCH_MM = 0.5
 TURN_RESOLUTION = 1 / 8  # what a hex key can sensibly be turned by
 CENTRED_MM = 0.1  # good enough: well inside the frame at every yaw
-# Where screw X points at yaw 0, counter-clockwise from the camera (seen from above): at the
-# camera, as designed (confirmed on the rig 2026-10-24; the user stands on the camera side).
+# Where screw X points at yaw 0, counter-clockwise from the camera (seen from above): straight
+# at the camera, as designed.
 SCREW_X_YAW_DEG = 0.0
 # The rail's direction is learnt from a fit only when the offset shows clearly in depth.
 SIGN_MIN_OFFSET_MM = 0.15

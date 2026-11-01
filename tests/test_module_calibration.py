@@ -34,7 +34,7 @@ async def test_measures_the_real_yaw_turn() -> None:
 async def test_machine_saves_the_yaw_calibration(machine: Machine) -> None:
     await until(lambda: machine.module.state.connected)
     machine.calibrate_yaw()
-    await idle(machine, timeout=60)
+    await idle(machine)
     calibration = machine.module_settings
     assert calibration.yaw_calibrated
     # The simulator's gearbox has the nominal ratio.
@@ -61,16 +61,16 @@ async def test_tilt_calibration_finds_the_switch_angle(machine: Machine) -> None
     # The app believes the switch trips at 95 degrees; on the simulated rig it trips at 97.
     await machine._save_module(machine.module_settings.model_copy(update={"tilt_switch_deg": 95}))
     machine.home()
-    await idle(machine, timeout=30)
+    await idle(machine)
     machine.home_module(("tilt", "yaw"))
-    await idle(machine, timeout=30)
+    await idle(machine)
     specimen = needle(machine)
     machine.set_point("start", round(specimen.focus_ref_mm * machine.axis.steps_per_mm))
     machine.go_to("start")
-    await idle(machine, timeout=30)
+    await idle(machine)
 
     machine.calibrate_tilt()
-    await idle(machine, timeout=120)
+    await idle(machine)
     calibration = machine.module_settings
     assert calibration.tilt_calibrated, machine.log.entries[-1]
     # Within the gearbox backlash (homing approaches the switch the other way round).
@@ -81,16 +81,16 @@ async def test_tilt_calibration_finds_the_switch_angle(machine: Machine) -> None
 async def test_failed_tilt_calibration_changes_nothing(machine: Machine) -> None:
     await until(lambda: machine.module.state.connected and machine.camera.state.connected)
     machine.home()
-    await idle(machine, timeout=30)
+    await idle(machine)
     machine.home_module(("tilt", "yaw"))
-    await idle(machine, timeout=30)
+    await idle(machine)
     start = round(10 * machine.axis.steps_per_mm)  # nowhere near the specimen's focus
     machine.set_point("start", start)
     machine.go_to("start")
-    await idle(machine, timeout=30)
+    await idle(machine)
 
     machine.calibrate_tilt()
-    await idle(machine, timeout=120)
+    await idle(machine)
     assert not machine.module_settings.tilt_calibrated
     assert "Focus on it" in machine.log.entries[-1].message
     assert machine.axis.state.position == start  # back where the user focused

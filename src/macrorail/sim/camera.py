@@ -69,9 +69,6 @@ class SimCamera:
     def disconnect(self, problem: str) -> None:
         self._state = replace(self._state, connected=False, problem=problem)
 
-    def reconnect(self) -> None:
-        self._state = replace(self._state, connected=True, problem=None)
-
     async def capture(self) -> Capture:
         if not self._state.connected:
             raise CameraError(self._state.problem or "The camera is not connected.")

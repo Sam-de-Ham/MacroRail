@@ -11,8 +11,10 @@ import math
 import queue
 import threading
 import time
+import weakref
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Protocol
 
 from ..motion.protocol import PROTOCOL_VERSION
 
@@ -20,6 +22,39 @@ FIRMWARE_VERSION = "1.0.0-sim"
 TICK_S = 0.002
 LINK_TIMEOUT_S = 2.0
 POS_REPORT_S = 0.1
+
+
+class Ticking(Protocol):
+    def tick(self, now: float, last: float) -> None: ...
+
+
+def start_ticking(sim: Ticking, name: str, period: float) -> None:
+    """Run `sim.tick` every `period` s on a thread of its own, until nothing else refers to `sim`.
+    The thread holds it only weakly, so a finished simulation stops instead of ticking on
+    (and holding the GIL) for the rest of the process: the tests create hundreds."""
+    ref = weakref.ref(sim)
+
+    def run() -> None:
+        last = time.monotonic()
+        while True:
+            time.sleep(period)
+            target = ref()
+            if target is None:
+                return
+            now = time.monotonic()
+            target.tick(now, last)
+            del target
+            last = now
+
+    threading.Thread(target=run, name=name, daemon=True).start()
+
+
+def time_slices(dt: float, longest: float) -> list[float]:
+    """`dt` of firmware time in equal steps no longer than `longest`. A late wake-up (a busy
+    host) then only delays the simulation instead of coarsening it, so switch trips, releases
+    and stops land where they would have on time."""
+    count = max(1, math.ceil(dt / longest))
+    return [dt / count] * count
 
 
 class _Motion(Enum):
@@ -98,8 +133,7 @@ class SimRail:
         self._transport: SimTransport | None = None
         self._inbox: queue.Queue[tuple[SimTransport, str]] = queue.Queue()
         self._reset()
-        self._thread = threading.Thread(target=self._run, name="sim-rail", daemon=True)
-        self._thread.start()
+        start_ticking(self, "sim-rail", TICK_S)
 
     # -- host side ----------------------------------------------------------------------------
 
@@ -164,23 +198,19 @@ class SimRail:
     def _pos(self) -> int:
         return round(self.position)
 
-    def _run(self) -> None:
-        last = time.monotonic()
-        while True:
-            time.sleep(TICK_S)
-            now = time.monotonic()
-            with self._lock:
-                while not self._inbox.empty():
-                    transport, line = self._inbox.get()
-                    if transport is self._transport:
-                        self.last_rx = now
-                        self._handle(line)
-                self._step((now - last) * self.speedup)
+    def tick(self, now: float, last: float) -> None:
+        with self._lock:
+            while not self._inbox.empty():
+                transport, line = self._inbox.get()
+                if transport is self._transport:
+                    self.last_rx = now
+                    self._handle(line)
+            for dt in time_slices((now - last) * self.speedup, TICK_S * self.speedup):
+                self._step(dt)
                 tripped = self._check_switch()
                 if self.pending.motion is not _Motion.NONE:
                     self._service(tripped)
-                self._timers(now)
-            last = now
+            self._timers(now)
 
     def _timers(self, now: float) -> None:
         if self.pending.motion is _Motion.NONE:

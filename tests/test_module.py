@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -18,14 +17,14 @@ from macrorail.log import ActivityLog
 from macrorail.machine import Machine, OperationError, build_machine
 from macrorail.motion.base import AxisError, MotionInterrupted
 from macrorail.motion.module import Geometry, ScanModule
-from macrorail.motion.ports import PortFinder
+from macrorail.motion.ports import PortFinder, Role
 from macrorail.motion.rail import RailAxis
 from macrorail.scan.pose import Poser
 from macrorail.settings import NOMINAL_HALF_STEPS_PER_TURN
 from macrorail.sim.firmware import SimRail
 from macrorail.sim.module import SimModule
 
-from .conftest import SPEEDUP, idle, until
+from .conftest import SPEEDUP, idle, until, wait
 
 CONFIG = ModuleConfig(port="sim")
 GEOMETRY = Geometry(
@@ -198,7 +197,7 @@ def test_port_finder_resolves_a_fixed_port_at_every_search(tmp_path: Path) -> No
     target.touch()
     probed: list[str] = []
 
-    def probe(port: str):  # type: ignore[no-untyped-def]
+    def probe(port: str) -> Role | None:
         probed.append(port)
         return None
 
@@ -230,7 +229,7 @@ def test_port_finder_remembers_the_other_controller() -> None:
 
 def test_port_finder_follows_a_controller_that_moved() -> None:
     # The rail was on /b and the module on /a; both were replugged and swapped ports.
-    roles = {"/a": "module", "/b": "rail"}
+    roles: dict[str, Role] = {"/a": "module", "/b": "rail"}
     finder = PortFinder(candidates=lambda: ["/a", "/b"], probe_port=lambda port: roles[port])
     assert finder.find("module") == "/a"
     assert finder.find("rail") == "/b"
@@ -270,7 +269,7 @@ async def test_machine_homes_and_poses(machine: Machine) -> None:
     with pytest.raises(OperationError, match="Home tilt"):
         machine.pose(0.0, None)
     machine.home_module(("tilt", "yaw"))
-    await idle(machine, timeout=20)
+    await idle(machine)
     snapshot = machine.snapshot()["module"]
     assert snapshot["tilt_homed"]
     assert snapshot["yaw_homed"]
@@ -279,7 +278,7 @@ async def test_machine_homes_and_poses(machine: Machine) -> None:
     with pytest.raises(OperationError, match="Tilt goes from -20"):
         machine.pose(-25.0, None)
     machine.pose(0.0, 90.0)
-    await idle(machine, timeout=20)
+    await idle(machine)
     snapshot = machine.snapshot()["module"]
     assert abs(snapshot["tilt_deg"]) < 0.2
     assert abs(snapshot["yaw_deg"] - 90) < 0.2
@@ -311,9 +310,9 @@ async def test_tilt_top_stays_clear_of_the_switch(machine: Machine) -> None:
     await module_ready(machine)
     await machine._save_module(machine.module_settings.model_copy(update={"tilt_switch_deg": 92}))
     machine.home_module(("tilt",))
-    await idle(machine, timeout=20)
+    await idle(machine)
     machine.pose(90.0, None)
-    await idle(machine, timeout=20)
+    await idle(machine)
     snapshot = machine.snapshot()["module"]
     assert snapshot["tilt_homed"]  # the switch wasn't hit
     assert abs(snapshot["tilt_deg"] - 90) < 0.2
@@ -346,10 +345,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         Config(rail=RailConfig(port="sim"), data_dir=tmp_path), sim=True, sim_speedup=SPEEDUP
     )
     with TestClient(create_app(machine)) as test_client:
-        deadline = time.monotonic() + 5
-        while not test_client.get("/api/state").json()["module"]["connected"]:
-            assert time.monotonic() < deadline, "simulated module did not connect"
-            time.sleep(0.05)
+        wait(lambda: test_client.get("/api/state").json()["module"]["connected"])
         yield test_client
 
 
@@ -358,10 +354,7 @@ def test_api_module_commands(client: TestClient) -> None:
     client.post("/api/control/take", headers=headers)
     response = client.post("/api/module/home", json={"axes": ["yaw"]}, headers=headers)
     assert response.status_code == 204
-    deadline = time.monotonic() + 20
-    while client.get("/api/state").json()["activity"] != "idle":
-        assert time.monotonic() < deadline
-        time.sleep(0.05)
+    wait(lambda: client.get("/api/state").json()["activity"] == "idle")
     assert client.get("/api/state").json()["module"]["yaw_homed"]
     response = client.post("/api/module/pose", json={"tilt": 0}, headers=headers)
     assert response.status_code == 409
@@ -384,8 +377,8 @@ async def test_spin_turns_until_stopped(machine: Machine) -> None:
     await module_ready(machine)
     start = machine.module.state.yaw_steps
     machine.spin()
-    await until(lambda: machine.module.state.yaw_steps - start > 500, timeout=10)
+    await until(lambda: machine.module.state.yaw_steps - start > 500)
     await machine.stop()
-    await idle(machine, timeout=10)
+    await idle(machine)
     assert machine.module.state.moving is None
     assert "Stopped" in machine.log.entries[-1].message

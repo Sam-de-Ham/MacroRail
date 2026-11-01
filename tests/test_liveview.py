@@ -6,6 +6,8 @@ from contextlib import aclosing
 from macrorail.camera.liveview import LiveView
 from macrorail.sim.camera import SimCamera
 
+from .conftest import CEILING_S
+
 
 async def take(view: LiveView, count: int) -> list[bytes]:
     frames: list[bytes] = []
@@ -22,7 +24,7 @@ async def test_frames_flow_only_while_watched() -> None:
     view = LiveView(camera, max_fps=50, paused=lambda: False)
     task = asyncio.create_task(view.run())
     try:
-        frames = await asyncio.wait_for(take(view, 2), 5)
+        frames = await asyncio.wait_for(take(view, 2), CEILING_S)
         assert all(frame.startswith(b"\xff\xd8") for frame in frames)  # JPEG
         assert view.viewers == 0
     finally:

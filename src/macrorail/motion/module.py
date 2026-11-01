@@ -417,11 +417,6 @@ class ScanModule:
         )
         return self._state.tilt_steps if axis == "tilt" else self._state.yaw_steps
 
-    async def read_hall(self) -> int:
-        reading = int((await self._request("HALL"))["hall"])
-        self._update(hall=reading)
-        return reading
-
     async def stop(self) -> None:
         # Always sent: the controller ignores it when idle, and the local `moving` flag can
         # briefly lag a motion that has just been started.

@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
@@ -301,7 +300,7 @@ def write_record(folder: Path, record: dict[str, Any]) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     tmp = folder / (RECORD + ".tmp")
     tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
-    os.replace(tmp, folder / RECORD)
+    tmp.replace(folder / RECORD)
 
 
 def read_record(folder: Path) -> dict[str, Any] | None:

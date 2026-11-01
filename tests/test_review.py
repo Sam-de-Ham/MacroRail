@@ -61,7 +61,7 @@ async def stack_of(machine: Machine, name: str = "") -> str:
     machine.set_point("start", 4000)
     machine.set_point("end", 4020)
     machine.start_stack()
-    await idle(machine, timeout=20)
+    await idle(machine)
     assert machine.stack is not None
     return machine.stack.id
 
@@ -69,7 +69,7 @@ async def stack_of(machine: Machine, name: str = "") -> str:
 async def test_stack_downloads_previews_and_builds_a_preview(machine: Machine) -> None:
     stack_id = await stack_of(machine, name="Weevil, dorsal")
     await until(lambda: machine.review.building is None and machine.review.revision > 0)
-    await until(lambda: machine.review.preview_path(stack_id).exists(), timeout=10)
+    await until(lambda: machine.review.preview_path(stack_id).exists())
     [summary] = machine.review.stacks()
     assert summary["id"] == stack_id
     assert summary["name"] == "Weevil, dorsal"
@@ -84,7 +84,7 @@ async def test_stack_archive_holds_record_preview_and_frames(machine: Machine) -
     stack_id = await stack_of(machine, name="Weevil, dorsal")
     assert machine.stack is not None
     assert machine.stack.latest_preview == 6
-    await until(lambda: machine.review.preview_path(stack_id).exists(), timeout=10)
+    await until(lambda: machine.review.preview_path(stack_id).exists())
     filename, chunks = machine.review.archive(stack_id)
     base = f"MacroRail-{stack_id}-Weevil-dorsal"
     assert filename == f"{base}.zip"
@@ -116,7 +116,7 @@ async def test_running_stack_cannot_be_deleted(machine: Machine) -> None:
     with pytest.raises(OperationError, match="still running"):
         machine.delete_stack(machine.stack.id)
     await machine.stop()
-    await idle(machine, timeout=20)
+    await idle(machine)
     machine.delete_stack(machine.stack.id)
     assert machine.review.stacks() == []
 

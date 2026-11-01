@@ -78,7 +78,7 @@ def found(start: int = 100, end: int = 200) -> RangeResult:
 
 def runner(
     tmp_path: Path,
-    ranges: list[Any],
+    ranges: list[RangeResult | Exception],
     poses: int = 3,
     fail_at: int | None = None,
     done: dict[int, dict[str, Any]] | None = None,

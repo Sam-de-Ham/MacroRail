@@ -88,7 +88,7 @@ async def test_auto_range_finds_the_simulated_subject(machine: Machine) -> None:
     machine.go_to("start")
     await idle(machine)
     machine.find_range()
-    await idle(machine, timeout=60)
+    await idle(machine)
     assert machine.axis.state.position == 4300  # back where the scan began
     result = machine.scanner.range
     assert result is not None
@@ -106,7 +106,7 @@ async def test_backlash_measurement_matches_the_simulator(machine: Machine) -> N
     machine.go_to("start")
     await idle(machine)
     machine.measure_backlash()
-    await idle(machine, timeout=60)
+    await idle(machine)
     assert machine.axis.state.position == 4120
     result = machine.scanner.backlash
     assert result is not None

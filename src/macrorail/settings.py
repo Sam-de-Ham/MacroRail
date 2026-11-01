@@ -8,7 +8,6 @@ version of the app without the 3D workspace.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Literal, Self
 
@@ -150,7 +149,7 @@ class Store[M: BaseModel]:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(value.model_dump_json(indent=2), encoding="utf-8")
-        os.replace(tmp, self.path)
+        tmp.replace(self.path)
 
 
 class SettingsStore(Store[Settings]):

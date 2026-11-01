@@ -1,4 +1,5 @@
-"""The focus axis abstraction. v1 implements it with the rail; v1.1 adds a 3D printer.
+"""The focus axis abstraction, implemented by the rail (`RailAxis`). Another motion source,
+such as a 3D printer, would be another implementation.
 
 Positions, distances, speeds and accelerations are in the axis' own steps (`steps_per_mm`
 converts), so stack positions stay exact integers on the axis' grid.

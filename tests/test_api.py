@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -12,7 +11,7 @@ from macrorail.api import create_app
 from macrorail.config import Config, RailConfig
 from macrorail.machine import build_machine
 
-from .conftest import SPEEDUP
+from .conftest import SPEEDUP, wait
 
 
 @pytest.fixture
@@ -21,10 +20,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         Config(rail=RailConfig(port="sim"), data_dir=tmp_path), sim=True, sim_speedup=SPEEDUP
     )
     with TestClient(create_app(machine)) as test_client:
-        deadline = time.monotonic() + 5
-        while not test_client.get("/api/state").json()["rail"]["connected"]:
-            assert time.monotonic() < deadline, "simulated rail did not connect"
-            time.sleep(0.05)
+        wait(lambda: test_client.get("/api/state").json()["rail"]["connected"])
         yield test_client
 
 

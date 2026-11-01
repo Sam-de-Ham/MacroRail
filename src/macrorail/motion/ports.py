@@ -144,7 +144,7 @@ def opener(finder: PortFinder, role: Role, port: str) -> Callable[[], Transport]
     """The transport factory for one controller: a fixed port, or `auto` (searched afresh
     on every connection, since a reconnect may follow an unplug)."""
     # The module's Nano keeps running between connections, so a reconnect (a USB hiccup, an
-    # app restart) keeps its homing. The rail's is reset on every connection, as it always was.
+    # app restart) keeps its homing. The rail's Nano is reset on every connection.
     keep = role == "module"
     if port != AUTO:
         finder.claim(role, port)

@@ -1,4 +1,5 @@
-"""The camera abstraction. v1 implements it with gphoto2 over USB; v1.1 adds a relay trigger."""
+"""The camera abstraction: gphoto2 over USB (`GPhotoCamera`), or the simulator's `SimCamera`.
+Another way to fire the shutter, such as a cable relay, would be another implementation."""
 
 from __future__ import annotations
 

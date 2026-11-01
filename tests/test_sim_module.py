@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 
 import pytest
 
 from macrorail.sim.module import SimModule, SimTransport, find_peak
+
+from .conftest import CEILING_S, wait
 
 SPEEDUP = 40.0
 HOME_TILT = "HOME TILT 800 100 30 3000 200 4000"
@@ -24,7 +25,7 @@ class Client:
         self.next_id = 1
         self.ready = self.read()
 
-    def read(self, timeout: float = 5.0) -> str:
+    def read(self, timeout: float = CEILING_S) -> str:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             line = self.transport.read_line()
@@ -38,7 +39,7 @@ class Client:
         self.transport.write_line(f"{request_id} {command}")
         return request_id
 
-    def reply(self, request_id: int, timeout: float = 5.0) -> str:
+    def reply(self, request_id: int, timeout: float = CEILING_S) -> str:
         """The reply to `request_id`, without its id."""
         deadline = time.monotonic() + timeout
         while True:
@@ -48,20 +49,13 @@ class Client:
             elif line.startswith(f"{request_id} "):
                 return line.split(" ", 1)[1]
 
-    def request(self, command: str, timeout: float = 5.0) -> str:
+    def request(self, command: str, timeout: float = CEILING_S) -> str:
         return self.reply(self.send(command), timeout)
 
     def data(self, command: str) -> dict[str, str]:
         reply = self.request(command)
         assert reply.startswith("OK"), reply
         return dict(token.split("=", 1) for token in reply.split()[1:])
-
-
-def wait_until(condition: Callable[[], bool], timeout: float = 2.0) -> None:
-    deadline = time.monotonic() + timeout
-    while not condition():
-        assert time.monotonic() < deadline, "timed out"
-        time.sleep(0.005)
 
 
 @pytest.fixture
@@ -178,7 +172,7 @@ def test_move_needs_homing(client: Client) -> None:
 
 def test_stop_decelerates_and_reports(client: Client) -> None:
     jog = client.send("JOG YAW 20000 1000 1000")
-    time.sleep(0.05)
+    wait(lambda: client.data("STATUS")["yaw"] != "0")
     client.request("STOP")
     reply = client.reply(jog)
     assert reply.startswith("ERR STOPPED pos=")
@@ -190,19 +184,21 @@ def test_coils_switch_off_after_idle() -> None:
     client = Client(module)
     assert not module.coils_on
     jog = client.send("JOG TILT 150 1000 4000")
-    wait_until(lambda: module.coils_on)
+    wait(lambda: module.coils_on)
     client.reply(jog)
     assert module.coils_on  # still on just after the move
-    wait_until(lambda: not module.coils_on, timeout=1.0)
+    wait(lambda: not module.coils_on)
 
 
-def test_stop_right_away_and_never_past_the_target(client: Client) -> None:
+def test_stop_right_away_and_never_past_the_target() -> None:
+    # Real time: a 300-step jog then lasts about a second, long enough to stop it halfway.
+    client = Client(SimModule(speedup=1.0))
     jog = client.send("JOG YAW 5000 1000 1000")
     client.request("STOP")  # before the first step: stops where it is
     assert client.reply(jog) == "ERR STOPPED pos=0"
     for _ in range(3):
         jog = client.send("JOG YAW 300 1000 1000")
-        wait_until(lambda: client.data("STATUS")["yaw"] not in ("0", "300"))
+        wait(lambda: client.data("STATUS")["yaw"] not in ("0", "300"))
         client.request("STOP")
         assert int(client.reply(jog).split("pos=")[1]) <= 300
         assert client.request("JOG YAW -300 1000 4000").startswith("OK")
@@ -212,7 +208,7 @@ def test_watchdog_stops_motion_when_the_host_goes_quiet() -> None:
     module = SimModule(speedup=1.0)  # the watchdog runs on the wall clock
     client = Client(module)
     jog = client.send("JOG YAW 20000 200 1000")
-    reply = client.reply(jog, timeout=5)
+    reply = client.reply(jog)
     assert reply.startswith("ERR LINK pos=")
 
 
@@ -242,7 +238,7 @@ def test_tilt_homing_repeats_from_anywhere() -> None:
 
 def test_tilt_homing_ignores_noise_on_the_probe(module: SimModule, client: Client) -> None:
     home = client.send("HOME TILT 800 20 30 3000 200 4000")
-    wait_until(lambda: module.pending.motion.name == "HOME_PROBE")
+    wait(lambda: module.pending.motion.name == "HOME_PROBE")
     module.blip_switch()  # too short for the filter: the probe goes on to the switch
     assert client.reply(home).startswith("OK pos=0")
     assert module.tilt_deg == pytest.approx(97.0, abs=0.01)
@@ -250,7 +246,7 @@ def test_tilt_homing_ignores_noise_on_the_probe(module: SimModule, client: Clien
 
 def test_tilt_homing_refuses_an_early_probe_contact(module: SimModule, client: Client) -> None:
     home = client.send("HOME TILT 800 10 30 3000 200 4000")
-    wait_until(lambda: module.pending.motion.name == "HOME_PROBE")
+    wait(lambda: module.pending.motion.name == "HOME_PROBE")
     module.hold_switch(True)  # well before where the seek tripped it (clearance/2 = 15)
     try:
         assert client.reply(home).startswith("ERR SWITCH_EARLY pos=")
@@ -283,8 +279,8 @@ def test_switch_stops_a_tilt_move_and_clears_homed(module: SimModule, client: Cl
         module.hold_switch(False)
     # Starting on the pressed switch and moving away ignores it until it releases.
     assert reply == "OK pos=800"
-    jog = client.send("JOG TILT -400 200 1000")
-    time.sleep(0.01)
+    jog = client.send("JOG TILT -400 20 1000")  # slow, to press the switch on the way
+    wait(lambda: client.data("STATUS")["tilt"] != "800")
     module.hold_switch(True)
     try:
         assert client.reply(jog).startswith("ERR ENDSTOP pos=")
@@ -297,9 +293,9 @@ def test_a_switch_hit_while_stopping_still_reports_endstop() -> None:
     module = SimModule(speedup=1.0)  # real time, to press the switch while it decelerates
     client = Client(module)
     homed_tilt(client)
-    assert client.request("MOVE TILT 600 1000 4000", timeout=10) == "OK pos=600"
+    assert client.request("MOVE TILT 600 1000 4000") == "OK pos=600"
     move = client.send("MOVE TILT 100 200 100")
-    wait_until(lambda: int(client.data("STATUS")["tilt"]) < 590, timeout=3.0)
+    wait(lambda: int(client.data("STATUS")["tilt"]) < 590)
     assert client.request("STOP") == "OK"
     module.hold_switch(True)
     try:

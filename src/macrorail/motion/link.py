@@ -139,10 +139,6 @@ class Link:
     def closed(self) -> bool:
         return self._closed.is_set()
 
-    async def wait_closed(self) -> LinkError:
-        await self._closed.wait()
-        return self._close_reason
-
     async def request(
         self, command: str, *args: int | str, timeout: float = 1.0, motion: bool = False
     ) -> dict[str, str]:

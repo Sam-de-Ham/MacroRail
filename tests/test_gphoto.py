@@ -14,6 +14,8 @@ from macrorail.camera.base import CameraError
 from macrorail.config import CameraConfig
 from macrorail.log import ActivityLog
 
+from .conftest import until
+
 GP_EVENT_TIMEOUT = 0
 GP_EVENT_FILE_ADDED = 2
 GP_WIDGET_TEXT = 2
@@ -135,10 +137,7 @@ async def start_camera() -> tuple[Any, asyncio.Task[None]]:
 
     camera = GPhotoCamera(CameraConfig(capture_timeout_s=0.5), ActivityLog(), lambda: None)
     task = asyncio.create_task(camera.run())
-    for _ in range(100):
-        if camera.state.connected or camera.state.problem != "Looking for the camera…":
-            break
-        await asyncio.sleep(0.01)
+    await until(lambda: camera.state.connected or camera.state.problem != "Looking for the camera…")
     return camera, task
 
 

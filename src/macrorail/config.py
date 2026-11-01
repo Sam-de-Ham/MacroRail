@@ -40,7 +40,7 @@ class RailConfig(_Section):
     homing_speed_mm_s: float = Field(
         2.0,
         gt=0,
-        description="Both the seek and the second touch of the switch (user, 2026-10-24).",
+        description="Both the seek and the second touch of the switch.",
     )
     homing_clearance_mm: float = Field(
         1.0, gt=0, description="How far past the switch's release point to back off."
@@ -53,8 +53,8 @@ class RailConfig(_Section):
     @model_validator(mode="before")
     @classmethod
     def _drop_retired(cls, data: object) -> object:
-        # The slow second touch was retired (user, 2026-10-24); config files written before
-        # still name its speed, and must keep loading.
+        # Homing once touched the switch a second time at a separate, slower speed. Config
+        # files from then still name that speed, and must keep loading.
         if isinstance(data, dict):
             data = {k: v for k, v in data.items() if k != "homing_probe_speed_mm_s"}
         return data
@@ -103,7 +103,7 @@ class CameraConfig(_Section):
 
 
 class ServerConfig(_Section):
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # noqa: S104  # served to phones and laptops on the LAN
     port: int = 8000
 
 

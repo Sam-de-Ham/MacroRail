@@ -13,7 +13,7 @@ constexpr uint8_t PIN_DIR = 4;
 constexpr uint8_t PIN_ENABLE = 5;    // TMC2209 EN, active low
 constexpr uint8_t PIN_UART_RX = 7;   // TMC2209 PDN_UART (direct)
 constexpr uint8_t PIN_UART_TX = 8;   // TMC2209 PDN_UART (through 1 kΩ)
-// D9 is reserved for the shutter-cable relay (v1.1).
+// D9 is reserved for a shutter-cable relay.
 
 // Endstop: switch to GND with the internal pull-up. The rail's switch is wired normally-open
 // (C + NO), so the input reads LOW while pressed. If it is rewired normally-closed (C + NC),

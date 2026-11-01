@@ -17,6 +17,8 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
+from .firmware import start_ticking, time_slices
+
 FIRMWARE_VERSION = "1.0.0-sim"
 PROTOCOL_VERSION = 1
 TICK_S = 0.002
@@ -226,8 +228,7 @@ class SimModule:
         self._transport: SimTransport | None = None
         self._inbox: list[tuple[SimTransport, str]] = []
         self._reset()
-        self._thread = threading.Thread(target=self._run, name="sim-module", daemon=True)
-        self._thread.start()
+        start_ticking(self, "sim-module", TICK_S)
 
     # -- host side ----------------------------------------------------------------------------
 
@@ -323,25 +324,20 @@ class SimModule:
     def _endstop(self) -> bool:
         return self.lever_closed or self.switch_held
 
-    def _run(self) -> None:
-        last = time.monotonic()
-        while True:
-            time.sleep(TICK_S)
-            now = time.monotonic()
-            with self._lock:
-                inbox, self._inbox = self._inbox, []
-                for transport, line in inbox:
-                    if transport is self._transport:
-                        self.last_rx = now
-                        self._handle(line)
-                dt = (now - last) * self.speedup
+    def tick(self, now: float, last: float) -> None:
+        with self._lock:
+            inbox, self._inbox = self._inbox, []
+            for transport, line in inbox:
+                if transport is self._transport:
+                    self.last_rx = now
+                    self._handle(line)
+            for dt in time_slices((now - last) * self.speedup, TICK_S * self.speedup):
                 self.clock += dt
                 self._step(dt)
                 tripped = self._check_switch()
                 if self.pending.motion is not _Motion.NONE:
                     self._service(tripped)
-                self._timers(now)
-            last = now
+            self._timers(now)
 
     def _timers(self, now: float) -> None:
         p = self.pending

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from functools import partial
 
 from .base import Camera, CameraError
@@ -51,7 +51,7 @@ class LiveView:
     def _has_frame_after(self, sequence: int) -> bool:
         return self._frame is not None and self._sequence != sequence
 
-    async def frames(self) -> AsyncIterator[bytes]:
+    async def frames(self) -> AsyncGenerator[bytes]:
         """Yield frames for one viewer, starting with the most recent one."""
         self._viewers += 1
         try:

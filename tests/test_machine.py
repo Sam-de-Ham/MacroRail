@@ -82,7 +82,7 @@ async def test_complete_stack_returns_to_start(machine: Machine) -> None:
     machine.set_point("start", 4000)
     machine.set_point("end", 4041)
     machine.start_stack()
-    await idle(machine, timeout=20)
+    await idle(machine)
     stack = machine.stack
     assert stack is not None
     assert stack.phase == "done"
@@ -107,7 +107,7 @@ async def test_pause_and_resume(machine: Machine) -> None:
     await asyncio.sleep(0.3)
     assert len(stack.shots) == taken
     machine.resume_stack()
-    await idle(machine, timeout=20)
+    await idle(machine)
     assert stack.phase == "done"
     assert len(stack.shots) == stack.plan.count
 
@@ -121,7 +121,7 @@ async def test_stop_returns_to_start(machine: Machine) -> None:
     assert stack is not None
     await until(lambda: len(stack.shots) >= 3)
     await machine.stop()
-    await idle(machine, timeout=20)
+    await idle(machine)
     assert stack.phase == "stopped"
     assert len(stack.shots) < stack.plan.count
     assert machine.axis.state.position == 4000
@@ -139,7 +139,7 @@ async def test_camera_failure_pauses_and_retakes(machine: Machine) -> None:
     await until(lambda: stack.phase == "camera_error")
     assert stack.error is not None
     machine.resume_stack()
-    await idle(machine, timeout=20)
+    await idle(machine)
     assert stack.phase == "done"
     assert [s.position for s in stack.shots] == [4000, 4004, 4008, 4012, 4016, 4020]
 
@@ -216,7 +216,7 @@ async def test_second_start_does_not_replace_running_stack(machine: Machine) -> 
         machine.start_stack()
     assert machine.stack is first
     await machine.stop()
-    await idle(machine, timeout=20)
+    await idle(machine)
 
 
 async def test_stop_while_preparing_stays_put(machine: Machine) -> None:
@@ -228,7 +228,7 @@ async def test_stop_while_preparing_stays_put(machine: Machine) -> None:
     assert stack is not None
     await until(lambda: machine.axis.state.position > 4000)
     await machine.stop()
-    await idle(machine, timeout=20)
+    await idle(machine)
     assert stack.phase == "stopped"
     assert stack.shots == []
     assert machine.axis.state.position < 40000
@@ -242,10 +242,10 @@ async def test_stop_while_returning(machine: Machine) -> None:
     machine.start_stack()
     stack = machine.stack
     assert stack is not None
-    await until(lambda: stack.phase == "returning", timeout=20)
+    await until(lambda: stack.phase == "returning")
     await until(lambda: machine.axis.state.position < 40000)
     await machine.stop()
-    await idle(machine, timeout=20)
+    await idle(machine)
     assert stack.phase == "done"
     assert 4000 < machine.axis.state.position < 40000
 

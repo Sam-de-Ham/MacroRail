@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
@@ -13,14 +14,27 @@ from macrorail.motion.rail import RailAxis
 from macrorail.sim.firmware import SimRail
 
 SPEEDUP = 25.0
+# A wait ends as soon as its condition holds; its ceiling only catches a hang. The simulators
+# run on the wall clock, so a loaded machine slows them down: ceilings are generous on purpose.
+CEILING_S = 120.0
+POLL_S = 0.01
 
 
-async def until(predicate: Callable[[], bool], timeout: float = 5.0) -> None:
-    async def poll() -> None:
-        while not predicate():
-            await asyncio.sleep(0.01)
+async def until(predicate: Callable[[], bool], timeout: float = CEILING_S) -> None:
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            pytest.fail(f"condition still false after {timeout} s")
+        await asyncio.sleep(POLL_S)
 
-    await asyncio.wait_for(poll(), timeout)
+
+def wait(predicate: Callable[[], bool], timeout: float = CEILING_S) -> None:
+    """`until` for synchronous tests (the test client, raw protocol lines)."""
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            pytest.fail(f"condition still false after {timeout} s")
+        time.sleep(POLL_S)
 
 
 @pytest.fixture
@@ -42,7 +56,10 @@ async def rail(sim_rail: SimRail) -> AsyncIterator[RailAxis]:
 async def machine(tmp_path: Path) -> AsyncIterator[Machine]:
     config = Config(rail=RailConfig(port="sim"), data_dir=tmp_path)
     m = build_machine(config, sim=True, sim_speedup=SPEEDUP)
-    await m.update_settings({"stack": {"settle_s": 0.0}})
+    # Settle pauses wait for vibration to die down. The simulator has none, and they run on
+    # the wall clock, unscaled: without this the 3D tests spend most of their time waiting.
+    await m.update_settings({"stack": {"settle_s": 0.0}, "scan": {"settle_s": 0.0}})
+    m.update_scan_plan({"settle_s": 0.0})
     task = asyncio.create_task(m.run())
     await until(lambda: m.axis.state.connected)
     yield m
@@ -50,7 +67,7 @@ async def machine(tmp_path: Path) -> AsyncIterator[Machine]:
     await asyncio.gather(task, return_exceptions=True)
 
 
-async def idle(machine: Machine, timeout: float = 10.0) -> None:
+async def idle(machine: Machine, timeout: float = CEILING_S) -> None:
     await until(lambda: not machine.busy, timeout)
 
 

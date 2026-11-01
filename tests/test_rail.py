@@ -89,7 +89,7 @@ async def test_controller_restart_reconnects_unhomed(rail: RailAxis, sim_rail: S
     await rail.home()
     sim_rail.open()  # another open resets the controller and steals the port
     await until(lambda: not rail.state.connected)
-    await until(lambda: rail.state.connected, timeout=10)
+    await until(lambda: rail.state.connected)
     assert not rail.state.homed
 
 

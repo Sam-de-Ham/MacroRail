@@ -149,7 +149,7 @@ class Machine:
         self.module = module(self._module_geometry)
         self.poser = Poser(self.module, config.module, self._check_stop, activity_log)
         self._listeners: list[Callable[[], None]] = []
-        self._task: asyncio.Task[None] | None = None
+        self._task: asyncio.Task[None] | None = None  # held so the running operation isn't GC'd
         self._stop_requested = False
         self._full_hold = True
         self._last_active = time.monotonic()
@@ -1400,7 +1400,7 @@ def build_machine(config: Config, *, sim: bool = False, sim_speedup: float = 1.0
         def specimen_view() -> tuple[SimSpecimen, float, float] | None:
             # A homed module stands for the 3D rig: the camera then sees the insect on it.
             if sim_module.yaw.homed:  # tilt may be set "by hand" (manual tilt)
-                # The simulated head is mounted like the real one: screw X away at yaw 0.
+                # The simulated head is mounted like the real one: screw X at the camera at yaw 0.
                 return specimen, sim_module.tilt_deg, sim_module.yaw_deg + SCREW_X_YAW_DEG
             return None
 

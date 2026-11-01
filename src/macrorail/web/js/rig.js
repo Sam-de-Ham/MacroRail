@@ -140,8 +140,8 @@ function renderSystemCard(m) {
     ["Port", link.port],
     ["Status round trip", link.status_ms === null ? null : `${link.status_ms} ms`],
     ["Tilt switch", m.connected ? (m.switch ? "Pressed" : "Released") : null],
-    ["Half-steps per turn", m.calibration.half_steps_per_turn.toFixed(2) + (m.calibration.yaw_calibrated ? "" : " (nominal)")],
-    ["Tilt switch angle", `${m.calibration.tilt_switch_deg.toFixed(2)}°` + (m.calibration.tilt_calibrated ? "" : " (from the CAD)")],
+    ["Half-steps per turn", `${m.calibration.half_steps_per_turn.toFixed(2)}${m.calibration.yaw_calibrated ? "" : " (nominal)"}`],
+    ["Tilt switch angle", `${m.calibration.tilt_switch_deg.toFixed(2)}°${m.calibration.tilt_calibrated ? "" : " (from the CAD)"}`],
   ];
   const key = JSON.stringify(rows);
   const container = $("module-diagnostics");

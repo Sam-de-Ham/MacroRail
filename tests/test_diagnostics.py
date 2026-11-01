@@ -40,7 +40,7 @@ async def test_machine_reports_driver_and_link(machine: Machine) -> None:
 
 def test_under_voltage_is_told_once_each_time() -> None:
     log = ActivityLog()
-    diagnostics = Diagnostics(None, None, Path("."), lambda: False, lambda: None, log)  # type: ignore[arg-type]
+    diagnostics = Diagnostics(None, None, Path(), lambda: False, lambda: None, log)  # type: ignore[arg-type]
     for now in (False, True, True, False, True):
         diagnostics._warn_power(now)
     warnings = [e for e in log.entries if "under-voltage" in e.message]

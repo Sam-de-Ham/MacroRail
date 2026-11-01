@@ -12,6 +12,7 @@ from macrorail.scan.centring import (
     SCREW_X_YAW_DEG,
     CentringError,
     Observation,
+    Signs,
     fit,
     height_error,
     screw_facing_yaw,
@@ -95,7 +96,7 @@ def test_a_screw_that_moves_the_other_way_is_caught() -> None:
     after = fit(observe(0.6 - 0.625, -0.4 - 0.375, [0, 90, 180, 270]))
     assert wrong_way(before, after, advice, DESIGN_SIGNS) == ["y"]
     # With Y's direction flipped, the advice for the new offset brings it back.
-    signs = {"x": 1, "y": -1}
+    signs: Signs = {"x": 1, "y": -1}
     assert {t.screw: t.turns for t in screw_turns(after, signs)} == {"y": 1.5}
 
 

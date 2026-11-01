@@ -1,7 +1,7 @@
 [project]
 name = "macrorail"
 version = "1.0.0"
-description = "Focus-stacking controller for a motorised macro rail: Raspberry Pi web app, Arduino + TMC2209 motion, gphoto2 camera."
+description = "Focus-stacking controller for a motorised macro rail, with an optional 3D scan module: Raspberry Pi web app, Arduino + TMC2209 motion, gphoto2 camera."
 readme = "README.md"
 license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE"]
@@ -29,6 +29,7 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.8",
     "mypy>=1.13",
+    "pytest-cov>=6",
 ]
 
 [build-system]
@@ -38,19 +39,29 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# Run inside Fusion 360 and follow its API's naming; checked there, not here.
+extend-exclude = ["hardware/scan-module/fusion"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT"]
-# Per-request timeouts are part of the link API, not an accidental pattern.
-ignore = ["ASYNC109"]
+select = [
+    "E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT",
+    "C4", "PIE", "PERF", "RET", "PTH", "N", "S",
+]
+ignore = [
+    "ASYNC109",  # per-request timeouts are part of the link API, not an accidental pattern
+    "N818",  # stop signals such as MotionInterrupted are not errors, so no Error suffix
+    "S101",  # asserts state invariants for the type checker; the app never runs with -O
+]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["ASYNC110"]
+"tests/*" = ["ASYNC110", "S311"]
+"src/macrorail/sim/*" = ["S311"]  # the simulator's noise needs no cryptographic randomness
 
 [tool.mypy]
 strict = true
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
+files = ["src", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
 module = ["gphoto2", "serial", "serial.*"]
@@ -60,3 +71,11 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["macrorail"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+precision = 1

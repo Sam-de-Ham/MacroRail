@@ -193,8 +193,8 @@ function renderScanList(ctx) {
 
 function renderScanView(ctx) {
   const card = $("scan-view");
-  card.hidden = !scan || !scan.record || Boolean(selected); // hidden until the record arrives
-  if (!scan || !scan.record) return;
+  card.hidden = !scan?.record || Boolean(selected); // hidden until the record arrives
+  if (!scan?.record) return;
   const record = scan.record;
   setText("scan-view-title", scanTitle(record));
   const results = record.results || {};

@@ -3,7 +3,7 @@
 // Each tab lives in its own module exporting `actions` (click handlers by data-action) and
 // `render(ctx)`. Everything shown is derived from the latest state; nothing is polled.
 //
-// Two workspaces share the page: 2D (focus stacking, today's app) and 3D (scanning with the
+// Two workspaces share the page: 2D (focus stacking) and 3D (scanning with the
 // scan module). Elements marked data-only="2d" or "3d" show in that workspace only; the rail's
 // Position card is moved into whichever workspace is showing, so it exists once.
 

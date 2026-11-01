@@ -166,14 +166,15 @@ async def test_sim_camera_shows_the_specimen_when_asked() -> None:
 def test_render_speed() -> None:
     specimen = SimSpecimen()
     specimen.render(0, 0, 20.0)  # warm up
-    start = time.perf_counter()
+    # CPU time of this thread, not wall time, so other work on the machine doesn't count.
+    start = time.thread_time()
     for yaw in (10.0, 20.0, 30.0):
         specimen.render(5, yaw, 20.0)
-    new_pose = (time.perf_counter() - start) / 3
-    start = time.perf_counter()
+    new_pose = (time.thread_time() - start) / 3
+    start = time.thread_time()
     for k in range(10):
         specimen.render(5, 30.0, 20.0 + 0.01 * k)
-    cached = (time.perf_counter() - start) / 10
+    cached = (time.thread_time() - start) / 10
     # Generous bounds (CI machines vary); typical laptop: ~110 ms new, ~20 ms cached.
     assert new_pose < 0.6
     assert cached < 0.2

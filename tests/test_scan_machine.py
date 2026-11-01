@@ -85,9 +85,9 @@ async def test_a_stopped_scan_continues_where_it_stopped(machine: Machine) -> No
     machine.start_scan()
     run = machine.scan
     assert run is not None
-    await until(lambda: 0 in run.results, timeout=200)
+    await until(lambda: 0 in run.results, timeout=300)
     await machine.stop()
-    await idle(machine, timeout=60)
+    await idle(machine)
     assert run.phase == "stopped"
     unfinished = machine.snapshot()["scan3d"]["unfinished"]
     assert [s["id"] for s in unfinished] == [run.id]
@@ -111,9 +111,9 @@ async def test_one_test_pose(machine: Machine) -> None:
     with pytest.raises(OperationError, match="Turn to a tilt"):
         machine.start_scan(test=True)  # homing parked tilt above the range
     machine.pose(0.0, 45.0)
-    await idle(machine, timeout=30)
+    await idle(machine)
     machine.start_scan(test=True)
-    await idle(machine, timeout=200)
+    await idle(machine, timeout=300)
     assert machine.scan is not None
     assert machine.scan.phase == "done"
     assert len(machine.scan.poses) == 1
@@ -127,9 +127,9 @@ async def test_stop_while_homing_yaw_ends_the_scan(machine: Machine) -> None:
     assert run is not None
     with pytest.raises(OperationError, match="can't change while a 3D scan runs"):
         await machine.update_settings({"stack": {"step": 30}})
-    await until(lambda: machine.module.state.moving == "yaw", timeout=10)
+    await until(lambda: machine.module.state.moving == "yaw")
     await machine.stop()
-    await idle(machine, timeout=30)
+    await idle(machine)
     assert run.phase == "stopped"
     assert not run.active
     machine.delete_scan(run.id)  # not stuck "running"
@@ -151,13 +151,13 @@ async def manual_rig(machine: Machine) -> None:
     )
     machine.update_scan_plan({"manual_tilt": True, "settle_s": 0.0, "keep_every": 4})
     machine.home()
-    await idle(machine, timeout=30)
+    await idle(machine)
     machine.home_module(("yaw",))
-    await idle(machine, timeout=30)
+    await idle(machine)
     machine.camera._specimen()[0].offset_mm = (0.0, 0.0, 0.0)  # type: ignore[attr-defined]
     machine.set_point("start", round(18.5 * machine.axis.steps_per_mm))
     machine.go_to("start")
-    await idle(machine, timeout=30)
+    await idle(machine)
 
 
 async def test_manual_tilt_refuses_the_tilt_motor(machine: Machine) -> None:
@@ -181,11 +181,11 @@ async def test_manual_tilt_scan_asks_for_each_ring(machine: Machine) -> None:
     run = machine.scan
     assert run is not None
     for ring in ("10", "0"):
-        await until(lambda: run.phase == "paused", timeout=120)
+        await until(lambda: run.phase == "paused")
         assert run.error
         assert f"Set the tilt to {ring}°" in run.error
         machine.resume_scan()
-        await until(lambda: run.phase == "running", timeout=5)
+        await until(lambda: run.phase == "running")
     await idle(machine, timeout=300)
     assert run.phase == "done", machine.log.entries[-1].message
     assert machine.module.state.tilt_steps == tilt_steps  # the tilt motor never moved
@@ -196,7 +196,7 @@ async def test_manual_tilt_centring_needs_only_yaw(machine: Machine) -> None:
     await manual_rig(machine)
     machine.camera._specimen()[0].offset_mm = (0.5, 0.3, 0.0)  # type: ignore[attr-defined]
     machine.measure_centring()
-    await idle(machine, timeout=150)
+    await idle(machine, timeout=300)
     assert machine.centring, machine.log.entries[-1].message
     assert machine.centring[-1].offset_x_mm == pytest.approx(0.5, abs=0.06)
     assert machine.centring[-1].offset_y_mm == pytest.approx(0.3, abs=0.06)

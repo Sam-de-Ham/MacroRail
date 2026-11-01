@@ -164,7 +164,11 @@ def _throttled() -> int | None:
         return None
     try:
         result = subprocess.run(
-            ["vcgencmd", "get_throttled"], capture_output=True, text=True, timeout=2, check=True
+            ["vcgencmd", "get_throttled"],  # noqa: S607  # found on PATH just above
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
         )
         return int(result.stdout.strip().split("=")[1], 16)
     except (OSError, subprocess.SubprocessError, IndexError, ValueError):
