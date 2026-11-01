@@ -1,6 +1,6 @@
 [project]
 name = "macrorail"
-version = "1.0.0"
+version = "1.1.0"
 description = "Focus-stacking controller for a motorised macro rail, with an optional 3D scan module: Raspberry Pi web app, Arduino + TMC2209 motion, gphoto2 camera."
 readme = "README.md"
 license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
