@@ -1,0 +1,628 @@
+<!-- MacroRail build guide. Built into MacroRail-build-guide.pdf by build.py; see README.md. -->
+
+<section class="titlepage">
+  <div class="project">MacroRail</div>
+  <h1 class="title">Build guide</h1>
+  <p class="subtitle">A motorised focus-stacking rail: parts, printing, assembly, electronics,
+  software and first use.</p>
+  <div class="hero"><img src="../images/rail.png" alt="The assembled rail"></div>
+  <p class="meta">For the rail as published at github.com/Sam-de-Ham/MacroRail, November 2026.
+  The optional scan module has its own guide.</p>
+  {{contents}}
+</section>
+
+<h2>About the rail</h2>
+<p>MacroRail moves the subject along the lens axis in steps of a few micrometres while a fixed
+camera takes one photograph per step. Combining the photographs (focus stacking) gives one image
+that is sharp throughout. The rail is meant for macro lenses and microscope objectives, where the
+depth of field is a few tens of micrometres.</p>
+<p>A Raspberry Pi runs a web app that is used from a phone or a laptop on the same network. The Pi
+talks to an Arduino Nano over USB; the Nano drives a NEMA 17 stepper through a TMC2209 driver and
+watches a home switch. The camera is connected to the Pi by USB and controlled with gphoto2.</p>
+<figure>{{rail_overview}}<figcaption>How the parts are connected. The browser never
+talks to the hardware directly: everything goes through the Pi.</figcaption></figure>
+
+<table>
+  <caption>Main figures of the rail as built.</caption>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+  <tr><td>Travel</td><td>140 mm usable (soft limit <code>travel_mm</code>); about 150 mm mechanical</td></tr>
+  <tr><td>Resolution</td><td>2.5 µm per microstep (Tr8×8 screw, 200 steps/rev, 1/16 microstepping)</td></tr>
+  <tr><td>Lead-screw backlash</td><td>14 µm ± 7 µm measured; avoided by always arriving in the stack direction</td></tr>
+  <tr><td>Speeds (defaults)</td><td>travel 2 mm/s, during a stack 1 mm/s, acceleration 10 mm/s²</td></tr>
+  <tr><td>Motor current (defaults)</td><td>600 mA running, 200 mA holding, set over UART</td></tr>
+  <tr><td>Supplies</td><td>12 V for the motor; 5 V for the Pi (2.5 A); the Nano is powered by the Pi's USB</td></tr>
+  <tr><td>Footprint</td><td>about 400 × 140 mm, on a heavy base</td></tr>
+  </tbody>
+</table>
+
+<h3>How to use this guide</h3>
+<p>Work through the sections in order. Sections 2 to 4 cover the mechanics, 5 and 6 the
+electronics, 7 and 8 the software, and 9 to 11 the first power-up, the camera and the first stack.
+Section 12 lists common faults. Steps that matter for safety or for the electronics are marked as
+cautions.</p>
+<div class="caution"><strong>Before you start</strong>
+<p>Never connect or disconnect the motor while the 12 V supply is on: it can destroy the TMC2209.
+Disconnect the power while assembling or adjusting, and keep fingers clear of the coupler and the
+lead screw whenever the motor is powered.</p></div>
+<p>A simulator lets you try the app without any hardware: on a computer with uv installed, run
+<code>uv run macrorail --sim</code> in the repository and open http://localhost:8000.</p>
+
+<h2>What you need</h2>
+<h3>Bought parts</h3>
+<p>Prices are approximate (euro, 2026, from general online shops) and only meant as a guide.
+Much of the motion hardware can come from an old 3D printer: the prototype used the rods, bearing
+blocks, lead screw and motor of an Anet A8.</p>
+<table>
+  <thead><tr><th>Part</th><th class="c">Qty</th><th>Specification</th><th class="num">≈ €</th></tr></thead>
+  <tbody>
+  <tr class="group"><td colspan="4">Mechanics</td></tr>
+  <tr><td>Smooth rod</td><td class="c">2</td><td>Ø8 mm, 380 mm long</td><td class="num">12</td></tr>
+  <tr><td>Linear bearing block</td><td class="c">4</td><td>SC8UU (8 mm, M4 mounting holes)</td><td class="num">12</td></tr>
+  <tr><td>Lead screw with nut</td><td class="c">1</td><td>Tr8×8 (8 mm lead, 2 mm pitch, 4 starts), about 345 mm; flanged T8 brass nut (Ø22 flange) with its four M3 screws</td><td class="num">10</td></tr>
+  <tr><td>Flexible coupler</td><td class="c">1</td><td>5 mm to 8 mm, helical, about Ø19 mm</td><td class="num">3</td></tr>
+  <tr><td>Stepper motor</td><td class="c">1</td><td>NEMA 17, 1.8°, 4 wires, 5 mm shaft (prototype: 42SHDC3025-24B)</td><td class="num">12</td></tr>
+  <tr><td>Roller-lever microswitch</td><td class="c">1</td><td>3 terminals (C, NO, NC), e.g. KW12 type</td><td class="num">1</td></tr>
+  <tr><td>Fasteners</td><td class="c"></td><td>M3, M4 and M5 screws, nuts and washers; see 2.3</td><td class="num">8</td></tr>
+  <tr><td>PLA filament</td><td class="c"></td><td>about 350 g</td><td class="num">7</td></tr>
+  <tr><td>Base</td><td class="c">1</td><td>flat, heavy board or plate, at least 420 × 160 mm</td><td class="num">10</td></tr>
+  <tr class="group"><td colspan="4">Electronics</td></tr>
+  <tr><td>Arduino Nano</td><td class="c">1</td><td>ATmega328P; a CH340 clone is fine; with a USB data cable (Mini-B on most)</td><td class="num">6</td></tr>
+  <tr><td>Stepper driver</td><td class="c">1</td><td>TMC2209 module (StepStick format, BTT or FYSETC style) with the PDN_UART pin brought out; sense resistor 0.11 Ω</td><td class="num">6</td></tr>
+  <tr><td>Motor supply</td><td class="c">1</td><td>12 V DC, 2 A, with leads or a screw-terminal adapter</td><td class="num">9</td></tr>
+  <tr><td>Capacitor</td><td class="c">1</td><td>100 µF electrolytic, 25 V or more</td><td class="num">0.2</td></tr>
+  <tr><td>Resistors</td><td class="c">1 + 1</td><td>1 kΩ and 10 kΩ, ¼ W</td><td class="num">0.2</td></tr>
+  <tr><td>Breadboard and wires</td><td class="c">1</td><td>half-size breadboard (30 columns); male–male jumper wires in several colours; wire for the switch</td><td class="num">6</td></tr>
+  <tr class="group"><td colspan="4">Computer</td></tr>
+  <tr><td>Raspberry Pi</td><td class="c">1</td><td>3B+ or later (tested on a 3B+); microSD card, 16 GB or more; official 5.1 V / 2.5 A supply</td><td class="num">55</td></tr>
+  <tr class="total"><td colspan="3">Total, without camera and optics</td><td class="num">about 160</td></tr>
+  </tbody>
+</table>
+<p class="small muted">Also needed, not included above: a camera that gphoto2 can trigger
+remotely (tested with a Sony A6400) with its USB cable, a lens or objective, a tripod or stand
+that holds the camera at the rail's height, and preferably a mains adapter (dummy battery) for
+the camera. A Pi under-supplied by a weak adapter drops USB devices; use a proper 2.5 A supply.</p>
+
+<div class="keep"><h3>Printed parts</h3>
+<p>The six STL files are in <code>hardware/rail/stl/</code>. They keep their assembly
+coordinates, so use <em>drop to build plate</em> and <em>arrange</em> in the slicer.</p>
+<table>
+  <thead><tr><th>File</th><th class="c">Qty</th><th>On the bed</th><th>Infill</th></tr></thead>
+  <tbody>
+  <tr><td><code>01_motor_end_block</code></td><td class="c">1</td><td>broad mounting foot</td><td>40–60 %</td></tr>
+  <tr><td><code>02_far_end_block</code></td><td class="c">1</td><td>broad mounting foot</td><td>40–60 %</td></tr>
+  <tr><td><code>03_carriage</code></td><td class="c">1</td><td>largest flat face</td><td>40–60 %</td></tr>
+  <tr><td><code>04_floating_nut_carrier</code></td><td class="c">1</td><td>upside down: the 30 × 40 mm flange on the bed</td><td>40–60 %</td></tr>
+  <tr><td><code>05_sample_platform</code></td><td class="c">1</td><td>largest flat face (not needed with the scan module)</td><td>30–50 %</td></tr>
+  <tr><td><code>06_endstop_trigger</code></td><td class="c">1</td><td>broad pad, or turned so the horizontal M4 pilot hole prints cleanly</td><td>30–50 %</td></tr>
+  </tbody>
+</table></div>
+<div class="row three">
+  <figure><img src="img/rail/01-motor-end-block.png" alt=""><figcaption>Motor-end block: rod bosses, coupler opening, switch tab.</figcaption></figure>
+  <figure><img src="img/rail/02-far-end-block.png" alt=""><figcaption>Far-end block.</figcaption></figure>
+  <figure><img src="img/rail/03-carriage.png" alt=""><figcaption>Carriage plate.</figcaption></figure>
+</div>
+<div class="row three">
+  <figure><img src="img/rail/04-floating-nut-carrier.png" alt=""><figcaption>Floating nut carrier.</figcaption></figure>
+  <figure><img src="img/rail/05-sample-platform.png" alt=""><figcaption>Sample platform.</figcaption></figure>
+  <figure><img src="img/rail/06-endstop-trigger.png" alt=""><figcaption>Endstop trigger.</figcaption></figure>
+</div>
+
+<h3>Fasteners</h3>
+<p>Check every screw length against the printed parts before tightening.</p>
+<table>
+  <thead><tr><th>Joint</th><th>Fasteners</th></tr></thead>
+  <tbody>
+  <tr><td>Motor to motor-end block</td><td>4 × M3, 14–16 mm depending on washers; they must not reach the windings</td></tr>
+  <tr><td>Bearing blocks to carriage</td><td>up to 16 × M4 × 10–12</td></tr>
+  <tr><td>T8 nut to nut carrier</td><td>the nut's own 4 × M3 screws</td></tr>
+  <tr><td>Nut carrier to carriage</td><td>4 × M4 × 16, washers and nuts</td></tr>
+  <tr><td>Sample platform to carriage</td><td>4 × M4 × 16, washers and nuts</td></tr>
+  <tr><td>Trigger to carriage</td><td>2 × M3 × 16, washers and nuts</td></tr>
+  <tr><td>Trigger adjusting screw</td><td>1 × M4, about 20 mm, into the trigger's 3.3 mm pilot, with a nut to lock it</td></tr>
+  <tr><td>Rod retention</td><td>4 × M4, short, tapped or thread-formed into the 3.3 mm pilot holes</td></tr>
+  <tr><td>Home switch to the motor-end tab</td><td>2 small screws to suit the switch's holes (M2.5 or M3 class)</td></tr>
+  <tr><td>End blocks to the base</td><td>M5 bolts or wood screws with large washers, through the slots in the feet</td></tr>
+  </tbody>
+</table>
+
+<h3>Tools</h3>
+<p>Hex keys for M3, M4 and M5 and for the coupler's set screws; a small screwdriver; an M4 tap or a
+thread-forming screw for the pilot holes; a deburring tool or craft knife; pliers; a multimeter
+(continuity and resistance); a USB cable to the Pi; and a computer to prepare the Pi's SD card.</p>
+
+<h2 class="keep">Printing</h2>
+<table>
+  <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+  <tbody>
+  <tr><td>Material</td><td>PLA (change material only once the fits are proven)</td></tr>
+  <tr><td>Nozzle, layer height</td><td>0.4 mm, 0.2 mm</td></tr>
+  <tr><td>Walls</td><td>at least 4</td></tr>
+  <tr><td>Top and bottom layers</td><td>at least 5</td></tr>
+  <tr><td>Infill</td><td>end blocks, carriage and nut carrier 40–60 %; platform and trigger 30–50 %</td></tr>
+  <tr><td>Supports</td><td>none, in the orientations of section 2.2</td></tr>
+  </tbody>
+</table>
+<ul>
+<li>Both end blocks have thin (0.8 mm) sacrificial fins under the two horizontal rod bosses, so the
+round bosses don't start in mid-air. Print them as part of the model and snap or trim them off
+afterwards.</li>
+<li>The openings in the walls are bridged. Don't add supports inside them unless a test print shows
+that your printer can't bridge them.</li>
+<li>Print a small part, or a slice of an end block, first and check the fits before printing both
+end blocks.</li>
+</ul>
+<h3>Preparing the parts</h3>
+<ol class="steps">
+<li><strong>Deburr.</strong> Remove the elephant's foot, strings and any support residue from every
+mating face, and break the edges of the holes.</li>
+<li><strong>Check the holes.</strong> Try the M3, M4 and M5 clearance holes with their screws,
+without forcing them.</li>
+<li><strong>Prepare the pilots.</strong> Tap or thread-form the four 3.3 mm M4 rod-retention holes in
+the end blocks and the horizontal pilot in the trigger.</li>
+<li><strong>Try the rods.</strong> Push each rod through both end blocks. It should go in without
+force.</li>
+<li><strong>Try the bearings.</strong> Run every bearing block along both rods. Put aside any block
+that feels rough or has play.</li>
+</ol>
+
+<h2>Mechanical assembly</h2>
+<p>The rods guide, the screw pushes and the base supplies the stiffness. The nut carrier is only
+tightened once the carriage runs freely on its own; that order is what keeps the rail from
+binding.</p>
+
+<h3>Carriage and bearing blocks</h3>
+<div class="row wide-left">
+  <figure><img src="img/rail/07-carriage-bearings.png" alt=""><figcaption>The carriage upside
+  down with the four SC8UU blocks.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li>Lay the carriage upside down: the bearing face up, the platform face on the bench.</li>
+  <li>Place two SC8UU blocks on each rod line, 80 mm apart centre to centre.</li>
+  <li>Start all M4 screws by hand before tightening any of them.</li>
+  <li>Tighten them gradually and diagonally, so the blocks stay flat on the carriage. Leave them
+  snug, not fully tight, until the carriage is on the rods.</li>
+  </ol>
+  <p>The four bores must form two straight, parallel lines. A twisted block binds at once.</p>
+  </div>
+</div>
+
+<h3>Rods and end blocks</h3>
+<figure class="w80"><img src="img/rail/08-rods-end-blocks.png" alt=""><figcaption>Both end blocks
+with the two rods and the carriage on them.</figcaption></figure>
+<ol class="steps">
+<li>Stand the motor-end block on a known-flat surface (the base or a temporary one).</li>
+<li>Push both rods through the motor-end block's bosses. Don't tighten the M4 retaining screws yet.</li>
+<li>Support the carriage and slide it onto the rods through all four bearing blocks.</li>
+<li>Slide the far-end block onto the rod ends.</li>
+<li>Move the carriage back and forth and adjust the far-end block until the resistance is low and
+even over the whole travel. Then tighten the bearing-block screws fully.</li>
+<li>Lock the rods: the motor-end retaining screws first, then the far end, gradually.</li>
+</ol>
+<div class="note"><strong>Check before going on</strong>
+<p>Without the lead screw, the carriage must slide smoothly over the whole travel. If it binds now,
+find the cause (table below) before fitting the screw.</p></div>
+<table>
+  <thead><tr><th>Symptom</th><th>Likely cause</th><th>Correction</th></tr></thead>
+  <tbody>
+  <tr><td>Tight everywhere</td><td>rod spacing does not match the blocks</td><td>loosen the far block and the bearing screws, let them settle, tighten again</td></tr>
+  <tr><td>Tight near one end</td><td>rods not parallel</td><td>realign the far block</td></tr>
+  <tr><td>Rough at regular intervals</td><td>dirty or damaged rod or bearing</td><td>clean, turn the rod, or replace the block</td></tr>
+  <tr><td>Carriage rocks</td><td>loose block or worn bearing</td><td>tighten the block, or replace it</td></tr>
+  </tbody>
+</table>
+
+<h3>Motor and coupler</h3>
+<div class="row wide-left">
+  <figure><img src="img/rail/09-motor-coupler.png" alt=""><figcaption>The NEMA 17 on the
+  motor-end block, with the coupler in the opening.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li>Fit the coupler to the motor shaft and tighten its motor-side set screw on the shaft's flat.</li>
+  <li>Bolt the motor to the outer face of the motor-end plate with four M3 screws, the coupler
+  passing through the central opening. Check that the screws don't bottom out in the motor.</li>
+  <li>Turn the motor by hand until both set screws can be reached through the opening.</li>
+  </ol>
+  </div>
+</div>
+
+<h3>Lead screw and nut carrier</h3>
+<figure class="w80"><img src="img/rail/10-lead-screw-nut-carrier.png" alt=""><figcaption>The lead
+screw in the coupler and the T8 nut on the floating carrier (carriage hidden).</figcaption></figure>
+<ol class="steps">
+<li>Screw the T8 nut's flange to the vertical face of the floating nut carrier with its four M3 screws.</li>
+<li>Thread the nut onto the lead screw by turning the screw, never forcing the thread.</li>
+<li>Push the screw about 6–7 mm into the coupler, without letting it touch the motor shaft, and
+tighten the screw-side set screw. The far end of the screw stays free, clear of the far-end block.</li>
+<li>Bolt the carrier under the carriage with four M4 × 16 through the adjustment slots, loosely.</li>
+<li>Run the carriage through its whole travel by hand, turning the screw, so the carrier finds the
+screw's natural line.</li>
+<li>Tighten the carrier evenly at the position where the screw turns with the least side load,
+without pulling the carriage sideways.</li>
+</ol>
+<div class="row wide-left">
+  <figure><img src="img/rail/11-carriage-on-nut.png" alt=""><figcaption>The carriage over the nut
+  carrier, seen from low down (platform not fitted).</figcaption></figure>
+  <div class="note"><strong>The screw is not self-locking</strong>
+  <p>A Tr8×8 screw moves 8 mm per turn and can be back-driven: with the motor off, the carriage
+  can be pushed. Turning the motor off therefore clears the rail's homed state in the app.</p>
+  <p>Check now: the screw turns by hand over the full travel, the carriage doesn't move sideways
+  as it turns, and the coupler runs true.</p></div>
+</div>
+
+<h3>Sample platform</h3>
+<div class="row wide-left">
+  <figure><img src="img/rail/12-sample-platform.png" alt=""><figcaption>The sample platform on the
+  carriage.</figcaption></figure>
+  <div>
+  <p>Bolt the platform to the carriage's 60 × 20 mm hole pattern with four M4 × 16, washers and
+  nuts. Tighten until it is rigid, without bowing either plate.</p>
+  <p>If you are fitting the scan module, leave the platform off: the module bolts to the same four
+  holes.</p>
+  </div>
+</div>
+
+<h3>Home switch and trigger</h3>
+<figure class="w70"><img src="img/rail/13-endstop.png" alt=""><figcaption>The roller switch on the
+motor-end tab and the trigger with its adjusting screw. In the renders the switch's position is
+approximate; follow the steps.</figcaption></figure>
+<p>Note that a roller lever opens again well past the point where it closed: 3.8 mm on the prototype. The
+firmware allows for that (section 9), so this is normal.</p>
+<ol class="steps">
+<li>Screw the roller microswitch to the tab on the motor-end block, its roller facing the
+carriage, so the trigger approaches the roller gradually.</li>
+<li>Bolt the trigger to the carriage with two M3 × 16, washers and nuts.</li>
+<li>Turn the M4 adjusting screw into the trigger's horizontal pilot, with its lock nut.</li>
+<li>Move the carriage slowly towards the motor end by hand and listen for the switch's click.</li>
+<li>Set the adjusting screw so the switch clicks before any part of the carriage, the bearing
+blocks or the nut carrier reaches the motor-end block, and the lever still has travel left after the
+click.</li>
+<li>Lock the screw with its nut once the switch triggers reliably.</li>
+</ol>
+
+<h3>Mounting on the base</h3>
+<ol class="steps">
+<li>Fix the motor-end block to the base with M5 bolts or screws and large washers.</li>
+<li>Leave the far end loose and run the carriage end to end a few times so the rods settle.</li>
+<li>Tighten the far end last, alternating between the screws, and check that the motion has not
+become tighter.</li>
+</ol>
+<div class="row">
+  <figure><img src="img/rail/14-finished-front.png" alt=""><figcaption>The finished rail from the
+  motor end.</figcaption></figure>
+  <figure><img src="img/rail/15-finished-back.png" alt=""><figcaption>The finished rail from the
+  far end.</figcaption></figure>
+</div>
+<h3>Mechanical checks</h3>
+<ul class="checks">
+<li>The rods are clean, straight and held firmly.</li>
+<li>All four bearing blocks sit flat and are tight; none feels rough or binds.</li>
+<li>The lead screw turns without steering the carriage sideways, and the coupler set screws are
+tight and reachable.</li>
+<li>The nut carrier is tight without side-loading the screw.</li>
+<li>The switch clicks before any hard contact, with overtravel left.</li>
+<li>At least 15 mm of clearance remains at the far soft limit (140 mm from the switch).</li>
+<li>The platform is rigid and doesn't rock; the end blocks are firmly mounted on a heavy, flat base.</li>
+</ul>
+
+<h2>Electronics</h2>
+<p>The controller is built on a half-size breadboard: an Arduino Nano, a TMC2209 driver module, two
+resistors and a capacitor. This section introduces the parts; section 6 puts them on the board.</p>
+<table>
+  <caption>Connections. Pins are constants in <code>firmware/src/config.h</code>.</caption>
+  <thead><tr><th>Nano</th><th>Goes to</th><th>Notes</th></tr></thead>
+  <tbody>
+  <tr><td class="nw">D2</td><td>home switch NO (switch C to GND)</td><td>closes (LOW) when pressed; hardware interrupt INT0</td></tr>
+  <tr><td class="nw">D3</td><td>TMC2209 STEP</td><td>one pulse is one 1/16 microstep, 2.5 µm</td></tr>
+  <tr><td class="nw">D4</td><td>TMC2209 DIR</td><td></td></tr>
+  <tr><td class="nw">D5</td><td>TMC2209 EN, plus 10 kΩ to 5 V</td><td>low enables the motor; the pull-up keeps it off while the Nano starts</td></tr>
+  <tr><td class="nw">D7</td><td>TMC2209 PDN_UART, direct</td><td>UART receive</td></tr>
+  <tr><td class="nw">D8</td><td>TMC2209 PDN_UART, through 1 kΩ</td><td>UART transmit; a single-wire UART needs the resistor</td></tr>
+  <tr><td class="nw">5V, GND</td><td>TMC2209 VIO, GND</td><td>logic supply; ground common with the 12 V supply</td></tr>
+  <tr><td class="nw">–</td><td>TMC2209 MS1, MS2 to GND</td><td>UART address 0</td></tr>
+  <tr><td class="nw">–</td><td>12 V to VM, 12 V − to GND</td><td>motor supply, with 100 µF across VM and GND at the module</td></tr>
+  <tr><td class="nw">D9</td><td>nothing</td><td>reserved for a shutter-cable relay</td></tr>
+  </tbody>
+</table>
+
+<h3>TMC2209 driver</h3>
+<figure class="w90">{{tmc_figure}}<figcaption>The usual TMC2209 module pinout (BTT V1.2/V1.3 and
+most clones).</figcaption></figure>
+<ul class="checks">
+<li>Turn the module over and compare the labels next to its pins with the drawing. Names vary:
+<em>OA1/OA2</em> or <em>1A/1B</em> for A1/A2, <em>VDD</em> or <em>VCC</em> for VIO.</li>
+<li>Find the UART pin: labelled PDN, PDN_UART or UART. On some BTT modules a solder jumper must be
+bridged to bring it out to the header.</li>
+<li>Check the sense resistors (marked R100 or R110: 0.11 Ω). If yours differ, change
+<code>DRIVER_RSENSE_OHM</code> in <code>firmware/src/config.h</code>: the current scales with it.</li>
+<li>The potentiometer (VREF) is not used: the current is set over UART from the app.</li>
+<li>If the module came with a heatsink, stick it on the pad on top, clear of all pins.</li>
+</ul>
+
+<h3>Arduino Nano</h3>
+<div class="row wide-left">
+  <figure>{{nano_rail}}<figcaption>The Nano as it sits on the breadboard, USB to the left. The
+  ringed pins are used.</figcaption></figure>
+  <div>{{nano_rail_legend}}</div>
+</div>
+<p>The rail uses six signal pins (D2–D5, D7, D8), 5V and both GND pins. D2 is the hardware-interrupt
+pin, so the switch stops the motor before its next step. A CH340 clone is fine; the Pi's USB
+powers it. The same colours are used for each signal in every drawing and table.</p>
+
+<h3>Resistors, capacitor and switch</h3>
+<div class="row">
+  <figure class="w80">{{r1k}}<figcaption>R2, 1 kΩ: brown, black, red (5-band: brown, black, black, brown).
+  D8 transmits through it.</figcaption></figure>
+  <figure class="w80">{{r10k}}<figcaption>R1, 10 kΩ: brown, black, orange (5-band: brown, black, black, red).
+  Pull-up on EN.</figcaption></figure>
+</div>
+<p>Resistors have no direction. If unsure of the colours, measure them: about 1.0 kΩ and 10 kΩ.</p>
+<div class="row narrow-left">
+  <figure class="w70">{{cap_figure}}<figcaption>C1, 100 µF.</figcaption></figure>
+  <div>
+  <p><strong>C1</strong> sits across VM and GND next to the driver and absorbs voltage spikes from the
+  motor. The stripe marks minus (−); the longer leg is plus (+). It must go in the right way round:
+  − to GND, + to VM. Use a 25 V or higher rating.</p>
+  <p><strong>The home switch</strong> has three terminals: C (common), NO (normally open) and NC
+  (normally closed). Wire C and NO, so the switch closes when pressed and pulls D2 to ground; NC
+  stays empty.</p>
+  </div>
+</div>
+<div class="row narrow-left">
+  <figure class="w70">{{rail_switch}}<figcaption>The home switch, wired normally open.</figcaption></figure>
+  <div>
+  <p>The switch is armed during every move, not only while homing. Its first contact stops any
+  motion before the next step. While it is pressed, moves towards it are refused.</p>
+  <p class="muted">To wire it normally closed (C and NC) instead, set <code>ENDSTOP_ACTIVE_LEVEL</code>
+  to <code>HIGH</code> in <code>firmware/src/config.h</code> and reflash. A broken wire then also
+  reads as pressed, which fails safe, at the cost of a stop whenever a connector works loose.</p>
+  </div>
+</div>
+
+<div class="keep"><h3>Motor coils</h3>
+<p>The NEMA 17 has four wires: two coils. With a multimeter on Ω, the two wires of one coil read a
+few ohms; wires of different coils read open. One pair goes to A1/A2, the other to B1/B2. Wire
+colours vary between motors, so measure, and mark the pairs before wiring.</p>
+<figure class="w80">{{coil_figure}}<figcaption>Finding the coil pairs: touch two wires at a time
+until both pairs are found.</figcaption></figure></div>
+
+<h2 class="keep">Wiring on the breadboard</h2>
+<h3>The breadboard</h3>
+<figure class="w80">{{breadboard}}<figcaption>Which holes are joined inside a breadboard.</figcaption></figure>
+<ul>
+<li>Columns are numbered 1–30 and rows lettered a–j. A hole is named by row and column, as in
+<code>c13</code>.</li>
+<li>Two parts are connected when their legs are in the same five-hole strip. Modules straddle the
+middle gap so that each pin has its own strip.</li>
+<li>Follow your board's red (+) and blue (−) markings for the rails; their order varies between
+makers. Long boards sometimes split the rails in the middle; this build stays within columns 1–30.</li>
+</ul>
+<h3>Reading the wiring drawing</h3>
+<ul>
+<li>Each wire carries a label such as <strong>W12 D7 → PDN</strong>: its number in the wire table,
+where it starts and where it ends.</li>
+<li>Most signal wires arch over the board so they don't cross. W9 and W10 lie flat in rows c and b,
+and the switch lead W14 runs flat between rows a and b.</li>
+<li>Wire colours don't matter electrically, but matching the drawing makes checking easier: black
+for ground, red for 5 V, one colour per signal.</li>
+<li>The 12 V leads go straight to the driver's VM and GND pins and never touch the rails, which
+carry the Nano's 5 V.</li>
+</ul>
+<div class="caution"><strong>Before you start</strong>
+<p>USB unplugged, 12 V supply off and disconnected, motor not connected.</p></div>
+
+<h3 class="pb">Complete wiring</h3>
+<figure>{{rail_wiring}}<figcaption>The complete controller. The TMC2209 is the module of section 5.1,
+turned a quarter turn clockwise: logic pins along the top, power pins along the bottom. The motor
+and the 12 V leads go on last, with the supply off (section 9).</figcaption></figure>
+
+<h3 class="pb">Wire table</h3>
+<p>Work down the table one line at a time and tick each line off against the drawing. The top rails
+are above row a, the bottom rails below row j.</p>
+{{rail_wires}}
+
+<div class="keep"><h3>Checks before power</h3>
+<ul class="checks">
+<li><strong>Coil pairs:</strong> a few ohms within each pair, open between the pairs; one pair on
+A1/A2, the other on B1/B2.</li>
+<li><strong>UART:</strong> W12 and R2 land on the UART pin (PDN, PDN_UART or UART), with the solder
+jumper bridged if your module needs it.</li>
+<li><strong>Switch:</strong> C to the GND rail, NO to D2, NC empty.</li>
+<li><strong>Common ground:</strong> with the meter on continuity, j25 (driver motor ground) and the
+bottom GND rail beep: the module joins its two GND pins.</li>
+<li><strong>No short:</strong> the 5 V rails and the GND rails don't beep.</li>
+<li><strong>C1:</strong> stripe (−) in h25, + in h26.</li>
+</ul></div>
+
+<h2 class="keep">Firmware</h2>
+<p>The Nano's firmware is in <code>firmware/</code> and is built with PlatformIO. It can be flashed
+from any computer with PlatformIO installed, or on the Pi once the app is installed (section 8).</p>
+<h3>From a computer</h3>
+<pre>pio run -d firmware -e nano -t upload</pre>
+<p>Use <code>-e nano_new</code> instead for a genuine Nano or one with the new bootloader; most
+CH340 clones use the old one (<code>nano</code>).</p>
+<h3>On the Pi</h3>
+<p>The app owns the serial port, so stop it first:</p>
+<pre>uv tool install platformio
+sudo systemctl stop macrorail
+~/.local/bin/pio run -d ~/macrorail/firmware -e nano -t upload --upload-port /dev/ttyUSB0
+sudo systemctl start macrorail</pre>
+<p>The first build downloads the compiler and libraries, which takes several minutes on a Pi.</p>
+<h3>Settings in the firmware</h3>
+<p>Everything that depends on the wiring is a constant in <code>firmware/src/config.h</code>:</p>
+<table>
+  <thead><tr><th>Constant</th><th>Default</th><th>Change when</th></tr></thead>
+  <tbody>
+  <tr><td><code>INVERT_DIRECTION</code></td><td><code>true</code></td><td>the carriage moves towards the switch on <em>Away</em></td></tr>
+  <tr><td><code>ENDSTOP_ACTIVE_LEVEL</code></td><td><code>LOW</code></td><td>the switch is wired normally closed (then <code>HIGH</code>)</td></tr>
+  <tr><td><code>DRIVER_RSENSE_OHM</code></td><td><code>0.11</code></td><td>the driver module has other sense resistors</td></tr>
+  </tbody>
+</table>
+
+<h2>Raspberry Pi and the app</h2>
+<h3>Preparing the Pi</h3>
+<ol class="steps">
+<li>With Raspberry Pi Imager, write <em>Raspberry Pi OS Lite (64-bit)</em> to the SD card. In its
+settings, set a host name (for example <code>macrorail</code>), a user and password, the Wi-Fi
+network, and turn on SSH.</li>
+<li>Start the Pi from its 2.5 A supply and log in over SSH: <code>ssh &lt;user&gt;@macrorail.local</code>.</li>
+<li>Install git: <code>sudo apt update &amp;&amp; sudo apt install -y git</code>.</li>
+</ol>
+<p class="small muted">The Lite image is preferred: desktop images run a gphoto2 volume monitor that
+can grab the camera. The installer warns if it finds one.</p>
+<h3>Installing the app</h3>
+<pre>git clone https://github.com/Sam-de-Ham/MacroRail.git ~/macrorail
+~/macrorail/deploy/install.sh</pre>
+<p>The script installs uv and the Python dependencies, creates
+<code>~/.config/macrorail/config.toml</code> from <code>deploy/config.example.toml</code>, and
+installs and starts the <code>macrorail</code> service, which then also starts on every boot. It asks
+for your password for the <code>sudo</code> steps, and warns if your user is not in the
+<code>dialout</code> and <code>plugdev</code> groups (needed for the serial port and the camera).
+Running it again later updates an existing installation and keeps the config.</p>
+<p>Open <strong>http://macrorail.local:8000</strong> (your host name) on a phone or laptop on the
+same network.</p>
+<table>
+  <thead><tr><th>Task</th><th>Command</th></tr></thead>
+  <tbody>
+  <tr><td>Follow the log</td><td><code>journalctl -u macrorail -f</code></td></tr>
+  <tr><td>Restart after a config change</td><td><code>sudo systemctl restart macrorail</code></td></tr>
+  <tr><td>Turn autostart off or on</td><td><code>sudo systemctl disable --now macrorail</code> (<code>enable --now</code>)</td></tr>
+  <tr><td>Install without autostart</td><td><code>~/macrorail/deploy/install.sh --no-autostart</code></td></tr>
+  <tr><td>Update</td><td><code>cd ~/macrorail &amp;&amp; git pull &amp;&amp; deploy/install.sh</code></td></tr>
+  </tbody>
+</table>
+<h3>The config file</h3>
+<p><code>~/.config/macrorail/config.toml</code> holds the hardware constants; day-to-day settings
+(speeds, currents, step size) are changed in the app. The defaults suit the rail as built:</p>
+<pre>[rail]
+port = "auto"            # finds the Nano by what it reports
+steps_per_mm = 400       # 200 steps x 16 microsteps / 8 mm lead
+min_mm = 0.5             # soft limits, mm from the switch
+travel_mm = 140.0
+homing_speed_mm_s = 2.0</pre>
+<p>Leave <code>port</code> on <code>"auto"</code>. It also works when the scan module's Nano is
+plugged in, which a <code>/dev/serial/by-id/...</code> path does not (both Nanos share that name).
+Restart the app after any change.</p>
+<div class="caution"><strong>Never pull the plug on a running app</strong>
+<p>Stop or restart it with <code>systemctl</code>. An unclean exit can leave the A6400 unresponsive
+until it is switched off and on again.</p></div>
+
+<h2>First power-up and homing</h2>
+<p>Do these checks in order, the first time and after any change to the wiring. Keep a hand near
+the 12 V switch.</p>
+<ol class="steps">
+<li><strong>Driver, without the motor.</strong> Motor unplugged, 12 V on, the Nano on the Pi. The
+rail's status in the app's top bar shows <em>Not homed</em>. <em>No driver power</em> means the
+TMC2209 doesn't answer: check 12 V, the UART wiring (W12, W13, R2) and MS1/MS2 (W7, W8). The
+driver only answers on UART while VM has power.</li>
+<li><strong>Switch.</strong> Press the switch by hand. The Position card on the Shoot tab shows
+<em>Home switch pressed</em> at once.</li>
+<li><strong>Motor.</strong> 12 V off, plug in the motor (M1, M2), 12 V on.</li>
+<li><strong>Direction.</strong> On the Shoot tab, choose 1 mm and press <em>Away</em>. The carriage
+must move away from the switch. If it moves towards it, swap the two wires of one coil (12 V off),
+or change <code>INVERT_DIRECTION</code> and reflash.</li>
+<li><strong>Home.</strong> Press <em>Home</em>. The rail moves towards the switch at 2 mm/s and stops
+on its first contact, backs off until the switch has opened again plus 1 mm, and touches it again
+at the same speed: that contact is position 0. It then parks 0.5 mm from the switch, or just clear
+of the release point if that is further. The activity log reports the release distance.</li>
+<li><strong>Travel.</strong> Jog to the far end of the travel and check that the carriage stops at
+the soft limit with at least 15 mm to spare. If your rail is shorter, lower <code>travel_mm</code>.</li>
+</ol>
+<h3>Motor current and backlash</h3>
+<p>The motor current is set on the System tab under Motion → Motor current: 600 mA running and
+200 mA holding by default. The full current is applied from the first move until the rail has been
+idle for 30 s, and is never changed during a stack. Raise it only if the motor misses steps, and
+check that the motor stays comfortably warm.</p>
+<p>Once per setup, with the camera running (section 10) and a small, sharp detail in focus, press
+<strong>System → Measure backlash</strong>. The rail passes through focus in both directions,
+measures the play in the screw and offers a take-up distance (the default is 0.3 mm until measured;
+the prototype measured 14 µm and uses 0.1 mm). Every arrival at a stack's start then ends with a
+move in the stack direction.</p>
+
+<h2>Camera</h2>
+<p>The app controls the camera over USB with gphoto2. It was developed with a Sony A6400; other
+bodies that gphoto2 can trigger remotely should work, with their own menu names.</p>
+<h3>Sony A6400 settings</h3>
+<table>
+  <thead><tr><th>Menu item</th><th>Setting</th><th>Why</th></tr></thead>
+  <tbody>
+  <tr><td>USB Connection</td><td>PC Remote</td><td>remote capture over USB</td></tr>
+  <tr><td>PC Remote Settings → Still Img. Save Dest.</td><td>PC+Camera</td><td>the full-size files stay on the card; a copy comes over USB</td></tr>
+  <tr><td>PC Remote Settings → PC Save Img</td><td>JPEG Only</td><td>a small JPEG for the app's previews, also when shooting RAW</td></tr>
+  <tr><td>USB Power Supply</td><td>Off</td><td>charging over USB overloads the Pi's supply and drops USB devices</td></tr>
+  <tr><td>Auto Power OFF</td><td>off, or the longest time</td><td>long stacks</td></tr>
+  <tr><td>Focus mode, exposure</td><td>manual focus, manual exposure</td><td>the rail does the focusing; every frame exposed alike</td></tr>
+  <tr><td>Shutter type</td><td>electronic (silent) where possible</td><td>avoids shutter shock at high magnification</td></tr>
+  </tbody>
+</table>
+<p>Connect the camera to the Pi; its status in the top bar turns green. Live view appears on the
+Shoot tab. Use a dummy battery for long stacks: the battery drains while the camera is connected.</p>
+<div class="row narrow-left">
+  <figure class="shot">
+    <img src="shot:camera" alt=""><figcaption>The Camera tab: ISO, shutter, aperture, exposure
+    compensation, white balance, quality, size and focus mode can be set from the browser.</figcaption>
+  </figure>
+  <div>
+  <p>The camera's settings can be changed on the Camera tab. The previews option downloads a
+  small copy of each shot for review on the Pi; it needs the two PC Remote settings above.</p>
+  <p>A capture is confirmed by the camera in about 1.4 s on the A6400. If a shot fails, the app
+  reconnects and retries once; a second failure pauses the stack, and Resume retakes that slice.
+  A duplicate frame is possible, a missing one is not.</p>
+  </div>
+</div>
+
+<h2>Shooting a stack</h2>
+<div class="row narrow-left">
+  <figure class="shot"><img src="shot:shoot" alt=""><figcaption>The Shoot tab: position, jog,
+  focus range and stack settings.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li><strong>Home</strong> the rail.</li>
+  <li><strong>Set the range.</strong> Jog to the front of the subject on the live view and press
+  <em>Set here</em> for Start, then the same for End. Or bring any part of it roughly into focus and
+  press <em>Find range automatically</em>: a focus scan finds where the subject starts and ends.
+  Tap the live view to zoom in 3×.</li>
+  <li><strong>Choose a step.</strong> <em>Which step?</em> suggests half the depth of field from the
+  magnification and numerical aperture (for a 4× / 0.10 objective, 32.5 µm). The Start button shows
+  the number of shots.</li>
+  <li><strong>Preview range</strong> moves between the two ends so you can check the framing.</li>
+  <li><strong>Start stack</strong>, optionally with a name. Pause holds the position; Stop returns to
+  the start.</li>
+  <li><strong>Review</strong> shows each stack's shots, a quick all-in-focus preview and a rough depth
+  map. <em>Download</em> gives a zip of the record, the preview, the depth maps and the small copies.</li>
+  </ol>
+  </div>
+</div>
+<p>One device controls the rail at a time; another can take over with <em>Take control</em>. Stop
+works from any device. Full-size files stay on the camera's card: stack them with your stacking
+software (Zerene Stacker, Helicon Focus or similar).</p>
+
+<h2>Troubleshooting</h2>
+<table>
+  <thead><tr><th style="width:34%">Symptom</th><th>Likely cause and fix</th></tr></thead>
+  <tbody>
+  <tr class="group"><td colspan="2">Mechanics</td></tr>
+  <tr><td>Carriage binds with the screw removed</td><td>Rods not parallel or spacing wrong: loosen the far block and the bearing screws, realign (section 4.2).</td></tr>
+  <tr><td>Binds only with the screw fitted</td><td>Nut carrier tightened off the screw's line: loosen it, run the carriage end to end, tighten again.</td></tr>
+  <tr><td>Tight spot once per turn of the screw</td><td>Bent screw or coupler not centred: check the screw's insertion and the coupler; replace a bent screw.</td></tr>
+  <tr><td>Uneven slices in a stack</td><td>Backlash not taken up: run <em>Measure backlash</em> and apply its take-up; check the nut carrier and coupler set screws.</td></tr>
+  <tr class="group"><td colspan="2">Controller</td></tr>
+  <tr><td>Status shows <em>No driver power</em></td><td>12 V missing at VM, or the UART is miswired: check W12, W13, R2 and MS1/MS2. The TMC2209 answers only while VM is powered.</td></tr>
+  <tr><td>The rail is not found</td><td><code>port = "auto"</code> in the config, the firmware flashed, a USB data cable (not charge-only). <code>ls /dev/serial/by-path/</code> must list it.</td></tr>
+  <tr><td>Moves towards the switch on <em>Away</em></td><td>Swap the two wires of one coil (12 V off), or change <code>INVERT_DIRECTION</code> and reflash.</td></tr>
+  <tr><td>Motor hums or vibrates without turning</td><td>Coil pairs mixed up: measure them again (section 5.4).</td></tr>
+  <tr><td>Homing fails with <code>NO_SWITCH</code></td><td>The switch never closed: check C to GND and NO to D2, press it by hand (the Position card must show it), and check that the trigger reaches the roller.</td></tr>
+  <tr><td>Homing fails with <code>SWITCH_STUCK</code></td><td>The switch stayed closed after backing off 5 mm: wired C and NC, or the trigger screw set too far out.</td></tr>
+  <tr><td>A move stops with <code>ENDSTOP</code></td><td>The switch closed during a move: the trigger reaches the roller too early, or a loose switch wire picks up noise.</td></tr>
+  <tr><td><code>LINK</code> errors, motion stops</td><td>No message from the Pi for 2 s: loose USB cable, or the Pi under-powered. Use a 2.5 A supply.</td></tr>
+  <tr class="group"><td colspan="2">Camera and Pi</td></tr>
+  <tr><td>Camera not found</td><td>USB Connection not on PC Remote, or a desktop image's gphoto2 monitor holds the camera. Unplug and replug the camera.</td></tr>
+  <tr><td>Camera drops out during a stack</td><td>The Pi is under-voltage (the System tab and the log warn): set the camera's USB Power Supply to Off and use a 2.5 A supply.</td></tr>
+  <tr><td>Camera stops responding after a crash</td><td>Switch the camera off and on. Always stop the app with <code>systemctl</code>.</td></tr>
+  <tr><td>No previews in Review</td><td>Set Still Img. Save Dest. to PC+Camera and PC Save Img to JPEG Only.</td></tr>
+  <tr><td>Can't install the app on a phone, no system notifications</td><td>Browsers only allow these over HTTPS or on the Pi itself. Over plain HTTP the stack alerts still chime, vibrate and mark the tab title.</td></tr>
+  </tbody>
+</table>
+<p class="small muted">Further reference: <code>docs/wiring.md</code> (pin map),
+<code>docs/protocol.md</code> (the serial protocol and its error codes) and
+<code>docs/design-notes.md</code> (why things are done the way they are).</p>

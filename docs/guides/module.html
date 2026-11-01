@@ -1,0 +1,624 @@
+<!-- MacroRail scan module guide. Built into MacroRail-scan-module-guide.pdf by build.py; see README.md. -->
+
+<section class="titlepage">
+  <div class="project">MacroRail</div>
+  <h1 class="title">Scan module guide</h1>
+  <p class="subtitle">An optional tilt-and-yaw module for the rail, for photographing a pinned
+  insect from many angles: parts, assembly, wiring, calibration and scanning.</p>
+  <div class="hero"><img src="../images/rail-with-module.png" alt="The scan module on the rail"></div>
+  <p class="meta">Module version 1, November 2026. It assumes a working rail, built and set up as
+  described in the MacroRail build guide.</p>
+  {{contents}}
+</section>
+
+<h2>About the module</h2>
+<p>The scan module bolts to the rail's carriage in place of the sample platform. It holds an insect
+on its pin and turns it about two axes, tilt and yaw, so the app can shoot a focus stack from each
+of many angles. The all-in-focus images, named by their angles, go to photogrammetry software
+(COLMAP, Meshroom) to build a 3D model.</p>
+<p>The module has its own Arduino Nano on its own USB cable. The rail's firmware, wiring and
+settings don't change, and the app's 2D mode works the same with or without the module. A
+<strong>2D / 3D</strong> switch in the app's top bar selects the workspace.</p>
+<figure class="w60"><img src="img/module/09-tilted.png" alt=""><figcaption>The module on the
+carriage, tilted 50° and turned 35°.</figcaption></figure>
+
+<table>
+  <thead><tr><th>Axis</th><th>Drive</th><th>Range</th><th>Home</th></tr></thead>
+  <tbody>
+  <tr><td>Tilt</td><td>28BYJ-48, direct drive, outside one upright; a printed axle in a 608 bearing on the other</td><td>−33° (belly towards the lens) to +90° (top view)</td><td>roller microswitch, tripped by a flag bolt at about +97°, away from the lens</td></tr>
+  <tr><td>Yaw</td><td>28BYJ-48 under the cradle floor; the head sits on its shaft</td><td>unlimited</td><td>KY-024 hall sensor under a magnet in the head; the field peak</td></tr>
+  <tr><td>Centring</td><td>two M3 screws at 90°, turned by hand with a 2 mm hex key; a spring pushes back</td><td>±2.5 mm, 0.5 mm per turn</td><td>set once per specimen, with the app measuring</td></tr>
+  <tr><td>Height</td><td>the pin slides in the holder; a printed gauge sets it</td><td>set by hand</td><td>measured by the app</td></tr>
+  </tbody>
+</table>
+
+<h3>Directions</h3>
+<p>This guide uses the module's own axes: <strong>+X</strong> points at the camera (the lens side),
+<strong>+Y</strong> is the bearing and switch side, <strong>−Y</strong> the tilt motor side, and up
+is up with the cradle level. In the app, tilt 0° is level and positive tilt turns the insect's back
+towards the camera; yaw is counter-clockwise seen from above, 0° where the magnet passes over the
+hall sensor. At yaw 0° centring screw X points at the camera.</p>
+
+<h3>Limits</h3>
+<ul>
+<li><strong>Field of view.</strong> At 4× the field is 5.5 × 3.65 mm, so insects larger than about
+5 mm don't fit. There is no tiling; use a lower magnification for larger specimens.</li>
+<li><strong>Belly views.</strong> The 4× objective's 12 mm working distance limits tilt to −33°, so
+the underside is only seen at a shallow angle.</li>
+<li><strong>Yaw wobble.</strong> The head sits on the motor shaft without a bearing. The shaft's play
+gives a small, repeatable wobble, well inside the frame once the specimen is centred.</li>
+<li><strong>Torque.</strong> The cradle needs about 40 mN·m at +90°; the gearbox holds it with the
+coils off, but lifting it is close to the motor's limit. A counterweight can be added (section 4.7).</li>
+<li><strong>Centring and height are manual</strong> and are repeated for every specimen.</li>
+<li><strong>Time.</strong> A full scan takes hours and thousands of shutter actuations.</li>
+<li><strong>Lighting</strong> is not part of the module.</li>
+</ul>
+
+<h2 class="keep">What you need</h2>
+<h3>Bought parts</h3>
+<p>Prices are approximate (euro, 2026) and only a guide.</p>
+<table>
+  <thead><tr><th>Part</th><th class="c">Qty</th><th>Specification</th><th class="num">≈ €</th></tr></thead>
+  <tbody>
+  <tr><td>Arduino Nano</td><td class="c">1</td><td>ATmega328P; a CH340 clone is fine; with a USB data cable</td><td class="num">8</td></tr>
+  <tr><td>Geared stepper with driver board</td><td class="c">2</td><td>28BYJ-48, <strong>5 V version</strong>, with its ULN2003 board</td><td class="num">6</td></tr>
+  <tr><td>Hall sensor board</td><td class="c">1</td><td>KY-024 (linear 49E-type sensor with analogue output AO)</td><td class="num">2</td></tr>
+  <tr><td>Ball bearing</td><td class="c">1</td><td>608 (8 × 22 × 7 mm)</td><td class="num">1</td></tr>
+  <tr><td>Magnet</td><td class="c">1</td><td>neodymium disc, Ø5.7 × 1.8 mm as built (pocket Ø6.1)</td><td class="num">1</td></tr>
+  <tr><td>Spring</td><td class="c">1</td><td>pen spring, OD 4.6 mm, free length 19 mm, wire 0.5 mm</td><td class="num">–</td></tr>
+  <tr><td>Roller-lever microswitch</td><td class="c">1</td><td>miniature, 20 × 10 × 5.8 mm, holes 9 mm apart, with two Ø1.9 mm screws</td><td class="num">1</td></tr>
+  <tr><td>Motor supply</td><td class="c">1</td><td>5 V DC, at least 1 A, separate from the Pi (a bench supply or a USB charger with a cut cable)</td><td class="num">6</td></tr>
+  <tr><td>Breadboard and wires</td><td class="c">1</td><td>half-size breadboard; male–male and male–female jumpers, long enough to reach the module</td><td class="num">5</td></tr>
+  <tr><td>Screws and nuts</td><td class="c"></td><td>M3 button heads and nuts, see 2.3</td><td class="num">4</td></tr>
+  <tr><td>Insect pins</td><td class="c"></td><td>sizes 00, 0 or 1 (0.30–0.40 mm)</td><td class="num">4</td></tr>
+  <tr><td>PLA filament</td><td class="c"></td><td>about 200 g</td><td class="num">4</td></tr>
+  <tr><td>Small cable ties</td><td class="c">6</td><td>for the cradle cables</td><td class="num">1</td></tr>
+  <tr class="total"><td colspan="3">Total</td><td class="num">about 45</td></tr>
+  </tbody>
+</table>
+<p class="small muted">The Pi needs a third free USB port (camera, rail Nano, module Nano). An 8 mm
+rod with nuts can serve as an optional counterweight for the cradle.</p>
+
+<h3 class="pb">Printed parts</h3>
+<p>The STLs are in <code>hardware/scan-module/exports/final/</code>, in model coordinates: use
+<em>place on face</em> in the slicer. The prototype was printed in PLA at 0.2 mm layers on a Prusa
+i3 MK3, without supports. Use at least 4 walls and 5 top and bottom layers, as for the rail.</p>
+<table>
+  <thead><tr><th>Part</th><th class="c">Qty</th><th>Face on the bed</th><th>Notes</th></tr></thead>
+  <tbody>
+  <tr><td>Fork</td><td class="c">1</td><td>base underside</td><td>bolts to the carriage; holds the tilt motor, the 608 and the switch bracket. About 12 cm tall.</td></tr>
+  <tr><td>Cradle</td><td class="c">1</td><td>floor underside</td><td>arms print upright (about 110 mm); the hub bores print on their side</td></tr>
+  <tr><td>Yaw head</td><td class="c">1</td><td>bell underside</td><td>snap off the thin fin under the spring housing after printing</td></tr>
+  <tr><td>Specimen holder</td><td class="c">1</td><td>plate underside</td><td>centring plate, clamp column and nose in one part, nose up</td></tr>
+  <tr><td>Tilt axle</td><td class="c">1</td><td>flange</td><td>shank upright, so it comes out round</td></tr>
+  <tr><td>Axle spacer</td><td class="c">1</td><td>flat</td><td></td></tr>
+  <tr><td>Endstop bracket</td><td class="c">1</td><td>back (the flat side)</td><td>pad side up; Ø1.5 pilot holes for the switch's screws</td></tr>
+  <tr><td>Carriage washer</td><td class="c">4</td><td>flat</td><td>the carriage holes are Ø4.5, so M3 nuts need a washer</td></tr>
+  <tr><td>Height gauge</td><td class="c">1</td><td>underside</td><td>a tool, not mounted: steps 17–21 mm above the nose tip</td></tr>
+  </tbody>
+</table>
+
+<h3>Screws and nuts</h3>
+<p>All screws are M3 button heads, turned with a 2 mm hex key; socket heads fit too. Lengths are
+under the head, as measured on the prototype's screws.</p>
+<table>
+  <thead><tr><th>Screw</th><th class="c">Qty</th><th>Where</th></tr></thead>
+  <tbody>
+  <tr><td class="nw">M3 × 12 (11.8)</td><td class="c">11</td><td>tilt motor 2, yaw motor 2, KY-024 1, centring screws 2, pin clamp 1, yaw set screw 1, endstop bracket 2</td></tr>
+  <tr><td class="nw">M3 × 18 (17.5)</td><td class="c">5</td><td>fork to carriage 4 (with the printed washers), tilt home flag 1</td></tr>
+  <tr><td class="nw">M3 × 28 (27.7)</td><td class="c">1</td><td>tilt axle</td></tr>
+  <tr><td class="nw">M3 nut</td><td class="c">17</td><td>one for every screw; the 5.7 mm pockets take both 5.2 and 5.5 mm nuts</td></tr>
+  </tbody>
+</table>
+
+<h3>Tools</h3>
+<p>A 2 mm hex key; a small Phillips screwdriver (the switch's screws); flat pliers (pushing nuts into
+their slots); superglue; a vice or clamp and a flat block (the bearing); a 5 mm drill bit, turned by
+hand, to clean a D-bore that is too tight; a multimeter; side cutters.</p>
+
+<h2>Printing and test pieces</h2>
+<p>Print the test pieces in <code>hardware/scan-module/exports/test-pieces/</code> before the large
+parts. The six <code>tp-*</code> files are slices of the real bodies; the small parts are printed
+whole and serve as their own test.</p>
+<table>
+  <thead><tr><th>Test piece</th><th>It passes when</th></tr></thead>
+  <tbody>
+  <tr><td><code>tp-bearing-seat</code></td><td>the 608 presses in by hand or in a vice and doesn't fall out; the lip stops it</td></tr>
+  <tr><td><code>tp-motor-seat</code></td><td>the tilt motor's boss drops into the recess, both ear screws line up and their heads sit flush</td></tr>
+  <tr><td><code>tp-base-holes</code></td><td>laid on the carriage, the four screws line up and it sits flat over the bearing-block screw heads</td></tr>
+  <tr><td><code>tp-tilt-d-bore</code></td><td>goes onto the shaft of the motor on <code>tp-motor-seat</code> firmly by hand, covers the flats, no play</td></tr>
+  <tr><td><code>tp-axle-socket</code></td><td>the axle's spigot fits; the nut presses into its pocket</td></tr>
+  <tr><td><code>tp-cradle-floor</code></td><td>yaw motor boss, ear screws, KY-024 screw and board seat, sensor pocket and lead slot all fit</td></tr>
+  <tr><td><code>yaw-head</code></td><td>fits the yaw shaft; the set-screw nut, centring nuts, magnet and spring go in; the fin snaps off cleanly</td></tr>
+  <tr><td><code>specimen-holder</code></td><td>slides freely in the ring between the screw tips and the spring; the pin slides through the nose; the clamp nut can't turn</td></tr>
+  <tr><td><code>endstop-bracket</code></td><td>bolts to the +Y upright; the switch's holes line up with the pilot holes and its screws bite</td></tr>
+  <tr><td><code>tilt-axle</code>, <code>axle-spacer</code></td><td>the axle slips through the 608; the spacer slides over it</td></tr>
+  </tbody>
+</table>
+<div class="row narrow-left">
+  <figure><img src="img/module/test-pieces.png" alt=""><figcaption>Test pieces of the fork (Fusion
+  360 view).</figcaption></figure>
+  <div>
+  <h4>If a fit is off</h4>
+  <p>Every fit is one parameter in the Fusion 360 model (<code>hardware/scan-module/fusion/</code>);
+  change it and re-export, and only the affected parts need reprinting. The values below came from
+  two rounds of test prints.</p>
+  </div>
+</div>
+<table>
+  <thead><tr><th>Fit</th><th>Parameter</th><th>Value</th></tr></thead>
+  <tbody>
+  <tr><td>608 bearing seat</td><td><code>fit_press</code></td><td>0.35 (0.25 was slightly tight)</td></tr>
+  <tr><td>Yaw D-bore in the head (printed upright)</td><td><code>fit_D</code></td><td>0.1 (at 0.2 it held only with the set screw)</td></tr>
+  <tr><td>Tilt D-bore in the cradle (printed on its side)</td><td><code>fit_Dt</code></td><td>0.05</td></tr>
+  <tr><td>Nut pockets</td><td><code>m3_pocketAF</code></td><td>5.7 across flats, 2.6 deep</td></tr>
+  <tr><td>Pin clamp nut slot</td><td><code>clampNut_H</code></td><td>5.5</td></tr>
+  <tr><td>Magnet pocket</td><td><code>magPocketD</code></td><td>magnet + 0.4</td></tr>
+  <tr><td>Pin hole</td><td><code>pinHoleD</code></td><td>1.2 (1.0 was tight)</td></tr>
+  <tr><td>Switch screw pilots</td><td><code>ws_pilotD</code></td><td>1.5</td></tr>
+  </tbody>
+</table>
+
+<h2>Assembly</h2>
+<p>Build three groups on the bench, the fork, the cradle and the yaw head, then put them together.
+Every nut goes into its printed pocket or slot first, so one hex key turns every screw. If a nut
+won't stay in, a dab of glue on its outside is fine.</p>
+
+<h3>Fork</h3>
+<div class="row">
+  <figure><img src="img/module/01-fork-bearing.png" alt=""><figcaption>The fork with the 608 in
+  the +Y upright.</figcaption></figure>
+  <figure><img src="img/module/02-fork-tilt-motor-endstop.png" alt=""><figcaption>The fork with
+  the tilt motor (fitted later, in 4.4) and the switch bracket.</figcaption></figure>
+</div>
+<ol class="steps">
+<li><strong>Bearing.</strong> Press the 608 into the round housing on the +Y upright from the
+<em>outside</em>, flat and square, with a vice or clamp and a flat block. It stops against a thin lip
+on the inside. Check that the inner race still turns freely. The lip takes the load, and the axle
+later clamps only the inner race, so the outer race is never squeezed.</li>
+<li><strong>Switch on the bracket.</strong> Hold the switch on the bracket's flat face next to the
+raised pad, at the end away from the two large holes: pins down, the lever's pivot end towards the
+camera (+X). Drive the two small screws through the switch into the pilot holes. Click the lever:
+it must move freely. Don't glue it yet.</li>
+<li><strong>Bracket on the fork.</strong> Push two M3 nuts into the hex pockets on the inside of the
++Y upright, below the bearing. Hold the bracket against the outside, pad against the upright and
+the switch towards the camera side, and fix it with two M3 × 12.</li>
+<li><strong>Tilt motor: not yet.</strong> Its shaft has to slide into the cradle's hub from outside,
+so it goes on once the cradle is in place (4.4).</li>
+</ol>
+
+<h3>Cradle</h3>
+<div class="row wide-left">
+  <figure><img src="img/module/03-cradle-yaw-motor.png" alt=""><figcaption>The cradle upside down:
+  the yaw motor and the KY-024 board under its floor.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li><strong>Hall sensor.</strong> On the KY-024, bend the small black sensor (on its long legs)
+  flat, lettered face up. From below, feed its legs through the slot in the floor so the sensor lies
+  in the shallow pocket on top, flush with the surface. The magnet passes 0.8 mm above it, so
+  nothing may stick up.</li>
+  <li><strong>KY-024 board.</strong> Fix the board under the floor with one M3 × 12: head on top
+  in its counterbore, nut under the board.</li>
+  <li><strong>Yaw motor.</strong> From below, push the shaft up through the large hole, boss into
+  its recess. Fix the two ears with M3 × 12, heads from the top in their counterbores, nuts under
+  the ears. The heads must end flush with the floor or below it: the head turns 1 mm above it.</li>
+  </ol>
+  </div>
+</div>
+
+<h3>Yaw head and specimen holder</h3>
+<div class="row narrow-left">
+  <figure><img src="img/module/05-head-exploded.png" alt=""><figcaption>The yaw head parts, top to
+  bottom: pin, holder with clamp nut and screw, head with centring screws, nuts and spring, and the
+  magnet.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li><strong>Fin.</strong> Snap off the thin fin under the spring housing; wiggle it and it breaks
+  at its root.</li>
+  <li><strong>Nuts.</strong> Push M3 nuts into the two slots in the top of the ring wall (for the X
+  and Y screws) and one into the slot in the hub (for the set screw).</li>
+  <li><strong>Magnet.</strong> Press the magnet into the small off-centre pocket under the head; a
+  drop of glue keeps it. Either pole works.</li>
+  <li><strong>Centring screws.</strong> Turn an M3 × 12 into each ring nut from outside until the
+  tip just shows inside the ring.</li>
+  <li><strong>Onto the motor.</strong> Push the head onto the yaw shaft, flats lined up with the
+  bore. Turn the set screw (M3 × 12) into the hub nut until it bites on the shaft's flat. Turn the
+  head by hand: it must clear the floor and run true.</li>
+  <li><strong>Holder.</strong> Push an M3 nut into the side slot of the holder's column; it only
+  fits flats up and down, which stops it turning. Turn the clamp screw in from the opposite face
+  until it just reaches the pin hole.</li>
+  <li><strong>Spring.</strong> Drop the pen spring into its bore from inside the ring. Press the
+  holder's rim against the spring, lower it into the ring and let go. The screw tips and the spring
+  sit in the rim's V-groove, so the holder slides but can't lift out.</li>
+  </ol>
+  </div>
+</div>
+<figure class="w50"><img src="img/module/04-head-holder.png" alt=""><figcaption>The finished head:
+centring screws on two sides, the spring housing opposite, the pin in the holder's nose.</figcaption></figure>
+
+<h3>Cradle into the fork</h3>
+<div class="row wide-left">
+  <figure><img src="img/module/06-cradle-in-fork.png" alt=""><figcaption>The cradle hung in the
+  fork on the tilt motor's shaft and the tilt axle, with the flag bolt.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li><strong>Cradle in.</strong> Lower the cradle, with its head, between the uprights. It fits
+  with 1 mm each side.</li>
+  <li><strong>Tilt motor.</strong> From outside the −Y upright, push the motor's shaft through the
+  hole into the cradle's hub. Turn the cradle until the flats line up, then push until the motor's
+  boss drops into its recess and the motor sits flat. Fix the two ears with M3 × 12 from the
+  inside (heads in the counterbores, reached past the cradle arm), nuts on the ears.</li>
+  </ol>
+  </div>
+</div>
+<div class="note"><strong>The tilt shaft must be fully seated</strong>
+<p>The motor's shaft carries the cradle on this side. Fully seated, about 6 mm of its flats are
+inside the hub.</p></div>
+<ol class="steps" start="3" style="counter-reset: step 2">
+<li><strong>Axle.</strong> Push an M3 nut into the hex pocket on the inside of the cradle's +Y hub.
+Hold the spacer against the outside of the +Y arm, centred, and push the axle in from outside:
+through the bearing, the spacer and into the arm's socket. Fix it with the M3 × 28 from the flange
+side into the nut until nothing wobbles. This clamps the axle, the spacer and the bearing's inner
+race to the cradle; the bearing does the turning. It also holds the cradle sideways, so it can't
+slide off the motor shaft, which is why the tilt hub needs no set screw.</li>
+<li><strong>Flag.</strong> Put an M3 × 18 through the small hole near the top of the +Y arm, head
+inside, nut outside. The end of this screw presses the home switch.</li>
+</ol>
+
+<h3>Tilt endstop</h3>
+<div class="row wide-left">
+  <figure><img src="img/module/07-tilt-endstop.png" alt=""><figcaption>The flag bolt on the switch
+  roller at tilt home.</figcaption></figure>
+  <div>
+  <p>Tilt turns slowly away from the lens until the flag bolt presses the switch. The flag meets
+  the roller at about +90° and the switch clicks at about +97°, beyond the +90° working limit.
+  Homing away from the lens means that a missed switch can never drive the insect into the
+  objective.</p>
+  <p>Swing the cradle by hand past +90° and listen for the click. The app's tilt calibration
+  (section 8) measures the real angle, so the bracket only needs moving if the click is far from
+  +97°. Once it is right, put a drop of superglue between the switch and the bracket.</p>
+  </div>
+</div>
+
+<h3>On the rail</h3>
+<div class="row wide-left">
+  <figure><img src="img/module/08-on-carriage.png" alt=""><figcaption>The module on the carriage,
+  sample platform removed.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li>Remove the rail's sample platform.</li>
+  <li>Tilt the cradle to about 90° to reach the base.</li>
+  <li>Put four M3 × 18 down through the base and the carriage's four free holes, with a printed
+  washer and a nut underneath each. The stack is 15.7 mm, so each screw shows 1.8 mm past its
+  nut, clear of the lead-screw nut and the bearing blocks.</li>
+  </ol>
+  <p>The tilt axis is 95 mm above the carriage. Set the camera so the lens axis is at that
+  height.</p>
+  </div>
+</div>
+
+<h3>Checks before any power</h3>
+<ul class="checks">
+<li>Swing the cradle slowly by hand from −30° to past +90°. The gearbox turns stiffly, which is
+normal. Nothing rubs, and the arms stay 1 mm from the uprights.</li>
+<li>Past +90° the flag meets the roller and the switch clicks.</li>
+<li>Turn the head a full turn by hand, slowly, through the gearbox. The holder stays in its ring.</li>
+<li>The holes at the top of the cradle arms (Ø8.3, 38 mm above the axis) take an optional
+counterweight: an 8 mm rod with nuts, if tilt ever loses steps near +90°.</li>
+</ul>
+
+<h2>Wiring</h2>
+<p>The module Nano drives the yaw and tilt motors through their ULN2003 boards, reads the tilt
+switch and the KY-024's analogue output, and talks to the app over USB. The motors take their
+power from a separate 5 V supply; only its ground is joined to the Nano's.</p>
+<figure class="w90">{{module_overview}}<figcaption>The module's connections. The rail's parts
+(dashed) don't change.</figcaption></figure>
+<div class="caution"><strong>Why a separate 5 V supply</strong>
+<p>Each 28BYJ-48 draws about 240 mA while it moves. The Nano's 5 V comes from the Pi's USB, which
+also feeds the camera link and the rail Nano; motor current there causes resets and USB drop-outs.
+Never join the supply's + to the Nano's 5V pin: two supplies would fight each other.</p></div>
+
+<h3>The parts</h3>
+<figure class="w80">{{uln_figure}}<figcaption>A ULN2003 driver board. The Nano's pins can't drive
+a coil; the board switches each coil for it.</figcaption></figure>
+<div class="row">
+  <div>
+  <figure class="w80">{{motor_figure}}<figcaption>The 28BYJ-48.</figcaption></figure>
+  <p>Use the 5 V version (<em>5VDC</em> on the label); the 12 V one is too weak at 5 V. The plug fits
+  the board's socket one way only. The gearbox holds the load with the coils off, and the firmware
+  switches them off 300 ms after every move, so the board's LEDs are dark at rest.</p>
+  </div>
+  <div>
+  <figure class="w80">{{ky024_figure}}<figcaption>The KY-024 hall sensor board.</figcaption></figure>
+  <p>Only the analogue output AO is used: the firmware finds the peak of the field, which repeats
+  far better than the board's on/off output DO. DO, its LED and the potentiometer are unused. With
+  no magnet near, AO reads about 512.</p>
+  </div>
+</div>
+<div class="row narrow-left">
+  <figure class="w70">{{module_switch}}<figcaption>The tilt switch, wired normally open.</figcaption></figure>
+  <div>
+  <p>The tilt switch is wired like the rail's home switch: C to GND, NO to D10, NC empty. Pressing it
+  pulls D10 low. The firmware watches it during every tilt move, so the first contact stops the tilt
+  at once.</p>
+  <p class="muted">To wire it normally closed (C and NC) instead, set <code>SWITCH_ACTIVE_LEVEL</code>
+  to <code>HIGH</code> in <code>firmware-module/src/config.h</code>.</p>
+  </div>
+</div>
+
+<h3>The module Nano</h3>
+<div class="row wide-left">
+  <figure>{{nano_module}}<figcaption>The module Nano as it sits on the breadboard, USB to the left.</figcaption></figure>
+  <div>{{nano_module_legend}}</div>
+</div>
+<p>The yaw board takes D2–D5 and the tilt board D7, D6, D9 and D11, each in the order IN1, IN2, IN3,
+IN4. Note the tilt order: IN1 is on D7 and IN2 on D6, as the firmware expects
+(<code>TILT_IN</code> in <code>firmware-module/src/config.h</code>). D8 stays free and D10 is the
+switch. IN1 has the same colour on both boards, and so on, so a swapped pair is easy to spot.</p>
+
+<h3>Complete wiring</h3>
+<figure>{{module_wiring}}<figcaption>The complete module wiring. Holes a–e of one column are one
+strip, f–j another. The top rails carry the motor supply, the bottom rails the Nano's own 5 V for
+the hall sensor; the GND rails are joined through the Nano's GND pins, the + rails never. The pin
+order on the driver boards varies between makers: go by the printed labels.</figcaption></figure>
+
+<h3 class="pb">Wire table</h3>
+<div class="caution"><strong>Reusing a Nano from another project?</strong>
+<p>Remove any capacitor between RST and GND (often 10 µF, fitted to stop the Nano resetting when its
+port opens). The app relies on that reset: the Nano then says which controller it is, and uploading
+firmware needs it too. A capacitor across 5V and GND can stay.</p></div>
+{{module_wires}}
+
+<h3>Cables on the module</h3>
+<p>The tilt motor and the switch sit on the fixed fork, so their cables simply run down the
+uprights. The yaw motor and the KY-024 ride on the cradle, which swings from −33° to +97°; their
+cables must follow that swing without pulling, rubbing or catching.</p>
+<figure class="w80">{{routing_figure}}<figcaption>Cable routing, seen from the camera.</figcaption></figure>
+<ul class="checks">
+<li>Take the cradle's cables to the −Y side (the tilt motor side), along the underside of the floor
+and up the −Y arm, and tie them to the arm with two small cable ties.</li>
+<li>Leave a loose loop near the tilt axis, where the arm moves least, then run the cables down the
+back (−X) of the −Y upright beside the tilt motor's cable and tie them there. The loop must allow
+the full 130° swing.</li>
+<li>Keep the +Y side clear: the flag bolt swings past the switch there. A cable on that side could
+press the switch or block the flag.</li>
+<li>Keep the camera side clear: the lens looks between the uprights from +X, so all cables leave at
+the back.</li>
+<li>Nothing electrical turns with the yaw head, so no cable may touch the head or the centring
+screws.</li>
+</ul>
+
+<h2>Firmware and connection</h2>
+<h3>Flashing the module Nano</h3>
+<p>The module's firmware is in <code>firmware-module/</code>. Flash it on the Pi with the module Nano
+plugged in, stopping the app first because it owns the serial ports:</p>
+<pre>sudo systemctl stop macrorail
+ls /dev/serial/by-path/     # unplug and replug the module Nano to see which entry is its
+~/.local/bin/pio run -d ~/macrorail/firmware-module -e nano -t upload \
+    --upload-port /dev/serial/by-path/&lt;the module's entry&gt;
+sudo systemctl start macrorail</pre>
+<p>Or from any computer with PlatformIO, with only the module Nano connected:
+<code>pio run -d firmware-module -e nano -t upload</code>. Use <code>-e nano_new</code> for a genuine
+or new-bootloader Nano.</p>
+<div class="caution"><strong>Pick the right port</strong>
+<p>Flashing the module firmware onto the rail's Nano stops the rail working until it is flashed
+again with <code>firmware/</code>.</p></div>
+<h3>Telling the two Nanos apart</h3>
+<p>Both Nanos are usually CH340 clones without a serial number, so their
+<code>/dev/serial/by-id</code> names are identical. In <code>~/.config/macrorail/config.toml</code>,
+both ports should be <code>"auto"</code> (the default):</p>
+<pre>[rail]
+port = "auto"
+
+[module]
+port = "auto"</pre>
+<p>With <code>"auto"</code> the app asks each Nano what it is: the module firmware says so in its
+first line. Alternatively give each port its USB socket's path from
+<code>ls /dev/serial/by-path/</code>, which stays the same while the cable stays in that socket. An
+older config with a <code>by-id</code> path under <code>[rail]</code> must be changed before the
+module is plugged in: the installer never overwrites an existing config. Then restart the app:
+<code>sudo systemctl restart macrorail</code>.</p>
+<h3>In the app</h3>
+<p>Switch the app to <strong>3D</strong> in the top bar. The System tab gains a <strong>Scan
+module</strong> card (connection, readings, manual tilt and calibration) and a <strong>Module
+test</strong> card; the Rig, Centre and Scan tabs appear. The module's status shows in the top bar:
+<em>Module offline</em>, <em>Module not homed</em> or <em>Module homed</em>.</p>
+<p>The module keeps its homing across USB reconnects and app restarts, as long as it keeps power;
+a real power loss resets it.</p>
+
+<h2>First power-up</h2>
+<p>Do these checks in order, before any homing and with no specimen in the holder. Move the rail
+so the module is well clear of the objective: until tilt is homed its angle is unknown and no tilt
+limits apply.</p>
+<ol class="steps">
+<li><strong>Supply.</strong> With the supply unplugged, set it to 5.0 V and check the wiring with a
+meter on continuity: the top GND rail beeps to the Nano's GND; the two + rails don't beep to each
+other or to GND. Then connect + to the top + rail and − to the top GND rail.</li>
+<li><strong>Power on.</strong> Supply on, module Nano on the Pi. The Scan module card on the System
+tab shows <em>Not homed</em>, not <em>Offline</em>. Nothing moves, and the driver boards' LEDs are
+dark.</li>
+<li><strong>Switch.</strong> Press the tilt switch by hand. The Module test readings show it pressed,
+and released when you let go.</li>
+<li><strong>Hall sensor.</strong> Watch the hall reading on the Scan module card and turn the head
+slowly by hand past the sensor (the coils are off at rest). Away from the magnet it reads about 512;
+near it, it must move at least 40 away from that, up or down. If it hardly moves, check that the
+sensor lies flat in its pocket and that the magnet is in the head.</li>
+<li><strong>Tilt direction.</strong> In Module test, choose a small step and press <em>− Belly</em>
+a few times. The tilt board's LEDs flicker, and the cradle must turn the insect's belly towards the
+lens: the flag bolt moves away from the switch. If it turns the other way, set
+<code>TILT_INVERT = true</code> in <code>firmware-module/src/config.h</code> and reflash. Before
+homing, tilt moves at most 10° per press and nothing stops it short of the lens, so watch it.</li>
+<li><strong>Yaw direction.</strong> Press <em>Counter +</em>. The head must turn counter-clockwise
+seen from above. If it turns clockwise, set <code>YAW_INVERT = true</code> and reflash.</li>
+<li><strong>Home.</strong> On the Rig tab, press <strong>Home</strong> (tilt, then yaw; the
+<em>Tilt only</em> and <em>Yaw only</em> buttons home one axis). Tilt turns slowly away from the
+lens until the flag presses the switch, backs off until it releases and touches it again; that
+contact is the tilt reference. Yaw turns counter-clockwise for up to about 1.3 turns while
+sampling the hall sensor, finds the magnet's peak and stops on it from the same side. Watch the
+first time, ready to press Stop.</li>
+<li><strong>Cables.</strong> With the quick poses <em>Belly view</em> and <em>Top view</em>, take
+the cradle slowly through its whole range and watch the cable loop.</li>
+</ol>
+<div class="row narrow-left">
+  <figure class="shot"><img src="shot:rig" alt=""><figcaption>The Rig tab: homing, gauges, jogs and
+  angles.</figcaption></figure>
+  <div>
+  <h4>Moving the axes</h4>
+  <p>The Rig tab jogs each axis, goes to typed angles, and has quick poses: <em>Level</em>,
+  <em>Top view</em>, <em>Belly view</em> (the lowest allowed tilt), and <em>Screw X to you</em> and
+  <em>Screw Y to you</em>. The gauges show the cradle's tilt with the no-go zone towards the lens,
+  and the head's yaw with the screws marked. The live view's corner shows both angles beside the
+  rail position.</p>
+  <p>Every arrival ends turning the same way, with a 3° take-up (tilt from above, yaw
+  counter-clockwise), so the gearboxes' backlash is always taken up alike.</p>
+  </div>
+</div>
+
+<h2 class="keep">Calibration</h2>
+<p>Two measurements, once per machine, on the System tab in 3D under <em>Scan module</em>. The
+results are kept in <code>~/.local/share/macrorail/module.json</code>.</p>
+<h3>Yaw turn</h3>
+<p>The 28BYJ-48's gear ratio is not a whole number and varies between motors: nominally 4075.77
+half-steps per output turn, but the prototype's yaw motor measured 4096.33. Press
+<strong>Measure yaw turn</strong> with nothing on the holder. The module homes yaw, turns three
+times and homes again; where the second homing finds the magnet gives the half-steps per turn.
+It takes about two minutes. A result more than 2 % from nominal is refused, since it means the head
+slipped on its shaft: tighten the set screw and measure again.</p>
+<h3>Tilt level</h3>
+<p>The switch's true angle is measured with a straight needle. Clamp a straight pin upright in the
+holder, home the rail and the module, focus on the middle of the pin, and press
+<strong>Level tilt</strong>. The module tilts it 10° each way, at yaw 0° and 180°, and compares
+where the pin's top and bottom come into focus; a pin leaning in the holder cancels out. Afterwards
+tilt is level and opens to its full range. Until this has been done, tilt stops at −20° on the belly
+side instead of −33°.</p>
+<p class="small muted">The tilt motor keeps the nominal gear ratio: its calibration measures only the
+switch's angle.</p>
+
+<h2>Mounting and centring a specimen</h2>
+<p>An insect never sits exactly on its pin's axis, so when the head turns it travels a circle and
+leaves the 5.5 mm field. Centring moves the holder until the insect sits where the yaw and tilt axes
+cross. It is done by hand with the two screws, with the app measuring, and usually takes two rounds.</p>
+<h3>Mounting</h3>
+<ol class="steps">
+<li><strong>Loosen</strong> the clamp screw half a turn. The holder stays in the head; only the pin
+is changed.</li>
+<li><strong>Pin.</strong> Push the specimen's pin down through the hole in the nose.</li>
+<li><strong>Height.</strong> Stand the height gauge on the nose tip with the pin in its slot. Slide
+the pin until the middle of the insect is level with the 19 mm step, the tilt axis's height. The 17,
+18, 20 and 21 mm steps show how far off it is.</li>
+<li><strong>Clamp.</strong> Tighten the clamp screw gently; it only has to stop the pin moving.</li>
+</ol>
+<h3>Centring</h3>
+<div class="row narrow-left">
+  <figure class="shot"><img src="shot:centre" alt=""><figcaption>The Centre tab after one round:
+  the offset, the screw dials and the buttons that turn each screw to you.</figcaption></figure>
+  <div>
+  <ol class="steps">
+  <li>Home the rail and the module, and focus roughly on the insect.</li>
+  <li>Optionally press <strong>Spin</strong>: yaw keeps turning while you watch the live view and
+  turn the screws by eye until the insect stops swinging from side to side. Then Stop.</li>
+  <li>Press <strong>Measure</strong>. The module turns to yaw 0°, 90°, 180° and 270°, focuses at each
+  and finds the insect across the image. A circle fit gives its offset from the yaw axis, and a
+  dashed line in the live view marks where the axis appears.</li>
+  <li><strong>Turn the screws</strong> as shown, in eighths of a turn (an eighth is about 60 µm).
+  <em>Screw X to you</em> and <em>Screw Y to you</em> turn the head so that screw faces you, by
+  default 45° beside the objective (<em>Screw angle for the key</em> on the Centre tab).</li>
+  <li>Press <strong>Measure again</strong> until the offset is under 0.1 mm.</li>
+  <li><strong>Measure height</strong> focuses at +20° and −20° tilt and says how far to push or pull
+  the pin.</li>
+  </ol>
+  </div>
+</div>
+<p>Turning a screw in pushes the holder away from it; backing it out lets the spring push the
+holder back. Each round also checks the last advice: if a screw moved the plate the opposite way,
+its direction is flipped and stored, so the next advice is right. <strong>New specimen</strong>
+clears the rounds and the height for the next insect.</p>
+
+<h2>Scanning</h2>
+<div class="row narrow-left">
+  <figure class="shot"><img src="shot:scan" alt=""><figcaption>The Scan tab: the plan, the pose map,
+  the estimate and the pre-flight list.</figcaption></figure>
+  <div>
+  <p>A scan is a ring of yaw angles at each of several tilts. The default plan is tilts +60°, +30°,
+  0° and −30° with a yaw step of 36°: 40 poses. Rings run from the top down, and yaw only turns
+  forwards, so every arrival takes up the gear backlash the same way.</p>
+  <p>At each pose the app turns the module and waits (1 s by default), runs a focus scan to find the
+  insect's front and back, shoots an ordinary focus stack through that range with the 2D step size,
+  and builds the pose's preview and depth map. It keeps every tenth small frame on the Pi to save
+  space; the full-size files stay on the camera's card. If a focus scan finds nothing, the last
+  range is used.</p>
+  </div>
+</div>
+<ol class="steps">
+<li>Set the tilt rings and the yaw step. The tab shows the number of poses and shots, the time and
+the space needed on the Pi and on the card.</li>
+<li>Check the pre-flight list: rail and module homed, camera and live view available, room on the
+Pi, whether the specimen has been centred, and a reminder to use a dummy battery.</li>
+<li><strong>Test this pose</strong> runs one pose at the current angles: a quick check of focus,
+range and exposure.</li>
+<li><strong>Start scan.</strong> Pause, Resume and Stop work as for a stack; the top bar's Stop stops
+the scan.</li>
+</ol>
+<p>The scan's record is written after every pose. After a stop or a restart, <strong>Continue</strong>
+homes yaw again and skips the poses already done; the step, settle time and focus span are fixed at
+the start, so the remaining poses are shot the same way. If the very first pose finds no range, the
+scan stops so you can focus, then continue.</p>
+<p>As a rough guide, at 4× (32.5 µm step) with 2.5 mm of depth per pose, a pose is about 78 shots
+and four to five minutes: the default plan takes around three hours and about 30 GB of full-size
+JPEGs on the card. Run the camera from a dummy battery, with its USB Power Supply set to Off.</p>
+<h3>Manual tilt</h3>
+<p>To set tilt by hand instead of with its motor, turn on <strong>Manual tilt</strong> on the Scan
+module card. Tilt then needs no homing and its controls are hidden; centring works at whatever tilt
+the cradle is set to. A scan pauses before each tilt ring with a message such as <em>Set the tilt
+to 30° by hand, then press Resume</em>, and turns only yaw. Levelling tilt and the height
+measurement need the motor and are not available.</p>
+
+<h2>Review and export</h2>
+<div class="row narrow-left">
+  <figure class="shot"><img src="shot:scan-review" alt=""><figcaption>A scan in the Review tab
+  (3D): one thumbnail per pose.</figcaption></figure>
+  <div>
+  <p>In 3D, the Review tab lists scans. Each pose's thumbnail opens the usual stack viewer: preview,
+  depth map, 3D relief and frames. Pose stacks don't appear in the 2D Review.</p>
+  <p><strong>Download for 3D</strong> streams a zip with one all-in-focus image per pose, named by its
+  angles, the depth maps, and the pose table:</p>
+  </div>
+</div>
+<pre>MacroRail-scan-&lt;id&gt;/
+  images/pose-001_tilt+060_yaw000.jpg        all-in-focus preview per pose (1600 px)
+  depth/pose-001_tilt+060_yaw000.png         16-bit depth map (white = first shot)
+  depth/pose-001_tilt+060_yaw000-colour.jpg
+  poses.csv     pose, tilt, yaw, image, stack, shots, first and last camera file
+  scan.json     the full record: plan, poses, results, camera file names
+  about.json    angle conventions and what the files are</pre>
+<p>The <code>images/</code> folder can go straight into COLMAP or Meshroom for a draft model. The
+previews are quick stacks at 1600 px; for full quality, stack the full-size files from the camera's
+card per pose (Zerene Stacker, Helicon Focus), using the file names in <code>poses.csv</code>, and
+reconstruct from those.</p>
+
+<h2>Troubleshooting</h2>
+<table>
+  <thead><tr><th style="width:34%">Symptom</th><th>Likely cause and fix</th></tr></thead>
+  <tbody>
+  <tr><td>The Scan module card shows <em>Offline</em></td><td>Check <code>port = "auto"</code> under <code>[module]</code>, that the module firmware is flashed, that no capacitor sits between RST and GND, and that the USB cable carries data. <code>ls /dev/serial/by-path/</code> must list it.</td></tr>
+  <tr><td>The rail is no longer found after plugging in the module</td><td>The config still names a <code>by-id</code> path, which can now point at either Nano. Set <code>port = "auto"</code> under <code>[rail]</code> and restart the app.</td></tr>
+  <tr><td>A motor hums or twitches but doesn't turn</td><td>IN wires in the wrong order (yaw D2, D3, D4, D5; tilt D7, D6, D9, D11 for IN1–IN4) or loose; or no 5 V on the board: check the supply, the board's − and + and its power jumper. LEDs that flicker while the motor stays still point at the motor plug or the supply.</td></tr>
+  <tr><td>Nothing moves, LEDs dark</td><td>The IN wires don't reach the board, or the module isn't connected.</td></tr>
+  <tr><td>Turns the wrong way</td><td>Set <code>TILT_INVERT</code> or <code>YAW_INVERT</code> in <code>firmware-module/src/config.h</code> and reflash. Don't rewire the motor plug.</td></tr>
+  <tr><td>Tilt homing fails: <code>NO_SWITCH</code></td><td>The tilt turned all the way without the switch closing. Check C to GND, NO to D10; press the switch by hand (Module test must show it); check that the flag reaches the roller. If tilt turned towards the lens, the direction is wrong.</td></tr>
+  <tr><td>Tilt homing fails: <code>SWITCH_STUCK</code></td><td>The switch stayed pressed after backing off: wired C and NC, the flag bolt too long, or the bracket too close.</td></tr>
+  <tr><td>Tilt homing fails: <code>SWITCH_EARLY</code></td><td>The second touch met the switch earlier than the first: noise on the switch wire, or the switch moved. Check the wiring and the glue; route the switch cable away from the motor cables.</td></tr>
+  <tr><td>Tilt stops with <code>ENDSTOP</code> during a move</td><td>Something pressed the switch: a cable on the +Y side, or a loose switch wire. Tilt must be homed again.</td></tr>
+  <tr><td>Yaw homing fails: <code>NO_MAGNET</code></td><td>The field peak was under 40 counts. Check AO to A0 (not DO), the sensor's + and G, that the sensor lies flat under the magnet's path, and that the magnet is in the head.</td></tr>
+  <tr><td><em>Measure yaw turn</em> refused</td><td>More than 2 % from nominal: the head slipped on its shaft. Tighten the set screw on the shaft's flat.</td></tr>
+  <tr><td>Tilt loses steps near +90°</td><td>The cradle is heaviest there. Homing on the switch shows any loss. Add a counterweight through the holes at the top of the arms.</td></tr>
+  <tr><td>Tilt won't go below −20°</td><td>Tilt hasn't been levelled: run <em>Level tilt</em> (section 8).</td></tr>
+  <tr><td>The Pi or the Nano resets when a motor starts</td><td>The boards are fed from the Nano's 5 V. Move their + to the separate supply; only the grounds are joined.</td></tr>
+  <tr><td><code>LINK</code> errors, motion stops</td><td>No message from the Pi for 2 s: a loose USB cable, or the Pi under-voltage. Use a 2.5 A supply for the Pi and set the camera's USB Power Supply to Off.</td></tr>
+  <tr><td>A pose finds no focus range</td><td>The insect is out of the field or out of focus range: centre it again, check the focus span. A scan's first pose stops the scan; later poses reuse the last range.</td></tr>
+  </tbody>
+</table>
+<p class="small muted">Further reference: <code>docs/3d-scanning.md</code> (the module and its use),
+<code>docs/protocol-module.md</code> (the module's serial protocol and error codes),
+<code>hardware/scan-module/README.md</code> (the CAD model) and
+<code>hardware/scan-module/MEASUREMENTS.md</code>.</p>
