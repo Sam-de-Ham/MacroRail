@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -11,10 +14,22 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0  # no floating v10 tag is published
       - run: uv sync --frozen
-      - run: uv run ruff check src tests
-      - run: uv run ruff format --check src tests
-      - run: uv run mypy src
-      - run: uv run pytest
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run mypy  # src, tests and scripts: see [tool.mypy] files
+      - run: uv run pytest --cov --cov-report=term
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Node is preinstalled on the runner; Biome is pinned here and in biome.json's $schema.
+      - run: npx --yes @biomejs/biome@2.5.15 ci --error-on-warnings
 
   firmware:
     runs-on: ubuntu-latest
@@ -24,3 +39,6 @@ jobs:
       - run: uv tool install platformio
       - run: pio run -d firmware
       - run: pio run -d firmware-module
+      # cppcheck on our own sources; the settings are in each platformio.ini.
+      - run: pio check -d firmware -e nano --fail-on-defect=medium --fail-on-defect=high
+      - run: pio check -d firmware-module -e nano --fail-on-defect=medium --fail-on-defect=high

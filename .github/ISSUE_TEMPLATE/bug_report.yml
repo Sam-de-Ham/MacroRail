@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Home the rail
+        2. ...
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Simulator (--sim)
+        - Real rig, 2D
+        - Real rig, 3D scan module
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "1.1.0, or a commit hash"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The activity log from the System tab, or `journalctl -u macrorail` on the Pi.
+      render: text

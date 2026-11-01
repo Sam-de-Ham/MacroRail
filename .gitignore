@@ -4,15 +4,11 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 dist/
 firmware/.pio/
 firmware/.vscode/
 *.local.toml
-docs/setup-guide/setup-guide.html
-docs/module-guide/module-guide.html
-hardware/scan-module/guide/scan-module-guide.html
+docs/guides/build/
 hardware/scan-module/fusion/verify.log
 
-# Working notes kept out of the repository
-agents.md
-notes/
