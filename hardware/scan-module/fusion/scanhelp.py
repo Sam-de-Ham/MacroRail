@@ -1,6 +1,6 @@
 """Model-specific helpers for the MacroRail scan module (built on fusion_helpers)."""
-import sys, importlib
-sys.path.insert(0, r'C:\path\to\fusion-helpers')
+import sys, importlib, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fusion_helpers as fh
 importlib.reload(fh)
 from fusion_helpers import *  # noqa

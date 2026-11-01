@@ -6,11 +6,14 @@ contract between `firmware-module/`, `src/macrorail/motion/module.py` and the si
 everything not stated here; the rail's protocol is unchanged.
 
 The module has its own Nano so the rail firmware never changes (see
-[3d-software-plan.md](3d-software-plan.md)).
+[design-notes.md](design-notes.md#a-second-nano)).
 
 ## Transport
 
-- USB serial, 115200 baud, 8N1. Opening the port resets the Nano; the host waits for `READY`.
+- USB serial, 115200 baud, 8N1. The first open resets the Nano, and the host waits for
+  `READY`. The host then clears HUPCL on the port, so later opens (a reconnect, an app
+  restart) don't reset it and the module keeps its homing; when no `READY` arrives within
+  2.5 s, the host sends `INFO`, whose reply carries the same fields.
 - ASCII lines ending in `\n` (a trailing `\r` is ignored), at most 63 characters host → firmware.
 - `READY` carries `role=module`. That is how the host tells the two Nanos apart: both are CH340
   clones without serial numbers, so their `/dev/serial/by-id` names collide. The rail's `READY`
@@ -24,9 +27,9 @@ The module has its own Nano so the rail firmware never changes (see
 - **TILT:** positive moves go **away from the switch**, which turns the insect's belly towards the
   lens (the tilt *angle* decreases). The switch is at the dorsal end, past +90°.
 - **YAW:** positive turns the head **counter-clockwise seen from above**, and it is the
-  direction `HOME YAW` turns. Yaw is unlimited. At yaw 0 the magnet is over the hall sensor,
-  centring screw X points away from the camera and screw Y at the motor side (−Y) (found on
-  the rig; the app's `SCREW_X_YAW_DEG`).
+  direction `HOME YAW` turns. Yaw is unlimited. At yaw 0 the magnet is over the hall sensor
+  and centring screw X points at the camera, with screw Y 90° counter-clockwise from it
+  (`SCREW_X_YAW_DEG` in `src/macrorail/scan/centring.py`).
 - Each axis has a direction constant in `firmware-module/src/config.h` (`TILT_INVERT`,
   `YAW_INVERT`) for the motor wiring.
 
@@ -125,7 +128,7 @@ which pulls the rotor back, so the count stays right and the first step is a nor
 
 | Event | When |
 |---|---|
-| `! READY fw=<semver> proto=1 role=module` | After boot (and after every port open). |
+| `! READY fw=<semver> proto=1 role=module` | After boot, i.e. after power-up or a reset (the first port open resets the Nano; see Transport). |
 | `! POS axis=<yaw\|tilt> pos=<n>` | About every 100 ms while that axis moves. |
 | `! SWITCH pressed=<0\|1>` | The tilt switch's debounced level changed. |
 
@@ -171,7 +174,7 @@ which pulls the rotor back, so the count stays right and the first step is a nor
 | Signal | Pin |
 |---|---|
 | Yaw ULN2003 IN1, IN2, IN3, IN4 | D2, D3, D4, D5 |
-| Tilt ULN2003 IN1, IN2, IN3, IN4 | D7, D6, D9, D11 (on the rig; the guide shows D6, D7) |
+| Tilt ULN2003 IN1, IN2, IN3, IN4 | D7, D6, D9, D11 |
 | Tilt switch (C → GND, NO → pin, internal pull-up, active low) | D10 |
 | KY-024 analog output | A0 |
 

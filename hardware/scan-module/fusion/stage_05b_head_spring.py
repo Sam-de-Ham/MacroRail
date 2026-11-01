@@ -1,6 +1,6 @@
 """Stage 05b: spring housing on the yaw head at 225 deg (opposite the two screws), its bore
 (open to the inside of the ring) and the reference spring. The pen spring bears straight on
-the holder's rim, no plunger (user, after the test print)."""
+the holder's rim, no plunger (after the test print)."""
 import sys, importlib, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scanhelp

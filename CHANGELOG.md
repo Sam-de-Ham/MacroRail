@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### Focus stacking
+
 - Tabbed interface: a fixed live view with Shoot, Camera, Review and System tabs, and a
   status strip showing whatever is running.
 - Auto range: a scan through focus finds where the subject starts and ends.
@@ -20,6 +22,34 @@
   load, memory and disk.
 - Firmware protocol 3: `DRIVER` reports the TMC2209's status. Reflash the Nano.
 - CI on current actions, a CI badge, and steadier switch tests.
+- Faster homing: the seek and the second touch both run at 2 mm/s, backing off 1 mm past the
+  switch's release. Config files that still name the old probe speed keep loading.
+- The rail's serial port defaults to `auto`: the app finds the Nano by what it reports.
+- A log warning when the Pi goes under-voltage (USB devices may then drop out).
+
+### 3D scan module
+
+- An optional bolt-on module for multi-angle scans: a printed fork on the carriage with a
+  motorised tilt cradle (−33° to +90°) and yaw head (two 28BYJ-48s), a roller switch for tilt
+  home, a hall sensor for yaw home, and a hand-adjusted centring plate with a pin clamp.
+  CAD scripts, STLs, test pieces and an assembly guide in `hardware/scan-module/`.
+- Its own Arduino Nano and firmware (`firmware-module/`, protocol v1), with a wiring guide.
+  The rail's firmware and protocol are unchanged.
+- Port auto-discovery tells the two Nanos apart; the module keeps its homing across
+  reconnects and app restarts.
+- A 2D / 3D switch in the app. 2D is unchanged; 3D adds Rig, Centre and Scan tabs and a Scan
+  module card in System.
+- Calibration: yaw half-steps per turn from two magnet peaks, and tilt level from a straight
+  needle.
+- Centring: measurements at four yaws, a circle fit, screw advice in eighths of a turn with a
+  dial per screw, self-correcting screw directions, Spin for rough centring, and the height
+  above the tilt axis. The yaw axis is drawn in live view.
+- Scans: tilt rings × yaw step, an estimate and pre-flight checks, a test pose, pause, resume,
+  and continue after a stop or restart. Each pose is a focus scan and an ordinary stack.
+- Manual tilt: scan with tilt set by hand; the scan pauses for each ring.
+- 3D Review: each scan's poses as thumbnails opening the stack viewer, and a "Download for
+  3D" zip with one all-in-focus image per pose named by angle, depth maps and a pose table.
+- Simulated module and specimen for development and tests.
 
 ## 1.0.0: 2026-10-19
 

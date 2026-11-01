@@ -2,7 +2,7 @@
 clamp column, 45-deg tapered nose and the pin hole on the yaw axis (through the whole holder).
 Pin clamp: one M3 screw on a straight line along +X, through a captive nut (slot open to +Y,
 flats up and down so it can't turn), its tip pressing the pin against the far end of the
-screw hole. No pad (user, after the test print). Plus the reference clamp screw and nut."""
+screw hole. No pad (after the test print). Plus the reference clamp screw and nut."""
 import sys, importlib, os, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scanhelp

@@ -2,6 +2,10 @@
 # Everything here is optional: missing values use the defaults shown.
 # Day-to-day settings (speeds, currents, step size, ...) are changed in the web UI instead.
 
+# Where settings, stacks, scans and the module's calibration are kept. Top-level keys like
+# this one must come before the first [section].
+# data_dir = "/home/pi/.local/share/macrorail"
+
 [rail]
 # The Nano's serial port. "auto" finds it by what it reports, which also works with the scan
 # module's Nano plugged in (both are CH340 clones, so their /dev/serial/by-id names collide).
@@ -9,7 +13,8 @@
 port = "auto"
 # Microsteps per mm of travel: 200 steps × 16 microsteps ÷ 8 mm lead (Tr8×8 screw).
 steps_per_mm = 400
-# Soft limits, in mm from the home switch. The rail parks at min_mm after homing.
+# Soft limits, in mm from the home switch. After homing the rail parks at min_mm, or just
+# clear of the switch's release point if that is further.
 min_mm = 0.5
 travel_mm = 140.0
 # Homing: seek the switch, back off until it releases plus a clearance, then touch it again
@@ -36,6 +41,3 @@ liveview_max_fps = 10.0
 [server]
 host = "0.0.0.0"
 port = 8000
-
-# Where settings and stack records are kept.
-# data_dir = "/home/pi/.local/share/macrorail"

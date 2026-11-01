@@ -1,254 +1,256 @@
 # 3D scanning
 
-The next major version: a full 3D scan of a pinned insect, driven by the existing focus
-rail. The v1 module design below was agreed with the user on 2026-10-21.
+The scan module is an optional bolt-on for the rail. It holds a pinned insect on two motorised
+axes, tilt and yaw, so the app can photograph it from many angles: one focus stack per pose.
+The all-in-focus images, named by their angles, go to photogrammetry software (COLMAP,
+Meshroom) to build a 3D model.
 
-**Status (2026-10-24):** the hardware is done. It is modelled, test-printed twice, printed
-and assembled, and it went together exactly as designed. All five software milestones
-(module firmware and driver, calibration, centring, scans, review and export) are built and
-tested in the simulator; the module isn't wired on the rig yet. See "Software" below.
+![The scan module](images/module.png)
 
-- Measurements and derived numbers: [`hardware/scan-module/MEASUREMENTS.md`](../hardware/scan-module/MEASUREMENTS.md)
-- Photos: [`reference-images/`](../reference-images/)
-- Concept sketches and a lens-checked 3D mock-up (private page):
-  (not published)
-- Research study (private page): (not published)
+Without the module, the rail is the plain focus-stacking rail. The module has its own Nano on
+its own USB cable, so the rail's firmware, wiring and protocol don't change, and the app's 2D
+mode behaves the same whether the module is plugged in or not. A **2D / 3D** switch in the top
+bar selects the workspace; it is remembered per browser.
 
-## Ground rule: 2D stays exactly as it is (user, 2026-10-21)
+- Hardware, print guide and CAD: [`hardware/scan-module/README.md`](../hardware/scan-module/README.md)
+- Assembly, wiring and use (PDF): the [scan module guide](guides/MacroRail-scan-module-guide.pdf); pins also in [wiring.md](wiring.md#scan-module)
+- Controller protocol: [protocol-module.md](protocol-module.md)
+- Why things are done this way: [design-notes.md](design-notes.md#scan-module)
 
-The rail must always work for normal focus stacking, exactly as it does today.
+## The problem it solves
 
-- **Branch:** all 3D work lives on `3d-scanning`. `main` stays the working 2D version.
-  Merge only when the user agrees.
-- **Mode switch:** the app gets a 2D/3D switch. 2D mode is today's app, unchanged.
-  3D mode reuses the same UI patterns and components for the 3D workflow.
-- **No 2D differences unless agreed.** Anything that shows in 2D mode needs the user's
-  yes first: UI, behaviour, defaults, settings, stack records, rail firmware behaviour.
-  If a 2D change looks worth it, propose it ("what about…?") and wait.
-- **Shared code:** refactoring shared code is fine only if 2D behaviour stays identical,
-  the existing tests still pass unchanged, and the refactor is mentioned to the user.
-- **Firmware:** the new axes are purely additive. The firmware must run the rail
-  normally with no module plugged in, and rail commands keep their current meaning.
-- **Hardware:** the module bolts onto the carriage. Without it, the rail is today's rail.
+A pinned insect never sits exactly on the pin's axis, so when the pin turns, the insect travels
+a circle. Movement along the lens axis only changes focus, and a focus scan at every pose
+absorbs it. Movement across the image pushes the insect out of a 5.5 × 3.65 mm field at 4×.
+Rotating-specimen rigs (DISC3D, scAnt and others) solve this the same way: centre the
+specimen once, where the rotation axes cross, then rotate freely. The module does that with a
+hand-adjusted centring plate and an app that measures how far to turn each screw.
 
-## Working together
-
-The user and the agent do the whole build together, step by step: plan, measure, model
-in CAD, print, program, set up, calibrate. Measurements come from the user, never from
-guesses. The rail's own geometry comes from the STLs in `hardware/rail/stl/`.
-
-## The problem, in short
-
-An insect on a pin never sits exactly on the pin's axis, so when the pin turns, the insect
-travels a circle. Movement along the lens axis only changes focus, and a focus scan at
-every pose absorbs it. Sideways and vertical movement pushes it out of a 5.5 × 3.65 mm
-frame. Every published rotating-specimen rig (DISC3D, scAnt, the CSIRO prototype) solves
-this the same way: centre the insect once, where the rotation axes cross, then rotate
-freely. Photogrammetry doesn't need the insect centred, only whole and sharp in every view.
-
-## v1 design (agreed 2026-10-21)
-
-The insect's centre sits where the yaw and tilt axes cross. Both axes are motorised, and
-centring is done by hand once per specimen.
+## The module
 
 ```
-camera ──▶ lens axis ──▶ insect (on both axes)
-                          │ pin, 19 mm exposed
-                          ├ specimen holder: nose + pin clamp (one M3 screw)
-                          │   on the centring plate, one part; ring + X/Y screws
-                          ├ yaw 28BYJ-48 (head straight on its shaft)
+camera ──▶ lens axis ──▶ insect (where the yaw and tilt axes cross)
+                          │ pin, about 19 mm exposed
+                          ├ specimen holder: nose + pin clamp (one M3 screw),
+                          │   on the centring plate (X/Y screws, spring)
+                          ├ yaw head on the yaw 28BYJ-48's shaft
                           └ cradle floor
-cradle arms ── tilt axis ── uprights: 608 on one side, tilt 28BYJ-48 on the other
+cradle arms ── tilt axis ── uprights: 608 bearing on one side, tilt 28BYJ-48 on the other
 base plate ── 4 × M3 ── rail carriage (focus axis, unchanged)
 ```
 
-| Part | Design | Why |
-|---|---|---|
-| **Mount** | Base plate on the carriage's four free holes (60 × 20, Ø4.5), M3 bolts with washers and nuts. Pockets for the bearing-block screw heads (1.3 tall) where the plate is wider than ±24. | The sample platform isn't fitted, so these holes are free. The app measures where the axes are, so the M3-in-Ø4.5 slop doesn't matter. |
-| **Fork** | One printed body: base plate, both uprights and their ribs. The bearing seat and the motor recess come out coaxial by construction; as horizontal holes, they are checked with test pieces first. | Supported on both sides: stiff, and the axis is set by two fixed points. The camera looks between the uprights, and there's room to light from the front and back. |
-| **Tilt axis** | A U-cradle between the uprights. One side: a printed axle through the 608 in one upright, clamped to the cradle by an M3 × 27.7. Other side: the **tilt 28BYJ-48, direct drive**. It's screwed to the outside of the other upright, with its Ø9 boss in a recess to centre it, and a D-hub on its shaft carries the cradle. | Simplest drive (user's choice). See "Torque" below. |
-| **Tilt home** | A roller microswitch on a printed bracket on the +Y upright, pressed by a flag bolt on the cradle arm. It clicks at +97°, past the +90° working limit. | Homing moves away from the lens, never towards it. |
-| **Tilt range** | −33° (belly towards the lens) to +90° (top view), confirmed by the CAD sweep. | The lens limits the belly side (see "Lens clearance"). |
-| **Yaw axis** | The **yaw 28BYJ-48** screwed under the cradle floor. The head mounts **straight on its shaft** through a D-hub, with no bearing (user's choice). | The yaw only carries the head (about 25 g). Shaft play causes a small, repeatable wobble that stays well inside the frame; the centring wizard shows how big it is. A 608 turntable can be added later if it matters. |
-| **Yaw home** | KY-024 linear hall board on the cradle floor, one Ø5.7 magnet in the head's underside. Homing reads the analog output and takes the field peak, the magnet's centre. | The peak repeats better than the board's on/off threshold. |
-| **Yaw range** | Unlimited in v1. | Nothing electrical turns with the head. |
-| **Centring (X/Y)** | One printed plate (Ø26 × 6) in a printed Ø43 ring on the yaw hub. Two M3 screws at 90° turn in captive nuts in the ring and push the plate; a pen spring at 225° pushes straight on the rim. The plate's rim has a 4 mm-wide V that holds the screw ends, so the plate can't lift. Plain button-head screws turned with a 2 mm hex key (no knobs). ±2.5 mm. | One layer and three parts. Metal screw tips on a printed plate. 0.5 mm per turn: a quarter turn is 0.125 mm. |
-| **Specimen holder** | One printed part: the centring plate with the clamp column and nose on top; one M3 screw through a captive nut pinches the pin. It stays in the head; specimens change by swapping the pin. | Explained under "Why no puck". |
-| **Pin clamp** | A Ø1.2 pin hole through a 45° tapered nose (Ø5 tip) and the clamp column. One M3 screw, on a straight line through a captive nut, presses the pin against the far wall of its hole. | Pins 00 to 1 (0.30–0.40) are guided above and below the clamp, so they can't kink or slip out. The tapered nose and low screw keep everything near the insect out of the lens's way. |
-| **Height (Z)** | Slide the pin against the printed stepped gauge (17 to 21 mm above the nose tip), then clamp it with the clamp screw. The wizard measures any height error, and you re-set the pin with the gauge. A fine Z screw was dropped in CAD: there was no room for it inside the lens clearance cone. | Puts the insect on the tilt axis, for glued-tip and pinned-through specimens alike. Pins stay full length (39.4), no cutting needed. |
-| **Accessories** | Height gauge; a straight needle in the holder for calibration (where the axes appear in the image). | Calibration happens once per machine; it's stored in `config.toml`. |
-| **Electronics** | 2 × ULN2003 from the user's 5 V supply, ground shared with the Nano. Pins below. | The Nano's USB 5 V shouldn't carry two motors (about 240 mA each while moving). |
-| **Lighting** | Deferred. Felt background, 2–3 lights and a bounce, as the user does now. | No dome needed. |
+### Mounting
 
-### Why no puck (user decision, 2026-10-21)
+The fork (base plate, both uprights and their ribs, printed as one body) bolts to the four
+free holes of the carriage (60 × 20 mm, Ø4.5) with M3 bolts and printed washers; the rail's
+sample platform is not fitted. The base has pockets for the bearing blocks' screw heads.
+The tilt axis sits 95 mm above the carriage top, so the camera's tripod sets the lens to that
+height. The module is about 126 mm wide including the tilt motor.
 
-The first design had a removable puck: three bumps in three V-grooves on the centring
-plate, held by magnets, so a specimen could be lifted off and put back without
-re-centring. The user dropped it for v1: the holder is rarely taken off, because changing
-specimens means swapping the pin, not the holder. So the clamp is printed straight onto
-the centring plate as one part, the **specimen holder**. No magnets, domes or grooves; the
-centring works as before. The 0.5 mm seat gap went into the holder's neck (6.5 mm), so
-every height below the insect is unchanged.
+The slop of M3 bolts in Ø4.5 holes doesn't matter: the app measures where the axes appear in
+the image.
 
-### Torque (direct-drive tilt)
+### Axes
 
-- **Load:** the cradle hangs below the axis like a pendulum. With the head straight on the
-  yaw shaft it pulls about 40 mN·m at 90° and about 35 at 60°.
-- **Holding: fine, even unpowered.** The 28BYJ-48's gearbox friction torque is listed at
-  60–120 mN·m, so the user's intuition is right. The coils switch off between moves, so
-  no heat reaches the insect.
-- **Lifting: borderline near 90°.** Its pull-in torque is listed at about 34 mN·m, and
-  slow stepping gives a bit more.
-  - So the cradle arms extend above the axis with **Ø8.3 counterweight holes**, 38 above
-    the axis, for an 8 mm rod with nuts.
-  - The first powered test runs without it. If the tilt skips steps near 90°, add weight;
-    homing on the endstop shows any lost steps.
-- **Shaft offset:** yes, both motors' shafts are 8 off the body centre (O1). The tilt
-  motor's shaft is the axis, so its body sits 8 off it. Its shaft and the 608 share the
-  cradle's weight, so the motor shaft only carries about half of it.
-- **Alignment:** the motor shaft and the 608 must be coaxial, or the cradle binds. The
-  motor boss's recess and the bolted uprights fix that. The motor's own shaft play moves
-  one end of the axis a little; the insect, halfway between, moves half as much.
+| Axis | Drive | Range | Home |
+|---|---|---|---|
+| Tilt | 28BYJ-48, direct drive, on the outside of one upright; a printed axle in a 608 bearing on the other | −33° (belly towards the lens) to +90° (top view) | Roller microswitch on a printed bracket, tripped by a flag bolt on the cradle at about +97°, away from the lens |
+| Yaw | 28BYJ-48 under the cradle floor; the head sits straight on its shaft | Unlimited (nothing electrical turns with the head) | KY-024 linear hall board under a Ø5.7 mm magnet in the head; homes on the field peak |
+| Centring X/Y | Two M3 button-head screws at 90°, turned with a 2 mm hex key; a pen spring pushes back | ±2.5 mm, 0.5 mm per turn | Set by hand, once per specimen |
+| Height | The pin slides in the holder; a printed stepped gauge (17–21 mm) sets it | Set by hand | Measured by the app |
 
-### Lens clearance
+Angles in the app: tilt 0 is level, positive turns the insect's back towards the camera; yaw
+is counter-clockwise seen from above, and 0 is where the magnet passes over the hall sensor.
+At yaw 0 centring screw X points at the camera, and screw Y is 90° counter-clockwise from it.
 
-The 4× objective has a 12 mm working distance and a Ø21.9 sleeve, then a Ø23.4 knurled ring,
-then a Ø29.8 adapter.
+Tilt is limited by the 4× objective's 12 mm working distance: a CAD sweep of every moving part
+against the objective plus 2 mm gives −33° on the belly side with 1.1 mm to spare. The limits
+are enforced by both the app and the module's firmware. Until the tilt switch's angle has been
+calibrated, tilt stops at −20°.
 
-- **Keep-out zone:** those diameters plus 2 mm all round (in `MEASUREMENTS.md`).
-- **Rule:** to tilt the belly side 45° towards the lens, a part at depth d below the
-  insect and reach w from the pin needs d − w ≥ 18.
-- **Hence:** 19 mm of exposed pin, the 45° tapered nose, the clamp screw low on the
-  carrier, and the small centring ring.
-- **The CAD sweep's result:** −33° on the belly side (1.1 mm to the keep-out zone); the
-  dorsal side is free to +100°. **Software tilt limits: −33° to +90°.**
+### Specimen holder
 
-### Key dimensions (CAD)
+The centring plate, a clamp column and a 45° tapered nose are one printed part. The pin
+(sizes 00 to 1, 0.30–0.40 mm) passes through a Ø1.2 hole in the nose and the column and is
+pinched by one M3 screw through a captive nut. Specimens are changed by swapping the pin; the
+holder stays in the head. Insects glued on the pin tip and insects pinned through both work.
 
-- **Under the insect:** pin 19, nose 10, clamp column 8, holder neck 6.5, plate 6, ring floor
-  2, bell hub 7, gap 1, floor 4, yaw motor 19. The motor's back is 82.5 below the insect.
-- **Tilt axis:** 95 above the carriage top, so the swinging cradle clears the base. The
-  camera's tripod sets the lens to that height.
-- **Across the rail:** cradle arms at ±33 to ±39. Uprights from ±40: 6 thick on the
-  bearing side (+Y), 4 on the motor side (−Y). About 126 wide including the tilt motor.
+The holder sits in a ring on the yaw head between the two screw tips and the spring. A 4 mm
+V in its rim captures the screw ends, so the plate can't lift.
 
-### Electronics: a second Nano (user, 2026-10-24)
+### Torque
 
-The module has its own Arduino Nano on its own USB cable, so the rail's Nano, firmware and
-wiring don't change at all. Its pins: yaw ULN2003 IN1–IN4 on D2–D5, tilt on D6, D7, D9, D11, the tilt
-switch on D10, the KY-024's analog output on A0. Wiring guide:
-[`module-guide/MacroRail-module-wiring-guide.pdf`](module-guide/MacroRail-module-wiring-guide.pdf);
-protocol: [`protocol-module.md`](protocol-module.md).
+The cradle hangs below the tilt axis like a pendulum and needs about 40 mN·m at 90°. The
+28BYJ-48's gearbox friction (listed at 60–120 mN·m) holds it unpowered, so the coils are
+switched off between moves and no heat reaches the specimen. Lifting is closer to the limit
+(pull-in torque about 34 mN·m, more at slow speed). If tilt loses steps near +90° (homing on
+the switch shows it), the cradle arms have Ø8.3 holes 38 mm above the axis for an 8 mm rod
+with nuts as a counterweight.
 
-### One scan
+## Electronics
 
-1. **Mount** the pinned insect in the holder's nose, set the pin height with the gauge,
-   and tighten the clamp screw (you, about 1 min).
-2. **Centre** with the wizard. The app turns the insect to 4 yaw angles, finds it in the
-   live view (sharp tiles) and with a focus scan, fits a circle, and says how far to turn
-   each screw, then turns the head so that screw faces you. Repeat until under about 0.1 mm (you and the app, about 2 min). It also
-   checks height at two tilts; you re-set the pin with the gauge if needed.
-3. **Scan, automatically:** rings of poses at several tilts (for example −30°, 0°, 30°,
-   60°, then a top view), yaw in 10° steps. At each pose: focus scan, then stack.
-4. **Export** one stacked image per pose for COLMAP or Meshroom.
+A second Arduino Nano runs the module ([`firmware-module/`](../firmware-module/)). Two ULN2003
+boards drive the 28BYJ-48s from a separate 5 V supply whose ground is shared with the Nano;
+the Nano's USB 5 V can't carry two motors at about 240 mA each.
 
-The wizard's maths: at yaw θ, an offset (x, y) shows sideways as x·cos θ − y·sin θ and
-in depth as x·sin θ + y·cos θ. With equally spaced angles the least-squares fit is a
-plain Fourier sum. The image gives the sideways curve precisely; the focus scan's depth
-curve is a cross-check.
+| Signal | Module Nano pin |
+|---|---|
+| Yaw ULN2003 IN1–IN4 | D2, D3, D4, D5 |
+| Tilt ULN2003 IN1–IN4 | D7, D6, D9, D11 |
+| Tilt switch (C → GND, NO → pin, internal pull-up) | D10 |
+| KY-024 analogue output | A0 |
 
-Backlash: every pose is approached turning the same way, the same trick as the rail's
-take-up. Rings run one way; going back unwinds past the start and comes forward again.
-Tilt backlash doesn't move the insect, because it sits on the tilt axis.
+The pins are constants in `firmware-module/src/config.h`. Flash it with
+`pio run -d firmware-module -e nano -t upload` (`nano_new` for a new-bootloader Nano).
 
-## CAD and build (2026-10-21 to 2026-10-24)
+Both Nanos are CH340 clones that share a `/dev/serial/by-id` name, so set `port = "auto"` for
+both `[rail]` and `[module]` in `config.toml` (the default) or give each a
+`/dev/serial/by-path/...` path. With `auto`, the app tells them apart by their first line.
 
-The full model is in Fusion 360 (document *3d scanner macro v1.2*, project Everything,
-folder Useful). [`hardware/scan-module/README.md`](../hardware/scan-module/README.md) covers
-the model's structure, how to rebuild it from the stage scripts, what was verified, the
-print guide, the hardware list and the test-piece checklist.
+**System → Module test** (3D workspace) shows every raw reading (switch, hall, half-steps,
+link) and has a forward and back button per motor, for checking the wiring before homing.
 
-Changes from the agreed concept, with reasons:
-- **Fork as one body:** coaxial bearing and motor seats with no assembly error.
-- **Wider cradle:** arms at ±33 (planned ±30), so the centring screws clear them.
-- **No knobs:** the centring and clamp screws are turned with a 2 mm hex key; yaw brings each
-  screw round to the user.
-- **Wider uprights:** 44.2 mm (motor tab spacing + counterbore + 3), so the tilt motor's ear
-  bolts land inside the upright.
-- **Thin motor-side upright (after test round 1):** 4 mm instead of 6, so the short
-  28BYJ-48 shaft reaches 6.2 mm into the cradle hub. The tilt motor goes on after the cradle
-  is in, its shaft pushed in from outside.
-- **Simpler head (after test round 1):** no pin pad and no spring plunger. One M3 screw on a
-  straight line clamps the pin; the spring pushes straight on the holder's rim.
-- **Thicker plate:** 6 mm with a 4 mm rim V. A flat M3 end can't enter a narrow V, so the
-  wider V captures the screws and the plate can't lift.
-- **Bell hub:** the head prints hub-down with no supports. A snap-off fin carries the
-  spring housing.
-- **Flat hall sensor:** the hall sensor lies flat in a floor pocket, 0.8 mm under an axial
-  magnet in the bell's underside.
-- **Fine Z screw dropped:** a stepped height gauge replaces it.
-- **Tilt axis at 95** (planned 87), and a belly limit of −33° (planned −36°).
+## Moving the axes
 
-- **Tilt home:** a printed bracket, bolted to the outside of the +Y upright with two M3
-  (nuts in pockets inside), holds a roller microswitch just past the upright's +X edge. It is
-  fixed with two small wood screws plus glue (the user's choice; the switch holes are too
-  small for M3). An M3 × 17.5 flag bolt through the +Y arm meets the roller at +90° and
-  clicks it at `home_t` = 97°, homing away from the lens.
-- **Specimen holder, no puck:** the plate and the clamp are one part (see "Why no puck").
+The Rig tab homes the module (tilt first, then yaw, or either alone), jogs each axis, goes to
+typed angles and has quick poses: Level, Top view, Belly view (the lowest allowed tilt), and
+Screw X / Screw Y to you. Gauges show the cradle's tilt with the no-go zone and the head's yaw
+with the screws marked; the live-view corner shows the angles beside the rail position.
+Before tilt is homed, a tilt jog is limited to 10°, since the app can't yet tell where the
+lens is.
 
-Assembly and use: [`hardware/scan-module/guide/MacroRail-scan-module-guide.pdf`](../hardware/scan-module/guide/MacroRail-scan-module-guide.pdf).
-STLs: `hardware/scan-module/exports/test-pieces/` and `exports/final/`.
+## Calibration
 
-Two test-print rounds tuned the fits (results in the module README). The final parts were
-printed and assembled on 2026-10-24 with no problems.
+Two measurements, once per machine, in the System tab (3D workspace). The results are stored
+in `module.json`.
 
-Print fits from the lens-mount project (Prusa i3 MK3, validated in PLA): M3 clearance 3.4;
-M3 nut pocket 5.7 across flats × 2.6 deep; friction bore +0.6 on diameter; sliding fit 0.4
-total clearance. No threads in plastic; counterbores, not countersinks.
+- **Measure yaw turn.** Homes yaw, turns three turns, homes again; where the second homing
+  finds the magnet gives the half-steps per turn. The 28BYJ-48's gear ratio is not an integer
+  and varies between units (nominal 4075.77; the built module's yaw measured 4096.33). A
+  result more than 2 % from nominal is refused, since it means the head slipped on its shaft.
+- **Level tilt.** With a straight needle upright in the holder and in focus, the app sweeps
+  focus at +10° and −10° (each at yaw 0° and 180°) and computes the switch's true angle from
+  how far the needle's top and bottom focus apart. Afterwards tilt is level and opens to its
+  full range (−33°).
 
-## Later
+The tilt motor keeps the nominal gear ratio; its calibration measures only the angle offset.
 
-- **v2, hands-off centring:** 28BYJ-48s on the X/Y screws (a hex-bit coupler on
-  the button heads, plus a bracket). That needs 8 more pins, so it means moving to an
-  **Arduino Mega 2560**: the same AVR toolchain, and hardware UARTs, which also remove the
-  half-duplex SoftwareSerial workaround. Not the Pi's GPIO: motion stays in the firmware.
+## Centring
+
+![Centre tab](images/app/centre.png)
+
+Centring puts the insect on the yaw axis. It is done by hand, with the app measuring, and
+usually takes two rounds.
+
+1. **Mount** the pin in the holder, set its height with the gauge, and tighten the clamp
+   screw. Home the rail and the module, and focus roughly on the insect.
+2. Optionally **Spin**: yaw keeps turning (up to 100 turns, until Stop) while you watch live
+   view and turn the screws by eye for a rough start.
+3. **Measure.** The app turns yaw to 0°, 90°, 180° and 270°. At each angle it focuses and
+   finds the insect across the image (the detail-weighted centre of the sharpest frame). A
+   circle fit gives the offset from the yaw axis and where the axis appears in the image,
+   drawn as a dashed line in live view.
+4. **Turn the screws.** The advice is in eighths of a turn, with a dial per screw. A button
+   turns the head so that screw faces you, by default 45° beside the objective (the access
+   angle is a setting, since the camera side is where you stand).
+5. **Measure again** until the offset is under 0.1 mm.
+6. **Height.** The app focuses at +20° and −20° tilt and says how far to push or pull the pin.
+
+Each round also checks the previous advice: if a screw moved the plate the opposite way, its
+direction is flipped and stored, so the next advice is right. **New specimen** clears the
+rounds and height for the next insect.
+
+## Scans
+
+![Scan tab](images/app/scan.png)
+
+A scan is a ring of yaw angles at each of several tilts. The default plan is tilts +60°, +30°,
+0° and −30° with a yaw step of 36°: 40 poses. Rings run from the top down, and within and
+between rings yaw only turns forwards, so every arrival takes up the gear backlash the same
+way.
+
+At each pose the app:
+
+1. turns the module to the pose and waits (1 s by default);
+2. runs a focus scan (auto range) to find the insect's front and back; if it finds nothing,
+   it uses the last range found;
+3. shoots an ordinary focus stack through that range with the 2D step size, using the same
+   code as the Shoot tab (take-up, settle, camera retries, previews);
+4. builds the pose's preview stack and depth map, and keeps every tenth frame on the Pi
+   (configurable) to save space.
+
+Before a scan starts, a pre-flight list checks that the rail and the module are homed, the
+camera and live view are available, there is room on the Pi, whether the specimen has been
+centred, and reminds you to use a dummy battery for long scans. The tab shows the number of
+poses and shots, the time, and the space needed on the Pi and on the card.
+
+- **Test this pose** runs one pose at the module's current angles: a quick check of focus,
+  range and exposure.
+- **Pause, Resume, Stop** work as for a stack. The top bar's Stop stops the scan.
+- **Continue.** The record (`scans/<id>/scan.json`) is written after every pose. After a stop
+  or a restart, Continue homes yaw again and skips the poses that are done. If the very first
+  pose finds no range, the scan stops so you can focus, then continue.
+- The step, the stack settle time and the focus span are fixed in the scan's record at the
+  start, so a continued scan shoots the remaining poses the same way.
+
+As a rough guide at 4× (32.5 µm step) with 2.5 mm of depth per pose, a pose is about 78 shots
+and four to five minutes, so the default plan takes around three hours and about 30 GB of
+full-size JPEGs on the card.
+
+### Manual tilt
+
+To set tilt by hand instead of with its motor, turn on **Manual tilt** in the System tab. Tilt
+then needs no homing and its controls are hidden. Centring works at whatever tilt the cradle
+is set to. A scan pauses before each tilt ring with an alert ("Set the tilt to 30° by hand,
+then press Resume") and turns only yaw. Levelling tilt and the height measurement need the
+motor and are not available.
+
+## Review and export
+
+The 3D Review tab lists scans. Each pose's thumbnail opens the usual stack viewer: preview,
+depth map, 3D relief and frames. Pose stacks don't appear in the 2D Review.
+
+**Download for 3D** streams a zip:
+
+```
+MacroRail-scan-<id>/
+  images/pose-001_tilt+060_yaw000.jpg   one all-in-focus preview per pose (1600 px)
+  depth/pose-001_tilt+060_yaw000.png    16-bit depth map (white = first shot)
+  depth/pose-001_tilt+060_yaw000-colour.jpg
+  poses.csv                             pose, tilt, yaw, image, stack, shots, first and last camera file
+  scan.json                             the full record: plan, poses, results, camera file names
+  about.json                            angle conventions and what the files are
+```
+
+The `images/` folder can go straight into COLMAP or Meshroom for a draft model. For full
+quality, stack the full-size files from the camera's card per pose (Zerene Stacker, Helicon
+Focus) using the file names in `poses.csv` and `scan.json`, and reconstruct from those.
+
+## Limits
+
+- **Field of view.** At 4× the field is 5.5 × 3.65 mm, so insects larger than about 5 mm
+  don't fit. There is no tiling; use a lower magnification for larger specimens.
+- **Belly views.** The lens limits tilt to −33°, so the underside is seen at a shallow angle
+  at best.
+- **Yaw wobble.** The head sits directly on the 28BYJ-48's shaft without a bearing. Shaft play
+  gives a small, repeatable wobble, well inside the frame after centring.
+- **Centring is manual** and is repeated for every specimen. The height is set with the gauge.
+- **Auto range per pose** has had limited testing on real subjects; a pose that finds nothing
+  falls back to the last range.
+- **Previews are quick stacks** (sharpest pixel per frame) at 1600 px. They are enough for a
+  draft reconstruction; a full-quality model needs the full-size files stacked elsewhere.
+- **Time and wear.** A full scan takes hours and thousands of shutter actuations. The camera
+  should run from a dummy battery, with its USB power supply set to Off (see
+  [design-notes.md](design-notes.md#power-on-the-pi)).
+- **Lighting** is not part of the module.
+
+## Possible extensions
+
+- Motorised centring: two more 28BYJ-48s on the X/Y screws through hex-bit couplers. That
+  needs more pins than a Nano has (an ATmega2560 board would do).
 - A 608 turntable under the yaw head, if the shaft wobble turns out to matter.
-- Tracking the insect between poses from the sharp tiles.
-- Tiling, for insects bigger than the frame.
-- **Cross-polarised lighting:** polariser film on each light, and an analyser behind the
-  objective in the adapter tube. A diffuser goes *before* the film, never after it,
-  because diffusers scramble polarisation.
-
-## Scan time (rough)
-
-- **Full resolution:** about 120 poses at a 32.5 µm step and about 2.5 mm visible depth
-  is about 78 shots per pose. That's about 9,400 shots, roughly 6–7 h at 2.4 s per shot.
-- **Live-view draft:** sweep the rail slowly while grabbing live-view frames
-  (1024 × 680). It takes under an hour with no shutter wear, which is good for checking
-  coverage first.
-
-## Software
-
-The agreed plan, milestones and decisions: [`3d-software-plan.md`](3d-software-plan.md). The
-module controller's protocol: [`protocol-module.md`](protocol-module.md).
-
-## Setup facts (user, 2026-10-21)
-
-- **Optics:** AmScope Plan 4/0.10 (160 mm tube, 0.17 cover glass) on a long printed
-  adapter (printables 143754).
-  - At 4× it gives 4.27×, a 5.5 × 3.65 mm field, 12 mm working distance with the sleeve on,
-    64 µm depth of field (step 32.5 µm).
-  - A 2× setup also exists, with more working distance.
-- **Camera:** on a tripod on the floor; the rail on the table. The camera looks along the
-  rail from the motor end. The focus point is kept near mid-travel, so the end blocks
-  never matter.
-- **Specimens:** aphids to grasshoppers, glued on the pin tip or pinned through. Bigger
-  insects get bigger pins. At 4×, anything over about 5 mm needs tiling or the 2× setup.
-- **Parts:** 4 × 28BYJ-48 and ULN2003, 1 × 608, 20 magnets, pen springs, roller
-  microswitches, 1 × KY-024, a 5 V supply, a 30 V / 10 A bench supply, plenty of M3.
-
-## Open items
-
-- Torque near 90°: check once the tilt motor runs; add the counterweight if steps skip.
-- Tilt home click angle: measured by the first homing calibration (about +97° expected).
-- Optional: screenshots of the user's old rotate-and-tilt build, for reference.
+- Tracking the insect between poses from the sharp tiles, and tiling for larger specimens.
+- A live-view draft scan: sweep focus at each pose without the shutter, to check coverage in
+  minutes.
+- Cross-polarised lighting: polariser film on each light and an analyser behind the
+  objective, with any diffuser before the film.
